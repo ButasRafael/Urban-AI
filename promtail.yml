@@ -1,0 +1,34 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  enable_runtime_reload: true 
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+    pipeline_stages:
+      - docker: {}
+      - timestamp:
+          source: time
+          format: RFC3339Nano
+      - drop:
+          older_than: 1h
+    relabel_configs:
+      - source_labels: [__meta_docker_container_name]
+        regex: '/(.+)'
+        target_label: container
+      - source_labels: [__meta_docker_container_label_com_docker_swarm_service_name]
+        target_label: service
+      - action: replace
+        target_label: __path__
+        source_labels: [__meta_docker_container_id]
+        regex: '(.+)'
+        replacement: /var/lib/docker/containers/$1/*.log

@@ -1,0 +1,190 @@
+
+services:
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    ports:
+      - "4317:4317"
+      - "4318:4318" 
+      - "3200:3200" 
+    volumes:
+      - ./tempo-config.yml:/etc/tempo/tempo.yaml:ro
+      - ./tempo-wal:/tmp/tempo/wal
+      - ./tempo-blocks:/tmp/tempo/blocks
+      - ./tempo-gen-wal:/tmp/tempo/generator/wal
+      - ./tempo-gen-traces:/tmp/tempo/generator/traces
+    command:
+      - "--config.file=/etc/tempo/tempo.yaml"
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+
+  web:
+    build: .
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 4
+    volumes:
+      - "./:/app"
+      - "./weights:/weights" 
+      - ./static:/app/static
+      - ./ultralytics_config:/app/ultralytics_config
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy  
+      tempo:
+        condition: service_started
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - YOLO_CONFIG_DIR=/app/ultralytics_config
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./recording_rules.yml:/etc/prometheus/recording_rules.yml:ro
+      - ./alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8082:8080"
+    volumes:
+      - "/:/rootfs"
+      - "/var/run:/var/run"
+      - "/sys:/sys"
+      - "/var/lib/docker/:/var/lib/docker"
+      - "/dev/disk/:/dev/disk"
+    privileged: true
+    devices:
+      - "/dev/kmsg"
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    pid: "host"
+    command:
+      - '--collector.filesystem.mount-points-exclude'
+      - '^/(run/user).*'
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: urban_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - "pgdata:/var/lib/postgresql/data"
+    restart: always
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.2.0-4.1.0-ubuntu22.04
+    container_name: dcgm-exporter
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "9400:9400" 
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    user: root
+    volumes:
+      - ./promtail-data:/tmp
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./promtail.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    command: 
+      - "--config.file=/etc/promtail/config.yml"
+    ports:
+      - "9080:9080"
+    restart: unless-stopped
+  
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana 
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER:  admin
+      GF_SECURITY_ADMIN_PASSWORD: supersecret
+      GF_USERS_ALLOW_SIGN_UP:   "false"
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  pgdata:
+  grafana_data:

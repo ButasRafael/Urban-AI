@@ -1,0 +1,15 @@
+{"logtail":{"client_time":"2025-05-11T00:50:33.208857922Z","proc_id":75797704,"proc_seq":1},"text":"logtail started"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.211182189Z","proc_id":75797704,"proc_seq":2},"text":"Program starting: v1.82.5-te4d64c6fa, Go 1.24.2: []string{\"tailscaled\", \"--state=/var/lib/tailscale/tailscaled.state\"}\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.211614136Z","proc_id":75797704,"proc_seq":3},"text":"LogID: 0995fc7837904b1a25e71b2be855a1c202fae71dfbe377119b9ead0a7996965c\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.211979817Z","proc_id":75797704,"proc_seq":4},"text":"logpolicy: using system state directory \"/var/lib/tailscale\"\nlogpolicy.ConfigFromFile /var/lib/tailscale/tailscaled.log.conf: open /var/lib/tailscale/tailscaled.log.conf: no such file or directory\nlogpolicy.Config.Validate for /var/lib/tailscale/tailscaled.log.conf: config is nil\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.213463788Z","proc_id":75797704,"proc_seq":5},"text":"dns: [rc=unknown ret=direct]\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.214039059Z","proc_id":75797704,"proc_seq":6},"text":"dns: using \"direct\" mode\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.214517792Z","proc_id":75797704,"proc_seq":7},"text":"dns: using *dns.directManager\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.215333479Z","proc_id":75797704,"proc_seq":8},"text":"dns: inotify: NewDirWatcher: context canceled\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.240617572Z","proc_id":75797704,"proc_seq":9},"text":"wgengine.NewUserspaceEngine(tun \"tailscale0\") ...\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.241580226Z","proc_id":75797704,"proc_seq":10},"text":"Linux kernel version: 5.15.167.4-microsoft-standard-WSL2\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.243337057Z","proc_id":75797704,"proc_seq":11},"text":"is CONFIG_TUN enabled in your kernel? `modprobe tun` failed with: modprobe: can't change directory to '/lib/modules': No such file or directory\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.243836191Z","proc_id":75797704,"proc_seq":12},"text":"wgengine.NewUserspaceEngine(tun \"tailscale0\") error: tstun.New(\"tailscale0\"): operation not permitted\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.244421343Z","proc_id":75797704,"proc_seq":13},"text":"flushing log.\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.24506445Z","proc_id":75797704,"proc_seq":14},"text":"logger closing down\n"}
+{"logtail":{"client_time":"2025-05-11T00:50:33.245625101Z","proc_id":75797704,"proc_seq":15},"text":"getLocalBackend error: createEngine: tstun.New(\"tailscale0\"): operation not permitted\n"}

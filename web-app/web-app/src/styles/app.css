@@ -1,0 +1,152 @@
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background-color: var(--surface-100);
+  color: var(--on-surface);
+  line-height: 1.5;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--secondary-500);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: var(--l);
+  gap: var(--m);
+}
+
+.sidebar a {
+  color: white;
+  padding: var(--s) var(--m);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.2s;
+}
+
+.sidebar a:hover {
+  background-color: var(--secondary-700);
+  text-decoration: none;
+}
+
+.sidebar a.active {
+  background-color: var(--primary-500);
+  font-weight: 600;
+}
+
+.content {
+  flex: 1;
+  padding: var(--xl);
+  overflow-y: auto;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s) var(--m);
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--primary-500);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-700);
+}
+
+.btn-secondary {
+  background: var(--secondary-500);
+  color: white;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--primary-500);
+  border: 1px solid var(--primary-500);
+}
+
+.btn-ghost:hover {
+  background: var(--primary-100);
+}
+
+.btn-danger {
+  background: var(--error);
+  color: white;
+}
+
+.input {
+  width: 100%;
+  padding: var(--s) var(--m);
+  border: 1px solid var(--secondary-300);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 2px var(--primary-100);
+}
+
+.card {
+  background: var(--surface-0);
+  border-radius: var(--radius-md);
+  padding: var(--l);
+  box-shadow: var(--shadow-sm);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--secondary-500);
+  margin-bottom: var(--m);
+  font-weight: 600;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-0);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.table th, .table td {
+  padding: var(--m);
+  text-align: left;
+  border-bottom: 1px solid var(--secondary-100);
+}
+
+.table th {
+  background: var(--secondary-100);
+  color: var(--secondary-700);
+  font-weight: 600;
+}
+
+.form-group {
+  margin-bottom: var(--m);
+}
+
+.form-label {
+  display: block;
+  margin-bottom: var(--s);
+  font-weight: 500;
+  color: var(--secondary-700);
+}

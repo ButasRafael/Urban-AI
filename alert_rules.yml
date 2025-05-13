@@ -1,0 +1,49 @@
+groups:
+- name: fastapi_alerts
+  rules:
+  - alert: HighErrorRate
+    expr: fastapi:error_rate > 0.05
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High FastAPI error rate ({{ $value | printf \"%.2f\" }})"
+      description: "Error rate >5% for 5m on job={{ $labels.job }}"
+
+  - alert: HighLatency
+    expr: fastapi:latency_p95 > 1
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High latency (p95 >1s)"
+      description: "95th-percentile request latency above 1s for 2m"
+
+  - alert: InstanceDown
+    expr: up == 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $labels.instance }} down"
+      description: "Instance {{ $labels.instance }} of job {{ $labels.job }} has been down for 5m"
+
+  - alert: ContainerHighCPU
+    expr: rate(container_cpu_usage_seconds_total{container_name!=""}[5m]) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Container CPU >80%"
+      description: "Container {{ $labels.container_name }} CPU usage above 80% for 5m"
+
+  - alert: ContainerHighMemory
+    expr: (container_memory_usage_bytes{container_name!=""}
+           / container_spec_memory_limit_bytes{container_name!=""})
+           * 100 > 90
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Container memory >90%"
+      description: "Container {{ $labels.container_name }} memory usage above 90% for 5m"

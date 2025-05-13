@@ -1,0 +1,11 @@
+[client]
+# point at your public‐IP server
+remote_addr     = "rathole-server:2333"
+default_token   = "REPLACE_WITH_A_LONG_RANDOM_SECRET"
+retry_interval  = 1           # reconnect every second if dropped
+
+[client.services.urban_ai_api]
+token       = "REPLACE_WITH_A_LONG_RANDOM_SECRET"
+# forward to your FastAPI container, port 8000 inside the compose network
+local_addr  = "web:8000"
+nodelay     = true           # TCP_NODELAY for lower latency
