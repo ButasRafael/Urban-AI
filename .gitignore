@@ -2,3 +2,4 @@
 /weights/sam2.1_b.pt
 /weights/sam2.1_hiera_base_plus.pt
 /weights/groundingdino_swinb_cogcoor.pth
+/static

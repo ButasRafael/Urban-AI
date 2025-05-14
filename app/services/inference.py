@@ -124,6 +124,17 @@ def _best(masks, scores, box):
     cv2.rectangle(rect, (x1, y1), (x2, y2), 1, -1)
     return masks[max(range(len(masks)),
                      key=lambda i: (np.logical_and(rect, masks[i]).sum(), scores[i]))]
+_label_rects: list[tuple[int,int,int,int]] = []
+
+def clear_label_rects():
+    global _label_rects
+    _label_rects = []
+
+def rects_overlap(r1, r2):
+    x11,y11,x12,y12 = r1
+    x21,y21,x22,y22 = r2
+    return not (x12 < x21 or x22 < x11 or y12 < y21 or y22 < y11)
+
 def draw_label(
     img: np.ndarray,
     text: str,
@@ -131,38 +142,50 @@ def draw_label(
     color: tuple[int, int, int],
     pad: int = 2,
 ) -> None:
-    """
-    Draw `text` inside or directly above `box` (x1,y1,x2,y2),
-    scaling the font to the box height and keeping the label inside the frame.
-    """
+    global _label_rects
+
     x1, y1, x2, y2 = box
-    h_box = y2 - y1
     h_img, w_img = img.shape[:2]
 
-    font       = cv2.FONT_HERSHEY_SIMPLEX
-    scale     = float(np.clip(h_box / 200.0, 0.4, 2.0))
-    thickness = int(np.clip(h_box // 120, 1, 4))
+    # base font settings
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    base_scale = float(np.clip((y2-y1) / 200.0, 0.8, 2.0))
+    thickness  = int(np.clip((y2-y1) // 120, 1, 5))
 
+    # measure text size at base scale
+    (tw, th), _ = cv2.getTextSize(text, font, base_scale, thickness)
+    avail_w = min(w_img, x2 - x1) - 2*pad
+    # if too wide, shrink the scale proportionally
+    if tw + 2*pad > avail_w and tw > 0:
+        scale = base_scale * (avail_w / (tw + 2*pad))
+        (tw, th), _ = cv2.getTextSize(text, font, scale, thickness)
+    else:
+        scale = base_scale
 
-    # text size
-    (tw, th), _ = cv2.getTextSize(text, font, scale, thickness)
-    x0 = np.clip(x1, 0, w_img - tw - 2 * pad)
-    y0 = y1 - th - 2 * pad
-
-    # if the label would be above the image, move *inside* the box
+    # initial position: above the box (or inside if too high)
+    x0 = int(np.clip(x1, 0, w_img - tw - 2*pad))
+    y0 = y1 - th - 2*pad
     if y0 < 0:
-        y0 = np.clip(y2 + 2, 0, h_img - th - 2 * pad)
+        y0 = y2 + 2  # put inside/below box
 
-    # background rectangle
-    cv2.rectangle(
-        img,
-        (x0, y0),
-        (x0 + tw + 2 * pad, y0 + th + 2 * pad),
-        color,
-        thickness=-1,
-    )
+    # define our new label rect
+    rect = (x0, y0, x0 + tw + 2*pad, y0 + th + 2*pad)
 
-    # white text
+    # nudge it down if it overlaps any previous label
+    for prev in _label_rects:
+        if rects_overlap(rect, prev):
+            # bump below the previous label
+            y0 = prev[3] + pad
+            # clamp inside image
+            y0 = int(min(y0, h_img - th - 2*pad))
+            rect = (x0, y0, x0 + tw + 2*pad, y0 + th + 2*pad)
+
+    # record this rect for future overlap checks
+    _label_rects.append(rect)
+
+    # draw background
+    cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), color, thickness=-1)
+    # draw text
     cv2.putText(
         img,
         text,
@@ -361,10 +384,6 @@ async def _gpt_refine_and_find(
         logger.error("JSON parse failed: %s\nContent was: %r", err, content)
         raise HTTPException(500, f"Invalid JSON from LLM: {content!r}")
 
-
-
-
-
 def overlay_masks(
     image: np.ndarray,
     mask: np.ndarray,
@@ -372,7 +391,9 @@ def overlay_masks(
     label: str,
     alpha: float = 0.5,
 ) -> None:
+    global _label_rects
 
+    # 1) draw the softened mask & glow as before
     mask_uint = (mask.astype(np.uint8) * 255)
     blurred   = cv2.GaussianBlur(mask_uint, (21, 21), 0)
     soft_mask = blurred.astype(bool)
@@ -382,38 +403,70 @@ def overlay_masks(
     cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, dst=image)
 
     glow = image.copy()
-    contours, _ = cv2.findContours(
-        mask_uint, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
+    contours, _ = cv2.findContours(mask_uint, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(glow, contours, -1, color, thickness=15)
     cv2.addWeighted(glow, alpha * 0.3, image, 1 - alpha * 0.3, 0, dst=image)
-
     cv2.drawContours(image, contours, -1, color, thickness=3)
 
+    # 2) now label
     ys, xs = np.where(mask)
-    if xs.size and ys.size:
-        x_c, y_c = int(xs.mean()), int(ys.mean())
-        h_img, w_img = image.shape[:2]
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        raw_scale = min(w_img, h_img) * 0.002
-        raw_th    = int(min(w_img, h_img) * 0.004)
-        scale     = float(np.clip(raw_scale, 0.6, 2.0))
-        th        = int(np.clip(raw_th, 2, 5))
-        (w, h), _ = cv2.getTextSize(label, font, scale, th)
-        pad = int(th * 2)
-        x0, y0 = x_c - w//2 - pad, y_c - h - pad - 5
-        x1, y1 = x_c + w//2 + pad, y_c + pad
-        cv2.rectangle(image, (x0, y0), (x1, y1), color, -1)
-        cv2.putText(
-            image,
-            label,
-            (x0 + pad, y1 - pad),
-            font,
-            scale,
-            (255, 255, 255),
-            th,
-            lineType=cv2.LINE_AA
-        )
+    if not (xs.size and ys.size):
+        return
+
+    h_img, w_img = image.shape[:2]
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    # base size based on image
+    raw_scale = min(w_img, h_img) * 0.003
+    raw_th    = int(min(w_img, h_img) * 0.004)
+    base_scale = float(np.clip(raw_scale, 0.8, 2.0))
+    thickness = int(np.clip(raw_th, 2, 6))
+
+    # measure and possibly shrink to image width
+    (w_txt, h_txt), _ = cv2.getTextSize(label, font, base_scale, thickness)
+    pad = int(thickness * 2)
+    max_w = w_img - 2*pad
+    if w_txt + 2*pad > max_w:
+        scale = base_scale * (max_w / (w_txt + 2*pad))
+        (w_txt, h_txt), _ = cv2.getTextSize(label, font, scale, thickness)
+    else:
+        scale = base_scale
+
+    # start at mask centroid
+    x_c, y_c = int(xs.mean()), int(ys.mean())
+    x0 = x_c - w_txt//2 - pad
+    y0 = y_c - h_txt - pad - 5
+    # keep on‐screen
+    x0 = int(np.clip(x0, 0, w_img - w_txt - 2*pad))
+    if y0 < 0:
+        y0 = int(np.clip(y_c + 5, 0, h_img - h_txt - 2*pad))
+
+    # pack rect
+    rect = (x0, y0, x0 + w_txt + 2*pad, y0 + h_txt + 2*pad)
+
+    # bump if overlaps any existing
+    for prev in _label_rects:
+        if not (rect[2] < prev[0] or prev[2] < rect[0] or rect[3] < prev[1] or prev[3] < rect[1]):
+            # move below prev
+            y0 = prev[3] + pad
+            y0 = int(min(y0, h_img - h_txt - 2*pad))
+            rect = (x0, y0, x0 + w_txt + 2*pad, y0 + h_txt + 2*pad)
+
+    _label_rects.append(rect)
+
+    # draw bg & text
+    cv2.rectangle(image, (rect[0], rect[1]), (rect[2], rect[3]), color, thickness=-1)
+    cv2.putText(
+        image,
+        label,
+        (x0 + pad, y0 + h_txt + pad - 1),
+        font,
+        scale,
+        (255, 255, 255),
+        thickness,
+        lineType=cv2.LINE_AA,
+    )
+
 
 def process_image(
     img: np.ndarray,
@@ -519,6 +572,7 @@ def process_image(
 
 async def process_image_combined(img_bgr, use_sam=True, run_id=None):
     # 1) YOLO gives us concrete boxes
+    clear_label_rects()
     initial = _run_yolo(img_bgr, run_id)
     unique_cids = {d["class_id"] for d in initial}
     colors = {cid: tuple(random.randint(0,255) for _ in range(3)) for cid in unique_cids}

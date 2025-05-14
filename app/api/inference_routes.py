@@ -452,3 +452,111 @@ async def detect_images(
         )
 
     return responses
+
+import zipfile
+
+@router.post(
+    "/images_zip",
+    response_model=List[ImageResponse],
+    dependencies=[require_roles("user", "admin")],
+)
+async def detect_images_zip(
+    archive: UploadFile = File(..., media_type="application/zip"),
+    use_sam: bool = Query(
+        True,
+        description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
+    ),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    latitude:  float | None = Form(None),
+    longitude: float | None = Form(None),
+    address:   str   | None = Form(None),
+):
+    # 1) save the zip
+    tmp_zip = _save_temp(archive)
+
+    # 2) extract supported images
+    images: List[tuple[str, np.ndarray]] = []
+    with zipfile.ZipFile(tmp_zip, 'r') as zf:
+        for name in zf.namelist():
+            ext = Path(name).suffix.lower()
+            if ext in IMAGE_EXTS:
+                data = zf.read(name)
+                arr  = np.frombuffer(data, np.uint8)
+                img  = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                if img is not None:
+                    images.append((name, _resize_if_needed(img)))
+
+    if not images:
+        raise HTTPException(400, "No supported images found in zip")
+
+    responses: List[ImageResponse] = []
+    for filename, img in images:
+        # — reverse‐geocode if needed
+        if address:
+            final_address = address
+        elif latitude is not None and longitude is not None:
+            final_address = await run_in_threadpool(reverse_geocode, latitude, longitude)
+        else:
+            final_address = ""
+
+        # — insert Media row
+        media = dbm.Media(
+            filename=filename,
+            media_type="image",
+            user_username=current_user.username,
+            address=final_address,
+            latitude=latitude,
+            longitude=longitude,
+        )
+        db.add(media); db.commit(); db.refresh(media)
+
+        # — run your pipeline
+        try:
+            annotated, dets = await svc.process_image_combined(img, use_sam, str(media.id))
+        except Exception as e:
+            db.delete(media); db.commit()
+            raise HTTPException(500, f"Inference failed for {filename}: {e!r}")
+
+        # — update dims
+        media.width, media.height = annotated.shape[1], annotated.shape[0]
+        db.add(media); db.commit()
+
+        # — persist Frame + Detections
+        fr = dbm.Frame(media_id=media.id, frame_index=0, timestamp=0.0)
+        db.add(fr); db.commit(); db.refresh(fr)
+        for d in dets:
+            db.add(dbm.Detection(
+                frame_id=fr.id,
+                track_id=d.get("track_id"),
+                class_id=d.get("class_id", -1),
+                class_name=d["class_name"],
+                confidence=d["confidence"],
+                x1=d["bbox"][0], y1=d["bbox"][1],
+                x2=d["bbox"][2], y2=d["bbox"][3],
+                mask_rle     = d.get("mask", {}).get("rle", {}),
+                mask_polygon = d.get("mask", {}).get("polygon", []),
+                description  = d.get("description"),
+                solution     = d.get("solution"),
+            ))
+        db.commit()
+
+        # — write annotated image
+        out_name = f"{media.id}.jpg"
+        out_path = STATIC_DIR / out_name
+        await run_in_threadpool(cv2.imwrite, str(out_path), annotated)
+
+        # — build response
+        responses.append(
+            ImageResponse(
+                media_id=media.id,
+                annotated_image_url=f"/static/{out_name}",
+                frames=[FrameOut(frame_index=0, timestamp_ms=0.0, objects=dets)],
+                address=media.address,
+                latitude=media.latitude,
+                longitude=media.longitude,
+                suggestions=[],
+            )
+        )
+
+    return responses
