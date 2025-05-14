@@ -140,8 +140,9 @@ def draw_label(
     h_img, w_img = img.shape[:2]
 
     font       = cv2.FONT_HERSHEY_SIMPLEX
-    thickness  = max(1, h_box // 120)              # ~1‑3 px
-    scale      = max(0.4, h_box / 200.0)           # 0.4‑3.0 range
+    scale     = float(np.clip(h_box / 200.0, 0.4, 2.0))
+    thickness = int(np.clip(h_box // 120, 1, 4))
+
 
     # text size
     (tw, th), _ = cv2.getTextSize(text, font, scale, thickness)
@@ -394,8 +395,10 @@ def overlay_masks(
         x_c, y_c = int(xs.mean()), int(ys.mean())
         h_img, w_img = image.shape[:2]
         font = cv2.FONT_HERSHEY_SIMPLEX
-        scale = max(0.6, min(w_img, h_img) * 0.002)
-        th = max(2, int(min(w_img, h_img) * 0.004))
+        raw_scale = min(w_img, h_img) * 0.002
+        raw_th    = int(min(w_img, h_img) * 0.004)
+        scale     = float(np.clip(raw_scale, 0.6, 2.0))
+        th        = int(np.clip(raw_th, 2, 5))
         (w, h), _ = cv2.getTextSize(label, font, scale, th)
         pad = int(th * 2)
         x0, y0 = x_c - w//2 - pad, y_c - h - pad - 5
