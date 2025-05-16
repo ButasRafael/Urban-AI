@@ -16,18 +16,15 @@ from pathlib import Path
 from typing import List, Dict, Any
 from pycocotools import mask as mask_util
 import yaml
-from collections import defaultdict
-import shutil
 import random
 import logging
-from typing import Tuple, List, Optional
+from typing import Tuple, List
 import os, json, base64
 from openai import AsyncOpenAI, InternalServerError, RateLimitError, APIConnectionError
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from groundingdino.util.inference import Model as _GDINO
-
-
+import time
 import asyncio
 import httpx
 
@@ -198,7 +195,6 @@ def draw_label(
     )
 
 def iou_xyxy(a: np.ndarray, b: np.ndarray) -> float:
-    """IoU between two boxes in [x1,y1,x2,y2] format."""
     xa1, ya1, xa2, ya2 = a
     xb1, yb1, xb2, yb2 = b
     inter_w  = max(0, min(xa2, xb2) - max(xa1, xb1))
@@ -210,36 +206,32 @@ def iou_xyxy(a: np.ndarray, b: np.ndarray) -> float:
     return inter / union
 
 
-def _ground_phrase(
+def _ground_phrase_weights(
     img_bgr: np.ndarray,
     phrase: str,
     existing: List[List[float]] = [],
-    box_thresh: float = 0.25,
-    text_thresh: float = 0.2,
-    iou_filter: float = 0.3,
+    box_thresh: float = 0.35,
+    text_thresh: float = 0.25,
+    iou_filter: float = 0.45,
 ):
-    """
-    Returns (x1, y1, x2, y2, score) **in absolute pixels** or None.
-    Compatible with GroundingDINO ≥ 0.6 which gives supervision.Detections.
-    """
+
     grounder = _load_grounder()
-    detections, _ = grounder.predict_with_caption(   # note the unpack!
-        image=img_bgr[:, :, ::-1],                   # BGR ➞ RGB
+    detections, _ = grounder.predict_with_caption( 
+        image=img_bgr[:, :, ::-1],         
         caption=phrase,
         box_threshold=box_thresh,
         text_threshold=text_thresh
     )
 
-    if detections.xyxy.shape[0] == 0:      # nothing found
+    if detections.xyxy.shape[0] == 0:   
         return None
 
-     # --- NEW: discard boxes that overlap a kept YOLO box ---
     keep = []
     for idx, box in enumerate(detections.xyxy):
         if all(iou_xyxy(box, ex) < iou_filter for ex in existing):
             keep.append(idx)
 
-    if not keep:                                      # nothing genuinely new
+    if not keep:                          
         return None
 
     # pick the best of the remaining boxes
@@ -296,6 +288,7 @@ def _run_yolo(img: np.ndarray, run_id: str | None = None,) -> List[Dict[str, Any
 
     return output
 
+
 async def _gpt_refine_and_find(
     initial: List[Dict[str, Any]],
     run_id: str,
@@ -307,38 +300,50 @@ async def _gpt_refine_and_find(
     async with httpx.AsyncClient() as http:
         resp = await http.get(image_url, timeout=5.0)
         resp.raise_for_status()
+    
     prompt_text = (
-    "You are analyzing an urban planning scenario based on an input image and its corresponding YOLO detections (bounding boxes)."
+    "You are analyzing an urban-planning scenario based on an input image and its corresponding YOLO detections (bounding boxes)."
     " Perform the following tasks:\n"
     "\n"
-    "1. For each YOLO detection provided, create exactly one JSON object containing:\n"
-    "   - \"track_id\": integer (the YOLO track ID provided)\n"
-    "   - \"keep\": boolean (true if the detected issue is valid and relevant, otherwise false)\n"
-    "   - \"description\": string (a clear one-sentence description of the detected urban issue)\n"
-    "   - \"solution\": string (a concise, practical, one-sentence remediation proposal for this issue)\n"
+    "1. For each YOLO detection **present in the array** (if the YOLO array is empty, skip this section entirely and output **no fields named \"track_id\" or \"keep\"):**\n"
+    "   - \"track_id\": integer (the YOLO track-ID provided)\n"
+    "   - \"keep\": boolean (true if YOLO correctly identified the object; false if it is a mis-identification)\n"
+    "   - \"description\": string (a clear one-sentence description of the detected object or issue)\n"
+    "   - \"solution\": string — if the object is an issue, give a concise, practical, one-sentence remediation proposal; "
+    "     if the object is NOT an issue, write \"No solution needed\".\n"
     "\n"
-    "   Do NOT include bounding box coordinates in your response, as YOLO's geometry will be used directly.\n"
+    "   Do NOT include bounding-box coordinates in your response; YOLO’s geometry will be used directly.\n"
     "\n"
-    "2. If you identify additional urban issues that were NOT detected by YOLO, add new JSON objects with:\n"
+    "2. Only add **new** JSON objects for additional urban issues **when they are BOTH important and realistically solvable**:\n"
     "   - \"new\": true\n"
     "   - \"class_name\": string (the specific type or category of urban issue identified)\n"
-    "   - \"confidence\": float between 0 and 1 (your confidence level for detecting this additional issue)\n"
+    "   - \"confidence\": float between 0 and 1 (your confidence in this additional issue)\n"
     "   - \"description\": string (a clear one-sentence description of the newly identified issue)\n"
     "   - \"solution\": string (a concise, practical, one-sentence remediation proposal)\n"
+    "   - \"dino_prompt\": string\n"
+    "       • 1 – 3 **lower-case tokens**, each ≤ 2 words.\n"
+    "       • Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. \"traffic light\", \"trash bin\").\n"
+    "       • NO commas, punctuation, verbs, prepositions, or numerals.\n"
+    "       • Color/material adjectives ONLY when they are the *sole* reliable cue (e.g. \"red cone\").\n"
+    "       • Put the **most visually distinctive token first**; order the rest by distinctiveness.\n"
+    "       • Prefer the canonical dataset label (\"fire hydrant\" not \"hydrant\").\n"
+    "       • Use singular form unless plurality is visually obvious.\n"
+    "       • Hard cap of three tokens — if unsure, pick ONE high-precision noun.\n"
+    "       • Separate tokens with ONE space exactly.\n"
     "\n"
-    "   Do NOT specify exact bounding box coordinates; these additional detections will be logged as coarse issues.\n"
+    "   Skip minor, cosmetic, or trivial issues entirely — return ZERO new detections if the photo appears clean.\n"
+    "   Do NOT specify exact bounding-box coordinates; these additional detections will be logged as coarse issues.\n"
     "\n"
-    "3. Return ONLY a JSON-formatted array containing all of the above-described JSON objects, and NOTHING ELSE."
+    "3. Return **ONLY** a JSON-formatted array containing all of the above-described objects, and NOTHING ELSE."
 )
 
-    
     initial = sorted(initial, key=lambda d: -d["confidence"])[:50]
 
     payload = [{
         "role": "user",
         "content": [
             {"type": "input_text",  "text": prompt_text},
-            {"type": "input_image", "image_url": image_url},
+            {"type": "input_image", "image_url": image_url, "detail": "high"},
             {"type": "input_text",  "text": json.dumps(initial)},
         ],
     }]
@@ -383,6 +388,122 @@ async def _gpt_refine_and_find(
     except json.JSONDecodeError as err:
         logger.error("JSON parse failed: %s\nContent was: %r", err, content)
         raise HTTPException(500, f"Invalid JSON from LLM: {content!r}")
+
+DDS_TOKEN = os.getenv("DDS_TOKEN")
+DDS_API   = os.getenv("DDS_API", "https://api.deepdataspace.com")
+
+async def _grounding_dino_1p6(
+    *,                      
+    prompt: str,
+    img_bgr:   np.ndarray | None = None,
+    image_url: str | None     = None,
+    bbox_threshold: float     = 0.25,
+    iou_threshold : float     = 0.8,
+    poll_every    : float     = 0.35,
+    timeout       : float     = 30.0,
+) -> list[dict]:        
+    if (img_bgr is None) == (image_url is None):
+        raise ValueError("Provide either img_bgr or image_url, not both/none.")
+    if not DDS_TOKEN:
+        raise RuntimeError("Set DDS_TOKEN in your environment!")
+
+    if image_url:
+        image_field = image_url                               
+    else:  
+        img_rgb  = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        _, buf   = cv2.imencode(".jpg", img_rgb, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        b64      = base64.b64encode(buf).decode()
+        image_field = f"data:image/jpeg;base64,{b64}"
+
+    payload = {
+        "model":   "GroundingDino-1.6-Pro",
+        "image":   image_field,
+        "prompt":  {"type": "text", "text": prompt},
+        "targets": ["bbox"],
+        "bbox_threshold": bbox_threshold,
+        "iou_threshold":  iou_threshold,
+    }
+    headers = {"Token": DDS_TOKEN, "Content-Type": "application/json"}
+
+    async with httpx.AsyncClient(timeout=timeout) as http:
+        task = await http.post(f"{DDS_API}/v2/task/grounding_dino/detection",
+                               json=payload, headers=headers)
+        task.raise_for_status()
+        task_uuid = task.json()["data"]["task_uuid"]
+
+        start = time.time()
+        while True:
+            r = await http.get(f"{DDS_API}/v2/task_status/{task_uuid}",
+                               headers=headers)
+            r.raise_for_status()
+            data = r.json()["data"]
+            if data["status"] == "success":
+                return data["result"]["objects"]
+            if data["status"] == "failed":
+                raise RuntimeError(f"DINO task failed: {data['error']}")
+            if time.time() - start > timeout:
+                raise TimeoutError("GroundingDINO request timed out")
+            await asyncio.sleep(poll_every)
+
+async def _ground_phrase(
+    img_bgr: np.ndarray,
+    classes: list[str],
+    *,                    
+    backend: str = "1.6pro",  # "1.6pro" (default)  |  "swinb"
+    bbox_threshold: float = 0.25,
+    iou_threshold : float = 0.8,
+    existing: list[list[float]] | None = None,
+) -> dict[str, list[dict]]:
+
+    if backend.lower() in {"1.6pro", "pro", "remote"}:
+        prompt_text = ".".join(classes)
+        objs = await _grounding_dino_1p6(
+            img_bgr      = img_bgr,
+            prompt       = prompt_text,
+            bbox_threshold = bbox_threshold,
+            iou_threshold  = iou_threshold,
+        )
+
+        by_cat: dict[str, list[dict]] = {c: [] for c in classes}
+        for o in objs:                               # bucket detections
+            cat = o["category"]
+            if cat in by_cat:
+                by_cat[cat].append(o)
+
+        # keep only highest-score hit per category
+        for c, hits in by_cat.items():
+            by_cat[c] = [max(hits, key=lambda h: h["score"])] if hits else []
+        return by_cat
+
+    elif backend.lower() in {"swinb", "local"}:
+        by_cat: dict[str, list[dict]] = {}
+        existing: list[list[float]] = existing or []
+        for phrase in classes:
+            hit = _ground_phrase_weights(
+                img_bgr,
+                phrase,
+                existing      = existing,
+                box_thresh    = bbox_threshold,
+                text_thresh   = 0.25,
+                iou_filter    = iou_threshold,
+            )
+            if hit:
+                x1, y1, x2, y2, score = hit
+                by_cat[phrase] = [{
+                    "bbox":     [x1, y1, x2, y2],
+                    "score":    score,
+                    "category": phrase,
+                }]
+                existing.append([x1, y1, x2, y2])
+            else:
+                by_cat[phrase] = []
+        return by_cat
+
+    else:
+        raise ValueError(f"Unknown backend {backend!r}; use '1.6pro' or 'swinb'.")
+
+
+
 
 def overlay_masks(
     image: np.ndarray,
@@ -632,42 +753,54 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
     existing_boxes = [d["bbox"] for d in final]
 
     # 4) handle any “new” coarse GPT issues
-    for r in refinements:
-        if not r.get("new"):
-            continue
+        # 4) handle any “new” coarse GPT issues
+    # 4) handle any “new” coarse GPT issues — ONE DDS call for all of them
+    new_items   = [r for r in refinements if r.get("new")]
+    if new_items:
+        class_phrases = [
+            (r.get("dino_prompt") or r.get("class_name") or r.get("description") or "urban issue").strip()
+            for r in new_items
+        ]
+        dino_hits = await _ground_phrase(img_bgr, class_phrases, backend="local", existing = existing_boxes)
+    else:
+        dino_hits = {}
+        class_phrases = []
+
+    for r, phrase in zip(new_items, class_phrases):
         color = tuple(random.randint(0, 255) for _ in range(3))
-        phrase = r.get("class_name") or r.get("description") or "urban issue"
-        grounded = _ground_phrase(img_bgr, phrase,existing=existing_boxes)
-        H, W = img_bgr.shape[:2]
-        if grounded is None:
-            x1,y1,x2,y2 = 0,0,W,H
-            score = 0.0
-            mask_data = {"rle": {}, "polygon": []}
-        else:
-            x1, y1, x2, y2, score = grounded
+        hits  = dino_hits.get(phrase, [])
+
+        # fallback: full-frame box if DINO found nothing
+        if not hits:
+            H, W = img_bgr.shape[:2]
+            hits = [{"bbox": [0, 0, W, H], "score": r.get("confidence", 0.0)}]
+
+        for h in hits:
+            x1, y1, x2, y2 = map(int, h["bbox"])
+            score          = float(h["score"])
+            existing_boxes.append([x1, y1, x2, y2])
+
             if use_sam:
                 masks, scores, _ = predictor.predict(
                     box=np.array([[x1, y1, x2, y2]], dtype=np.float32),
-                    multimask_output=True
+                    multimask_output=True,
                 )
-                mask = masks[np.argmax(scores)]
+                mask      = masks[np.argmax(scores)]
                 mask_data = {"rle": _encode(mask), "polygon": _poly(mask)}
-                overlay_masks(annotated, mask, color, f"{phrase}-gpt+dino", alpha=0.5)
+                overlay_masks(annotated, mask, color, f"{r.get('class_name')}-gpt+dino", 0.5)
             else:
                 mask_data = {"rle": {}, "polygon": []}
-                (tw, th), _ = cv2.getTextSize(f"{phrase}-gpt+dino", font, scale, thickness)
-                draw_label(
-                    annotated, f"{phrase}-gpt+dino", (x1, y1, x2, y2), color,
-                )
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
+                draw_label(annotated, f"{r.get('class_name')}-gpt+dino", (x1, y1, x2, y2), color)
 
-        final.append({
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
+
+            final.append({
                 "track_id":   None,
                 "class_id":   -1,
-                "class_name": f"{phrase}-gpt+dino",
-                "confidence": score if score != 0 else r.get("confidence", 0),
+                "class_name": f"{r.get('class_name')}-gpt+dino",
+                "confidence": score,
                 "bbox":       [float(x1), float(y1), float(x2), float(y2)],
-                "mask":      mask_data,
+                "mask":       mask_data,
                 "description": r["description"],
                 "solution":    r["solution"],
             })
@@ -813,7 +946,6 @@ def process_video(video_path: Path, use_sam: bool = True):
 
     vw.release()
     return out_path, frames_meta
-
 
 
 
