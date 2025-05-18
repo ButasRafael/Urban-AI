@@ -59,6 +59,8 @@ export default function ListPage() {
             <th>Date</th>
             <th>User</th>
             <th>Classes</th>
+            <th>Description</th>
+            <th>Solution</th>
             <th>Thumb</th>
           </tr>
         </thead>
@@ -69,6 +71,8 @@ export default function ListPage() {
               <td>{new Date(it.created_at).toLocaleString()}</td>
               <td>{it.user_username}</td>
               <td>{it.predicted_classes.join(", ")}</td>
+              <td>{it.descriptions?.[0] ?? "-"}</td>
+              <td>{it.solutions?.[0] ?? "-"}</td>
               <td>
                 {it.annotated_image_url && (
                   <img

@@ -20,6 +20,7 @@ from app.core.database import Base
 from app.models import user 
 from app.models import revoked 
 from app.models.media import Media
+from app.models import rag, conversation  
 
 target_metadata = Base.metadata      # MUST NOT be None
 

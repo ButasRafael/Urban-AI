@@ -28,6 +28,7 @@ from opentelemetry.instrumentation.requests import RequestsInstrumentor
 import os
 import logging
 from app.core.security import require_roles
+from app.api.chat import router as chat_router
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,7 @@ app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(infer_router)
 app.include_router(problems.router)
 app.include_router(analytics.router) 
+app.include_router(chat_router, prefix="/chat", tags=["Chat"])
 
 app.add_route(
     "/metrics/raw",

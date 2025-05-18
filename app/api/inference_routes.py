@@ -1,6 +1,7 @@
 # app/api/inference_routes.py
 from fastapi import (
-    APIRouter, UploadFile, File, HTTPException, Depends, Query, Form
+    APIRouter, UploadFile, File, HTTPException, Depends, Query, Form,
+    BackgroundTasks 
 )
 from pathlib import Path
 import shutil, uuid, logging
@@ -21,6 +22,7 @@ from typing import List
 import httpx
 from openai import InternalServerError
 import numpy as np
+from app.services.embedding_worker import enqueue_embeddings
 
 IMAGE_EXTS = {
     ".bmp", ".dng", ".jpeg", ".jpg", ".mpo", ".png", ".tif", ".tiff",
@@ -91,6 +93,7 @@ def reverse_geocode(lat, lon):
     dependencies=[require_roles("user", "admin")],
 )
 async def detect_image(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     use_sam: bool = Query(
         True,
@@ -101,7 +104,6 @@ async def detect_image(
     latitude:  float | None = Form(None),
     longitude: float | None = Form(None),
     address:   str   | None = Form(None),
-
 ):
     logger.info("Received image inference request", extra={
         "upload_filename": file.filename, "use_sam": use_sam
@@ -159,6 +161,7 @@ async def detect_image(
     media.height = annotated.shape[0]
     db.add(media)
     db.commit()
+    enqueue_embeddings(background_tasks, media.id)
 
     # 4) persist Frame + Detection rows
     fr = dbm.Frame(media_id=media.id, frame_index=0, timestamp=0.0)
@@ -200,6 +203,7 @@ async def detect_image(
     dependencies=[require_roles("user", "admin")],
 )
 async def detect_video(
+    background_tasks: BackgroundTasks, 
     file: UploadFile = File(...),
     use_sam: bool = Query(
         True,
@@ -210,7 +214,6 @@ async def detect_video(
     latitude:  float | None = Form(None),
     longitude: float | None = Form(None),
     address:   str   | None = Form(None),
-
 ):
     logger.info("Received video inference request", extra={"upload_filename": file.filename})
     INFERENCE_VIDEO_COUNT.inc()
@@ -322,7 +325,7 @@ def list_my_uploads(
                   .distinct()
                   .all()
             ]
-        descriptions: List[Optional[str]] = []
+        descriptions, solutions = [], []
         if first_frame:
             descriptions = [
                 d[0] for d in
@@ -330,6 +333,15 @@ def list_my_uploads(
                   .filter(
                       dbm.Detection.frame_id == first_frame.id,
                       dbm.Detection.description.isnot(None),
+                  )
+                  .all()
+            ]
+            solutions = [
+               s[0] for s in
+                db.query(dbm.Detection.solution)
+                  .filter(
+                      dbm.Detection.frame_id == first_frame.id,
+                      dbm.Detection.solution.isnot(None),
                   )
                   .all()
             ]
@@ -345,6 +357,7 @@ def list_my_uploads(
             longitude=m.longitude,
             predicted_classes=classes,
             descriptions=descriptions,
+            solutions=solutions,
         ))
     return out
 

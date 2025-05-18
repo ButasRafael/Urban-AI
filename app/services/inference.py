@@ -324,7 +324,7 @@ async def _gpt_refine_and_find(
     "       • 1 – 3 **lower-case tokens**, each ≤ 2 words.\n"
     "       • Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. \"traffic light\", \"trash bin\").\n"
     "       • NO commas, punctuation, verbs, prepositions, or numerals.\n"
-    "       • Color/material adjectives ONLY when they are the *sole* reliable cue (e.g. \"red cone\").\n"
+    "       • Color/material adjectives when they are the *sole* reliable cue (e.g. \"red cone\").\n"
     "       • Put the **most visually distinctive token first**; order the rest by distinctiveness.\n"
     "       • Prefer the canonical dataset label (\"fire hydrant\" not \"hydrant\").\n"
     "       • Use singular form unless plurality is visually obvious.\n"
@@ -357,6 +357,7 @@ async def _gpt_refine_and_find(
                 resp = await client.responses.create(
                     model="gpt-4.1",
                     input=payload,
+                    temperature=0.2,
                     timeout=35,
                 )
                 break

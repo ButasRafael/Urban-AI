@@ -11,6 +11,8 @@ export interface Problem {
   annotated_video_url?: string;
   created_at: string;
   predicted_classes: string[];
+  descriptions?: string[];
+  solutions?: string[];
 }
 
 export async function getProblems(opts: { media_type?: string; klass?: string } = {}) {

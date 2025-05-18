@@ -17,6 +17,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       : [
           { to: '/map', label: 'Map' },
           { to: '/list', label: 'List' },
+          { to: '/chat', label: 'Chat' },
         ];
 
   return (

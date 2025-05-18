@@ -13,3 +13,5 @@ class ProblemOut(BaseModel):
     annotated_video_url: Optional[str]
     created_at: datetime
     predicted_classes: List[str] = []
+    descriptions: List[str] = []
+    solutions: List[str] = []

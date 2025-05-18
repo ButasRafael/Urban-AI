@@ -1,0 +1,42 @@
+
+
+stringconnect
+
+stringUPDATE
+
+stringGET /static http send
+
+stringGET /metrics/raw
+
+stringGET /static
+
+stringGET /healthz
+
+stringPOST /infer/video
+%
+stringPOST /infer/video http send
+$
+stringGET /metrics/raw http send
+!
+stringPOST /chat http receive
+
+stringPOST /chat http send
+
+stringSELECT urban_ai
+
+stringSELECT
+
+stringINSERT urban_ai
+
+stringINSERT
+ 
+stringGET /healthz http send
+
+stringUPDATE urban_ai
+
+stringselect
+
+stringshow
+
+string
+POST /chat

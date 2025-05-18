@@ -22,7 +22,7 @@ class Media(Base):
     latitude   = Column(Float,  nullable=True)
     longitude  = Column(Float,  nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
+    rag_chunks = relationship("RAGChunk", back_populates="media", cascade="all,delete")
     frames = relationship("Frame", back_populates="media", cascade="all,delete")
 
 

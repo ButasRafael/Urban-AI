@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import AnalyticsPage from './pages/AnalyticsPage';
 import MapPage from './pages/MapPage';
 import ListPage from './pages/ListPage';
+import ChatPage from "./pages/ChatPage";
 
 export default function AppRouter() {
   return (
@@ -39,6 +40,15 @@ export default function AppRouter() {
               </Protected>
             }
           />
+          <Route
+            path="/chat"
+            element={
+              <Protected role="authority">
+                <ChatPage />
+              </Protected>
+            }
+          />
+
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

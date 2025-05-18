@@ -108,21 +108,24 @@ services:
       - "9100:9100"
     restart: unless-stopped
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg17         # ← official pgvector build for Postgres 17
+    container_name: urban-ai-db
     environment:
-      POSTGRES_DB: urban_ai
+      POSTGRES_DB:   urban_ai
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
-      - "pgdata:/var/lib/postgresql/data"
-    restart: always
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: always
+
 
   dcgm-exporter:
     image: nvcr.io/nvidia/k8s/dcgm-exporter:4.2.0-4.1.0-ubuntu22.04

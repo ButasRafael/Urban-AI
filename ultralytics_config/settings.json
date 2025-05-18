@@ -3,7 +3,7 @@
   "datasets_dir": "/app/datasets",
   "weights_dir": "weights",
   "runs_dir": "runs",
-  "uuid": "5f8c8daa930611c58deb990406429301c41390b03b70e57b8547179b2408ec88",
+  "uuid": "baf706db765ba15d9d6e1172b41c23286a8dbc8a63f082bd06add7db7ab390e8",
   "sync": true,
   "api_key": "",
   "openai_api_key": "",
@@ -16,5 +16,6 @@
   "raytune": true,
   "tensorboard": false,
   "wandb": false,
-  "vscode_msg": true
+  "vscode_msg": true,
+  "openvino_msg": true
 }

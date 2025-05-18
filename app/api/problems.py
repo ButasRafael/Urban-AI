@@ -32,6 +32,15 @@ def all_problems(
         classes = [c[0] for c in classes_q]
         if klass and not classes:           # filter out if class not found
             continue
+
+        detects = (
+            db.query(dbm.Detection)
+              .join(dbm.Frame, dbm.Frame.id == dbm.Detection.frame_id)
+              .filter(dbm.Frame.media_id == m.id)
+              .all()
+        )
+        descriptions = [d.description or "n/a" for d in detects]
+        solutions    = [d.solution    or "n/a" for d in detects]
         out.append(ProblemOut(
             media_id=m.id,
             address=m.address,
@@ -43,5 +52,7 @@ def all_problems(
             annotated_video_url = f"/static/{m.id}.mp4" if m.media_type=="video" else None,
             created_at=m.created_at,
             predicted_classes=classes,
+            descriptions=descriptions,
+            solutions=solutions,
         ))
     return out

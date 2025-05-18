@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from datetime import datetime
 
 
@@ -14,7 +14,7 @@ class Detection(BaseModel):
     class_id: int
     class_name: str
     confidence: float
-    bbox: List[float]  # [x1,y1,x2,y2]
+    bbox: List[float]
     mask: Mask
     description: Optional[str] = None
     solution:    Optional[str] = None
@@ -54,9 +54,8 @@ class MediaListItem(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     predicted_classes: List[str] = []
-    descriptions: List[Optional[str]] = Field(
-        default_factory=list,
-        description="One‐sentence descriptions for the first frame's kept detections"
-    )
+    descriptions: list[str]
+    solutions: list[str]
+
 
 
