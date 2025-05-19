@@ -1,0 +1,80 @@
+:root {
+  --color-surface: #ffffff;
+  --color-muted: #95A5A6;
+  --color-primary: #2C3E50;
+  --color-accent: #16A085;
+  --spacing-s: 8px;
+  --spacing-m: 16px;
+  --spacing-l: 24px;
+  --radius: 8px;
+}
+
+.container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-s);
+  padding: var(--spacing-s) var(--spacing-m);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-muted);
+}
+
+.filter {
+  max-width: 230px;
+}
+
+.select,
+.filter input,
+.button {
+  border-radius: var(--radius);
+  padding: var(--spacing-s) var(--spacing-m);
+  border: 1px solid var(--color-muted);
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.select:hover,
+.filter input:hover,
+.button:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.stats {
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--color-muted);
+}
+
+.map {
+  width: 100%;
+  height: calc(100vh - 72px);
+}
+
+.marker-img {
+  width: 100%;
+  border-radius: var(--radius);
+  margin-top: var(--spacing-s);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.infoWindow h4 {
+  margin: 0 0 var(--spacing-s) 0;
+  font-size: 16px;
+  color: var(--color-primary);
+}
+
+.infoWindow p {
+  margin: 0 0 var(--spacing-m) 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.infoWindow .item {
+  border-top: 1px solid var(--color-muted);
+  padding-top: var(--spacing-s);
+  margin-top: var(--spacing-s);
+}
+
+.infoWindow .item strong {
+  color: var(--color-primary);
+}

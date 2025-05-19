@@ -762,7 +762,7 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
             (r.get("dino_prompt") or r.get("class_name") or r.get("description") or "urban issue").strip()
             for r in new_items
         ]
-        dino_hits = await _ground_phrase(img_bgr, class_phrases, backend="local", existing = existing_boxes)
+        dino_hits = await _ground_phrase(img_bgr, class_phrases, backend="remote", existing = existing_boxes)
     else:
         dino_hits = {}
         class_phrases = []

@@ -108,7 +108,7 @@ services:
       - "9100:9100"
     restart: unless-stopped
   db:
-    image: pgvector/pgvector:pg17         # ← official pgvector build for Postgres 17
+    image: pgvector/pgvector:pg17 
     container_name: urban-ai-db
     environment:
       POSTGRES_DB:   urban_ai

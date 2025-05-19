@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from app.core.security import require_roles, get_current_user
 from app.core.database import get_db
 from app.models.conversation import ChatSession, ChatMessage
@@ -9,21 +9,16 @@ from app.services import rag as rag_svc
 from openai import AsyncOpenAI, InternalServerError
 import asyncio
 import os
-
+from app.models.schemas_chat import (
+    ChatRequest,
+    ChatResponse,
+    SessionSummary,
+    SessionHistory,
+    ChatMessageResponse,
+)
 
 router = APIRouter(tags=["Chat"], dependencies=[require_roles("authority")])
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-class ChatRequest(BaseModel):
-    message: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    radius_km: Optional[float] = 1.0
-    session_id: Optional[int] = None
-
-class ChatResponse(BaseModel):
-    session_id: int
-    answer: str
 
 
 async def _build_context(db: Session, req: ChatRequest) -> str:
@@ -82,3 +77,79 @@ async def chat(req: ChatRequest, db: Session = Depends(get_db), current_user=Dep
     db.commit()
 
     return ChatResponse(session_id=session.id, answer=answer)
+
+@router.get("/sessions", response_model=List[SessionSummary])
+async def list_sessions(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    sessions = (
+        db.query(ChatSession)
+          .filter(ChatSession.authority_username == current_user.username)
+          .order_by(ChatSession.created_at.desc())
+          .all()
+    )
+    out: List[SessionSummary] = []
+    for s in sessions:
+        last = s.messages[-1].created_at if s.messages else s.created_at
+        out.append(SessionSummary(
+            id=s.id,
+            created_at=s.created_at,
+            last_message_at=last
+        ))
+    return out
+
+@router.get("/sessions/{session_id}", response_model=SessionHistory)
+async def get_session_history(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    session = (
+        db.query(ChatSession)
+          .filter(
+              ChatSession.id == session_id,
+              ChatSession.authority_username == current_user.username
+          )
+          .first()
+    )
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    msgs = (
+        db.query(ChatMessage)
+          .filter(ChatMessage.session_id == session_id)
+          .order_by(ChatMessage.created_at)
+          .all()
+    )
+    return SessionHistory(
+        messages=[
+            ChatMessageResponse(
+                role=m.role,
+                content=m.content,
+                created_at=m.created_at
+            )
+            for m in msgs
+        ]
+    )
+
+@router.delete("/sessions/{session_id}", status_code=204)
+async def delete_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Delete one chat session and all its messages."""
+    session = (
+        db.query(ChatSession)
+          .filter(
+              ChatSession.id == session_id,
+              ChatSession.authority_username == current_user.username
+          )
+          .first()
+    )
+    if not session:
+        raise HTTPException(404, "Session not found")
+    db.delete(session)
+    db.commit()
+    # 204 No Content – nothing to return

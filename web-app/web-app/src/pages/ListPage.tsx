@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getProblems } from "../api/problems";
 import type { Problem } from "../api/problems";
 import Input from "../components/Input";
-import { colors, spacing } from "../theme";
+import styles from "../styles/ListPage.module.css";
 
 export default function ListPage() {
   const [items, setItems] = useState<Problem[]>([]);
@@ -10,34 +10,34 @@ export default function ListPage() {
   const [type, setType] = useState<"all" | "image" | "video">("all");
 
   useEffect(() => {
-    getProblems({
-      media_type: type === "all" ? undefined : type,
-    }).then(items => {
-      const filtered = klass 
-        ? items.filter(p => 
-            p.predicted_classes.some(c => 
-              c.toLowerCase().includes(klass.toLowerCase())
+    getProblems({ media_type: type === "all" ? undefined : type }).then(
+      (items) => {
+        const filtered = klass
+          ? items.filter((p) =>
+              p.predicted_classes.some((c) =>
+                c.toLowerCase().includes(klass.toLowerCase())
+              )
             )
-          )
-        : items;
-      setItems(filtered);
-    });
+          : items;
+        setItems(filtered);
+      }
+    );
   }, [klass, type]);
 
   return (
-    <div style={{ padding: spacing.m }}>
+    <div style={{ padding: "var(--spacing-m)" }}>
       <h2>Problems list</h2>
-
-      <div style={{ display: "flex", gap: spacing.s }}>
+      <div style={{ display: "flex", gap: "var(--spacing-s)" }}>
         <Input
           placeholder="filter by class…"
           value={klass}
           onChange={(e) => setKlass(e.target.value)}
         />
-
         <select
           value={type}
-          onChange={(e) => setType(e.target.value as "all" | "image" | "video")}
+          onChange={(e) =>
+            setType(e.target.value as "all" | "image" | "video")
+          }
         >
           <option value="all">all types</option>
           <option value="image">images</option>
@@ -45,39 +45,38 @@ export default function ListPage() {
         </select>
       </div>
 
-      <table
-        style={{
-          width: "100%",
-          marginTop: spacing.m,
-          background: colors.surface,
-          borderCollapse: "collapse",
-        }}
-      >
+      <table className={styles.table}>
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Date</th>
-            <th>User</th>
-            <th>Classes</th>
-            <th>Description</th>
-            <th>Solution</th>
-            <th>Thumb</th>
+            {["ID", "Date", "User", "Classes", "Description", "Solution", "Thumb"].map(
+              (label) => (
+                <th key={label} className={styles.th}>
+                  {label}
+                </th>
+              )
+            )}
           </tr>
         </thead>
-        <tbody>
+        <tbody className={styles.tbody}>
           {items.map((it) => (
             <tr key={it.media_id}>
-              <td>{it.media_id}</td>
-              <td>{new Date(it.created_at).toLocaleString()}</td>
-              <td>{it.user_username}</td>
-              <td>{it.predicted_classes.join(", ")}</td>
-              <td>{it.descriptions?.[0] ?? "-"}</td>
-              <td>{it.solutions?.[0] ?? "-"}</td>
-              <td>
+              <td className={styles.td}>{it.media_id}</td>
+              <td className={styles.td}>
+                {new Date(it.created_at).toLocaleString()}
+              </td>
+              <td className={styles.td}>{it.user_username}</td>
+              <td className={styles.td}>{it.predicted_classes.join(", ")}</td>
+              <td className={`${styles.td} ${styles["td--left"]}`}>
+                {it.descriptions?.[0] ?? "-"}
+              </td>
+              <td className={`${styles.td} ${styles["td--left"]}`}>
+                {it.solutions?.[0] ?? "-"}
+              </td>
+              <td className={styles.td}>
                 {it.annotated_image_url && (
                   <img
-                    src={import.meta.env.VITE_API_URL + it.annotated_image_url}
-                    style={{ width: 80 }}
+                    src={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                    style={{ width: 80, borderRadius: 4 }}
                   />
                 )}
                 {it.annotated_video_url && "🎞️"}

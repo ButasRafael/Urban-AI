@@ -1,5 +1,0 @@
-
-$
-stringGET /metrics/raw http send
-
-stringGET /metrics/raw

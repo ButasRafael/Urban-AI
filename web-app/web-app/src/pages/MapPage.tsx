@@ -218,7 +218,7 @@ export default function MapPage() {
                   {p.predicted_classes.join(", ") || "(no classes)"}
                   {p.annotated_image_url && (
                     <img
-                      src={import.meta.env.VITE_API_URL + p.annotated_image_url}
+                      src={`${import.meta.env.VITE_API_BASE}/static/${p.media_id}.jpg`}
                       style={{
                         width: "100%",
                         borderRadius: 4,
