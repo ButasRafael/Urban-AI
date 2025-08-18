@@ -7,10 +7,15 @@ Urban AI provides a complete solution for efficiently identifying, segmenting, a
 * [Project Overview](#project-overview)
 * [AI Model Development and Training](#ai-model-development-and-training)
 * [Backend Development](#backend-development)
+  * [Monitoring and Logging](#monitoring-and-logging)
+    * [Prometheus & Grafana](#prometheus--grafana)
+    * [Loki & Tempo](#loki--tempo)
 * [Frontend Applications](#frontend-applications)
+* [Chat & RAG Module](#-chat--rag-module)
 * [Docker Services Explained](#docker-services-explained)
 * [Installation and Usage Guide](#installation-and-usage-guide)
 * [Contributing and Development](#contributing-and-development)
+
 
 ## 🌟 Project Overview
 
