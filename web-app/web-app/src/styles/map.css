@@ -1,0 +1,245 @@
+/* ===========================
+   Map shell + container
+   =========================== */
+
+.map-shell {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  box-shadow: 0 16px 40px rgba(0,0,0,.14);
+}
+
+.map-el {
+  width: 100%;
+  height: min(72vh, 720px);
+  min-height: 380px;
+}
+
+/* ===========================
+   Overlay (top-right stack)
+   =========================== */
+
+.map-ui {
+  position: absolute;
+  inset: 12px 12px auto auto; /* top-right */
+  display: grid;
+  gap: 10px;
+  z-index: 2;
+  pointer-events: none; /* let the map receive events except on controls */
+}
+.map-ui > * { pointer-events: auto; }
+
+/* Reusable frosted card */
+.map-card {
+  backdrop-filter: saturate(1.1) blur(8px);
+  -webkit-backdrop-filter: saturate(1.1) blur(8px);
+  border-radius: 12px;
+  border: 1px solid var(--surface-200);
+  background: color-mix(in srgb, var(--surface-0) 72%, transparent);
+  box-shadow: 0 10px 26px rgba(0,0,0,.18);
+}
+
+:root.dark .map-card {
+  background: color-mix(in srgb, #0b1220 82%, transparent);
+  border-color: #1f2c38;
+  box-shadow: 0 16px 40px rgba(0,0,0,.55);
+}
+
+/* Controls group */
+.map-controls {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 6px;
+  padding: 6px;
+}
+
+.control-btn {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--surface-200);
+  background: color-mix(in srgb, var(--surface-0) 92%, transparent);
+  color: var(--secondary-900);
+  cursor: pointer;
+  transition: transform .08s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,.06);
+}
+.control-btn:hover   { transform: translateY(-1px); background: var(--primary-100); border-color: var(--primary-300); }
+.control-btn:active  { transform: translateY(0); }
+.control-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 30%, transparent); }
+
+:root.dark .control-btn {
+  background: color-mix(in srgb, #0b1220 92%, transparent);
+  border-color: #1f2c38;
+  color: #e2e8f0;
+}
+:root.dark .control-btn:hover { background: #0e1628; border-color: #2a3a4a; }
+
+/* Legend */
+.map-legend { padding: 8px 10px; }
+.map-legend strong {
+  display: block; font-size: 12px; letter-spacing: .2px; margin-bottom: 6px; color: var(--secondary-800);
+}
+.map-legend ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.map-legend li { display: grid; grid-template-columns: 14px 1fr; gap: 8px; align-items: center; }
+.legend-dot {
+  width: 12px; height: 12px; border-radius: 999px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #000 8%, transparent);
+}
+.legend-label { font-size: 12px; color: var(--secondary-900); white-space: nowrap; }
+:root.dark .map-legend strong { color: #cbd5e1; }
+:root.dark .legend-dot { box-shadow: 0 0 0 2px rgba(255,255,255,.08); }
+:root.dark .legend-label { color: #e2e8f0; }
+
+/* Status pill */
+.map-status {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 10px; font-size: 12px; font-weight: 700;
+}
+.map-status .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--primary-500); }
+
+/* ===========================
+   InfoWindow inner content
+   =========================== */
+
+.info {
+  font: 13px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+}
+.info__title {
+  font-weight: 700;
+  color: var(--on-surface);
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 4px;
+}
+.info .pill {
+  display: inline-block;
+  padding: 2px 6px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--primary-100);
+  color: var(--primary-800);
+  border: 1px solid var(--primary-200);
+}
+:root.dark .info .pill {
+  background: #0e1628; border-color: #2a3a4a; color: #dbeafe;
+}
+.info__addr { color: var(--secondary-700); margin: 6px 0 10px; }
+:root.dark .info__addr { color: #94a3b8; }
+.info__actions { display: flex; gap: 8px; }
+
+/* Small button semantics used in InfoWindow & sheet */
+.btn { --btn-radius: 10px; --btn-pad-y: 8px; --btn-pad-x: 12px; --btn-font: 13px; }
+.btn-sm { --btn-pad-y: 6px; --btn-pad-x: 10px; --btn-font: 12px; }
+.btn-primary {
+  background: var(--primary-500); border: 1px solid var(--primary-500); color: #fff;
+}
+.btn-secondary {
+  background: var(--surface-0); border: 1px solid var(--surface-200); color: var(--secondary-900);
+}
+:root.dark .btn-secondary { background: #0b1220; border-color: #1f2c38; color: #e2e8f0; }
+
+/* ===========================
+   Loading / fallback
+   =========================== */
+
+.map-skeleton {
+  height: min(72vh, 720px);
+  min-height: 360px;
+  border-radius: 14px;
+  border: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  overflow: hidden;
+  position: relative;
+}
+.map-skeleton .sk {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.04) 50%, rgba(0,0,0,0) 100%),
+    repeating-linear-gradient(0deg, var(--surface-100), var(--surface-100) 10px, var(--surface-0) 10px, var(--surface-0) 20px);
+}
+.shimmer { animation: shimmer 1.6s linear infinite; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+.map-fallback.card {
+  border-radius: 14px;
+  border: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  padding: 14px;
+}
+.map-fallback__inner {
+  display: flex; gap: 10px; align-items: center;
+  color: var(--secondary-800);
+}
+.map-fallback__inner .muted { color: var(--secondary-700); }
+:root.dark .map-fallback.card { background: #0f141a; border-color: #1f2c38; }
+
+/* ===========================
+   Google Maps InfoWindow chrome
+   =========================== */
+
+.gm-style .gm-style-iw-c {
+  background: var(--surface-0) !important;
+  border: 1px solid var(--surface-200) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18) !important;
+  padding: 0 !important; /* our .info manages spacing */
+}
+.gm-style .gm-style-iw-d { color: var(--on-surface) !important; }
+.gm-style .gm-style-iw-t::after {
+  background: var(--surface-0) !important;
+  box-shadow: 0 0 0 1px var(--surface-200) !important;
+}
+:root.dark .gm-style .gm-style-iw-c {
+  background: #0f141a !important;
+  border-color: #1f2c38 !important;
+  box-shadow: 0 14px 40px rgba(0,0,0,.5) !important;
+}
+:root.dark .gm-style .gm-style-iw-d { color: #e2e8f0 !important; }
+:root.dark .gm-style .gm-style-iw-t::after {
+  background: #0f141a !important;
+  box-shadow: 0 0 0 1px #1f2c38 !important;
+}
+:root.dark .gm-style .gm-ui-hover-effect {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* ===========================
+   Mobile bottom sheet (active pin)
+   =========================== */
+
+.map-sheet {
+  position: absolute;
+  left: 10px; right: 10px; bottom: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  box-shadow: 0 20px 50px rgba(0,0,0,.25);
+  padding: 12px;
+  display: none; /* hidden on desktop */
+}
+.sheet-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.sheet-title { font-weight: 700; color: var(--on-surface); display: flex; gap: 8px; align-items: center; }
+.sheet-title .pill {
+  padding: 2px 6px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--primary-100); color: var(--primary-800); border: 1px solid var(--primary-200);
+}
+.sheet-close {
+  width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--surface-200);
+  background: var(--surface-0); cursor: pointer;
+}
+.sheet-body { margin: 8px 0 10px; color: var(--secondary-700); }
+.sheet-actions { display: flex; gap: 8px; }
+
+:root.dark .map-sheet       { background: #0f141a; border-color: #1f2c38; }
+:root.dark .sheet-title     { color: #e2e8f0; }
+:root.dark .sheet-title .pill { background: #0e1628; border-color: #2a3a4a; color: #dbeafe; }
+:root.dark .sheet-body      { color: #94a3b8; }
+:root.dark .sheet-close     { background: #0b1220; border-color: #1f2c38; color: #e2e8f0; }
+
+/* Show the sheet & hide InfoWindow on small screens */
+@media (max-width: 640px) {
+  .map-sheet { display: block; }
+  .gm-style .gm-style-iw-c { display: none !important; }
+}

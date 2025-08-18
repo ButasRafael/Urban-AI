@@ -1,0 +1,213 @@
+/* ===========================
+   Button – refined, theme-aware
+   =========================== */
+
+.btn {
+  /* Layout tokens */
+  --btn-radius: 12px;
+  --btn-gap: 8px;
+  --btn-pad-y: 10px;
+  --btn-pad-x: 14px;
+  --btn-font: 14px;
+  --btn-shadow: 0 6px 16px rgba(0,0,0,.08);
+  --btn-shadow-hover: 0 10px 22px rgba(0,0,0,.12);
+
+  /* State tokens */
+  --focus-ring: 0 0 0 4px color-mix(in srgb, var(--primary-500) 22%, transparent);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--btn-gap);
+  padding: var(--btn-pad-y) var(--btn-pad-x);
+  border-radius: var(--btn-radius);
+  border: 1px solid transparent;
+  background: var(--surface-0);
+  color: var(--on-surface);
+  font-weight: 700;
+  font-size: var(--btn-font);
+  line-height: 1;
+  letter-spacing: .2px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  box-shadow: var(--btn-shadow);
+  transition:
+    transform .08s ease,
+    background .2s ease,
+    border-color .2s ease,
+    color .2s ease,
+    box-shadow .2s ease,
+    opacity .2s ease,
+    filter .2s ease;
+}
+
+/* Hover / active lift */
+.btn:hover { transform: translateY(-1px); box-shadow: var(--btn-shadow-hover); }
+.btn:active { transform: translateY(0); filter: brightness(.98); }
+
+/* Strong, visible focus without shifting layout */
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--btn-shadow-hover), var(--focus-ring);
+}
+
+/* Size scale */
+.btn-sm { --btn-pad-y: 7px;  --btn-pad-x: 10px; --btn-font: 13px; --btn-gap: 6px;  border-radius: 10px; }
+.btn-md { /* defaults */ }
+.btn-lg { --btn-pad-y: 12px; --btn-pad-x: 18px; --btn-font: 15px; --btn-gap: 10px; border-radius: 14px; }
+
+.btn-block { width: 100%; }
+
+/* Inner content */
+.btn__inner { display: inline-flex; align-items: center; gap: var(--btn-gap); transition: opacity .15s ease; }
+.btn__inner--loading { opacity: 0; }
+
+/* Icons keep alignment + width stability */
+.btn__icon { display: inline-grid; place-items: center; width: 1.1em; height: 1.1em; }
+.btn__icon svg { width: 1em; height: 1em; stroke: currentColor; }
+.btn__icon.-left  { margin-inline-start: -2px; }
+.btn__icon.-right { margin-inline-end: -2px; }
+
+/* Spinner with track + arc (tuned speeds) */
+.btn__spinner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.btn__spinner svg { width: 18px; height: 18px; }
+.btn__spinner .ring { fill: none; stroke: currentColor; opacity: .2; stroke-width: 3; }
+.btn__spinner .bar  {
+  fill: none; stroke: currentColor; stroke-width: 3;
+  stroke-linecap: round; stroke-dasharray: 56; stroke-dashoffset: 44;
+  animation: btn-spin .85s linear infinite, btn-dash 1.7s ease-in-out infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+@keyframes btn-dash { 0% { stroke-dashoffset: 56; } 50% { stroke-dashoffset: 12; } 100% { stroke-dashoffset: 56; } }
+
+/* Disabled */
+.btn.is-disabled,
+.btn:disabled {
+  cursor: not-allowed;
+  transform: none;
+  opacity: .75;
+  box-shadow: var(--btn-shadow);
+  filter: none;
+}
+
+/* ==================
+   Visual Variants
+   ================== */
+
+/* Primary – deep brand gradient with subtle top highlight */
+.btn-primary {
+  color: #fff;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--primary-500) 92%, #fff 8%), var(--primary-650, var(--primary-600)));
+  border-color: color-mix(in srgb, var(--primary-600) 85%, #000 15%);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 35%, transparent),
+    0 8px 18px color-mix(in srgb, var(--primary-600) 24%, transparent);
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, var(--primary-500), var(--primary-700));
+  border-color: var(--primary-700);
+}
+.btn-primary:active {
+  background: linear-gradient(180deg, var(--primary-600), var(--primary-800));
+  border-color: var(--primary-800);
+}
+
+/* Secondary – elevated surface with subtle tint on hover */
+.btn-secondary {
+  background: var(--surface-0);
+  border-color: var(--surface-200);
+  color: var(--secondary-900);
+}
+.btn-secondary:hover { background: var(--primary-100); border-color: var(--primary-300); }
+.btn-secondary:active { background: var(--primary-200); }
+
+/* Ghost – quiet by default, prominent on hover */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--primary-700);
+  box-shadow: none;
+}
+.btn-ghost:hover { background: var(--primary-100); border-color: var(--primary-200); }
+.btn-ghost:active { background: var(--primary-200); }
+
+/* Danger – bold but refined */
+.btn-danger {
+  color: #fff;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--error) 92%, #fff 8%),
+    color-mix(in srgb, var(--error) 100%, #000 0%)
+  );
+  border-color: color-mix(in srgb, var(--error) 85%, #000 15%);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--error) 22%, transparent);
+}
+.btn-danger:hover {
+  background: linear-gradient(180deg, var(--error), color-mix(in srgb, var(--error) 90%, #000 10%));
+}
+.btn-danger:active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--error) 92%, #000 8%), color-mix(in srgb, var(--error) 85%, #000 15%));
+}
+
+/* =========================
+   Dark-mode neutral tweaks
+   ========================= */
+:root.dark .btn-secondary {
+  background: #0b1220;
+  border-color: #1f2c38;
+  color: #e2e8f0;
+}
+:root.dark .btn-secondary:hover { background: #0e1628; border-color: #2a3a4a; }
+:root.dark .btn-ghost { color: #dbeafe; }
+:root.dark .btn-ghost:hover { background: #0e1628; border-color: #2a3a4a; }
+
+/* Slightly deepen primary gradient in dark */
+:root.dark .btn-primary {
+  background: linear-gradient(180deg, var(--primary-600), var(--primary-800));
+  border-color: var(--primary-800);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 16%, transparent),
+    0 10px 22px rgba(0,0,0,.36),
+    0 0 0 1px color-mix(in srgb, var(--primary-700) 22%, transparent);
+}
+:root.dark .btn-primary:hover { background: linear-gradient(180deg, var(--primary-600), var(--primary-900)); }
+
+/* =========================
+   Icon-only sizing & polish
+   ========================= */
+.btn[data-icon-only] {
+  padding: 8px;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+}
+.btn-lg[data-icon-only] { width: 44px; height: 44px; }
+.btn-sm[data-icon-only] { width: 32px; height: 32px; }
+.btn[data-icon-only] .btn__inner { gap: 0; }
+
+/* =========================
+   High-contrast friendliness
+   ========================= */
+@media (forced-colors: active) {
+  .btn { border: 1px solid CanvasText; }
+  .btn:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; box-shadow: none; }
+  .btn-primary, .btn-danger { color: ButtonText; }
+}
+
+/* =========================
+   Reduced motion
+   ========================= */
+@media (prefers-reduced-motion: reduce) {
+  .btn, .btn__inner { transition: none; }
+  .btn__spinner .bar { animation: btn-spin 1.2s linear infinite; }
+}

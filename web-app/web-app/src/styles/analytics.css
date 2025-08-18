@@ -1,0 +1,239 @@
+.analytics {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: clamp(var(--l), 4vw, var(--xl));
+  display: grid;
+  gap: var(--xl);
+}
+
+/* ---------- Header ---------- */
+.analytics__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--l);
+  flex-wrap: wrap; /* allow wrapping on narrow screens */
+}
+.title-stack .eyebrow {
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--secondary-700);
+}
+:root.dark .title-stack .eyebrow { color: #94a3b8; }
+.grad-title {
+  margin: 4px 0 2px;
+  font-size: clamp(26px, 4vw, 34px);
+  font-weight: 800;
+  line-height: 1.1;
+  background: linear-gradient(90deg, var(--primary-600), var(--secondary-600));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.03));
+}
+.header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* segmented */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  border-radius: 999px;
+  padding: 3px;
+  backdrop-filter: saturate(1.1) blur(2px);
+}
+.segmented button {
+  min-width: 48px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--on-surface);
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, transform .06s ease;
+}
+.segmented button:hover { transform: translateY(-1px); }
+.segmented button.active {
+  background: var(--primary-100);
+  color: var(--primary-800);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 16%, transparent);
+}
+.segmented button:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---------- KPIs ---------- */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0,1fr));
+  gap: var(--m);
+}
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media (max-width: 760px)  { .kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 520px)  { .kpis { grid-template-columns: 1fr; } }
+
+.kpi {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-0);
+  border: 1px solid var(--surface-200);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+}
+.kpi::after {
+  content:"";
+  position:absolute; inset:-20% -10% auto -10%;
+  height: 60%;
+  background: radial-gradient(280px 180px at 20% 0%, color-mix(in srgb, var(--primary-500) 16%, transparent), transparent 65%);
+  pointer-events: none;
+}
+:root.dark .kpi::after {
+  background: radial-gradient(280px 180px at 20% 0%, color-mix(in srgb, #3b82f6 16%, transparent), transparent 65%);
+}
+.kpi__label {
+  display: block;
+  font-size: 12px;
+  color: var(--secondary-700);
+  margin-bottom: 6px;
+}
+:root.dark .kpi__label { color: #94a3b8; }
+.kpi__value {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--on-surface);
+}
+.kpi__top { display:flex; align-items:center; justify-content:space-between; gap: 8px; }
+
+.kpi--accent {
+  border-color: color-mix(in srgb, var(--primary-500) 30%, var(--surface-200));
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--primary-500) 16%, transparent);
+}
+
+.sparkline { margin-top: 8px; opacity: .9; }
+
+/* Chips */
+.chip {
+  display:inline-flex; align-items:center; gap:6px;
+  font-size: 12px; line-height: 1;
+  padding: 6px 8px; border-radius: 999px; border: 1px solid;
+}
+.chip--neutral { border-color: var(--surface-200); color: var(--secondary-700); background: var(--surface-0); }
+.chip--up      { border-color: color-mix(in srgb, #10b981 45%, transparent); color: #059669; background: color-mix(in srgb, #10b981 12%, transparent);}
+.chip--down    { border-color: color-mix(in srgb, #ef4444 45%, transparent); color: #b91c1c; background: color-mix(in srgb, #ef4444 12%, transparent);}
+.chip--soft    { border-color: var(--surface-200); color: var(--secondary-700); background: var(--surface-0); margin-top: 6px; }
+:root.dark .chip--neutral,
+:root.dark .chip--soft { background: #0b1220; border-color: #1f2c38; color: #94a3b8; }
+
+/* Skeletons */
+.kpi--skeleton { position: relative; overflow: hidden; }
+.kpi--skeleton .sk-line { height: 10px; width: 50%; background: var(--surface-200); border-radius: 6px; margin-bottom: 10px; }
+.kpi--skeleton .sk-num  { height: 22px; width: 70%; background: var(--surface-200); border-radius: 8px; }
+.kpi--skeleton::after {
+  content:""; position:absolute; inset:0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  animation: shimmer 1.4s infinite;
+  pointer-events: none;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* ---------- Cards / sections ---------- */
+.card {
+  position: relative;
+  background: var(--surface-0);
+  border: 1px solid var(--surface-200);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  padding: clamp(var(--m), 2vw, var(--l));
+}
+.card--glow::before {
+  content:""; position:absolute; inset:-1px; border-radius:inherit; pointer-events:none;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary-500) 35%, transparent), transparent 40%);
+  mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
+  padding: 1px;
+  opacity:.35;
+}
+
+/* section headings */
+.section-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-bottom: 8px;
+}
+.section-head h2 { margin: 0; font-size: 18px; }
+
+/* Charts */
+.chart-wrap { --chart-h: 300px; height: var(--chart-h); position: relative; }
+@media (max-width: 900px) { .chart-wrap { --chart-h: 260px; } }
+@media (max-width: 560px) { .chart-wrap { --chart-h: 220px; } }
+
+.chart-wrap::after {
+  content:""; position:absolute; inset:auto 8% -8% 8%;
+  height: 40px;
+  background: radial-gradient(50% 60% at 50% 0%, color-mix(in srgb, var(--primary-500) 14%, transparent), transparent 70%);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.chart-skeleton {
+  height: 100%;
+  border-radius: 12px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--surface-100),
+    var(--surface-100) 10px,
+    var(--surface-200) 10px,
+    var(--surface-200) 20px
+  );
+  animation: bg-pan 1.6s linear infinite;
+}
+@keyframes bg-pan { from { background-position: 0 0; } to { background-position: 100% 0; } }
+
+.empty {
+  display: grid; place-items: center; gap: 10px;
+  color: var(--secondary-700);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 10px;
+  background: var(--surface-0);
+  border: 1px solid var(--surface-200);
+  color: var(--on-surface);
+  cursor: pointer;
+  transition: transform .08s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease;
+}
+.btn:hover { background: var(--primary-100); border-color: var(--primary-300); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-ghost { background: transparent; }
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 20%, transparent);
+}
+:root.dark .btn { background: #0b1220; border-color: #1f2c38; color: #e2e8f0; }
+:root.dark .btn:hover { background: #0e1628; border-color: #2a3a4a; }
+
+/* Chart theming vars */
+:root {
+  --chart-grid: color-mix(in srgb, var(--secondary-300) 60%, transparent);
+  --chart-axis: color-mix(in srgb, var(--secondary-700) 85%, transparent);
+}
+:root.dark {
+  --chart-grid: #1f2c38;
+  --chart-axis: #9fb2c3;
+}
+
+/* Make Recharts tooltips readable in dark mode (belt & suspenders) */
+.recharts-default-tooltip { color: var(--on-surface) !important; }
+
+/* Dark mode surfaces */
+:root.dark .card,
+:root.dark .kpi { background: #0f141a; border-color: #1f2c38; }
+:root.dark .kpi--skeleton .sk-line,
+:root.dark .kpi--skeleton .sk-num,
+:root.dark .chart-skeleton { background: #101820; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .kpi--skeleton::after, .chart-skeleton { animation: none; }
+}

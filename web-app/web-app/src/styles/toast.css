@@ -1,0 +1,22 @@
+/* src/styles/toast.css */
+:root { --sonner-z-index: 9999; }
+
+.app-toast {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--secondary-200);
+  background: var(--surface-0);
+  color: var(--secondary-900);
+  box-shadow: var(--shadow-lg);
+}
+.app-toast-title { font-weight: 700; }
+.app-toast-desc  { opacity: .9; }
+
+:root.dark .app-toast {
+  background: #0f141a;
+  color: #f8fafc;
+  border-color: #1f2c38;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+
+/* Optional: nudge spacing on action buttons to fit your buttons */
+.app-toast .btn { padding: 6px 10px; border-radius: 10px; }

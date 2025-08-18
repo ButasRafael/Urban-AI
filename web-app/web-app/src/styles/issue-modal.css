@@ -1,0 +1,328 @@
+/* lock page scroll when modal is open (fixes white scrollbar gutter) */
+html.has-modal,
+html.has-modal body { overflow: hidden !important; }
+
+/* Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background:
+    radial-gradient(1200px 800px at 20% 10%, rgba(14,124,100,.12), transparent 60%),
+    rgba(6,10,14,.55);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  padding: min(4dvh, 16px);
+}
+
+/* Card with gradient border so edges look great in light & dark */
+.modal-card {
+  width: min(860px, 96vw);
+  background:
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--secondary-300)) border-box;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.25);
+  overflow: clip;
+  animation: rise-in .18s ease-out both;
+  position: relative;
+  max-height: calc(100dvh - 2 * min(4dvh, 16px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0)  scale(1); }
+}
+
+/* Tiny toast */
+.modal-toast {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  font-size: 12px; font-weight: 700;
+  color: var(--primary-900);
+  background:
+    linear-gradient(var(--primary-100), var(--primary-100)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--primary-400)) border-box;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+}
+:root.dark .modal-toast {
+  color: #dbeafe;
+  background:
+    linear-gradient(#0e1628, #0e1628) padding-box,
+    linear-gradient(135deg, #204e87, #2a3a4a) border-box;
+}
+
+/* Header */
+.modal-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px 10px;
+  flex: 0 0 auto;
+}
+
+.modal-badge {
+  width: 38px; height: 38px; border-radius: 12px;
+  display: grid; place-items: center;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(14,124,100,.25);
+}
+
+.modal-titles h2 { margin: 0; font-size: 18px; letter-spacing: .2px; }
+.modal-titles .muted { margin-top: 2px; font-size: 12px; color: var(--secondary-700); }
+.modal-titles .username { color: var(--secondary-900); font-weight: 600; }
+:root.dark .modal-titles .muted { color: #94a3b8; }
+:root.dark .modal-titles .username { color: #e2e8f0; }
+
+/* Close button */
+.icon-close {
+  display: grid; place-items: center;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background:
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    linear-gradient(135deg, var(--surface-200), var(--surface-300)) border-box;
+  border: 1px solid transparent;
+  color: var(--secondary-800);
+  cursor: pointer;
+  transition: transform .08s, background .2s, border-color .2s;
+}
+.icon-close:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(var(--primary-100), var(--primary-100)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--primary-300)) border-box;
+}
+/* dark */
+:root.dark .icon-close {
+  background:
+    linear-gradient(#0b1220, #0b1220) padding-box,
+    linear-gradient(135deg, #1f2c38, #1f2c38) border-box;
+  color: #e2e8f0;
+}
+:root.dark .icon-close:hover {
+  background:
+    linear-gradient(#0e1628, #0e1628) padding-box,
+    linear-gradient(135deg, #2a3a4a, #2a3a4a) border-box;
+}
+
+/* Media preview */
+.media-box {
+  position: relative;
+  border-top: 1px solid var(--surface-200);
+  border-bottom: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  aspect-ratio: 16 / 9;
+  max-height: 48dvh;
+  flex: 0 0 auto;
+}
+:root.dark .media-box { background: #0f141a; border-color: #1f2c38; }
+
+.media-el { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.media-skeleton {
+  position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(90deg, var(--surface-100), var(--surface-100) 30px, var(--surface-200) 30px, var(--surface-200) 60px);
+}
+.shimmer { position: relative; overflow: hidden; }
+.shimmer::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+.media-toolbar {
+  position: absolute; right: 12px; bottom: 12px;
+  display: flex; gap: 8px;
+}
+.tool-btn {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background:
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    linear-gradient(135deg, var(--surface-200), var(--surface-300)) border-box;
+  border: 1px solid transparent;
+  color: var(--secondary-800);
+  cursor: pointer;
+  transition: background .2s, transform .08s;
+}
+.tool-btn:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(var(--primary-100), var(--primary-100)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--primary-300)) border-box;
+}
+:root.dark .tool-btn {
+  background:
+    linear-gradient(#0b1220, #0b1220) padding-box,
+    linear-gradient(135deg, #1f2c38, #1f2c38) border-box;
+  color: #e2e8f0;
+}
+:root.dark .tool-btn:hover {
+  background:
+    linear-gradient(#0e1628, #0e1628) padding-box,
+    linear-gradient(135deg, #2a3a4a, #2a3a4a) border-box;
+}
+
+/* Body */
+.modal-body { padding: 12px 16px 4px; 
+  flex: 1 1 auto; overflow: auto; min-height: 0; }
+
+/* Chips */
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.chip-label { font-size: 12px; color: var(--secondary-700); margin-right: 2px; }
+:root.dark .chip-label { color: #94a3b8; }
+
+.chip {
+  display: inline-flex; align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  background:
+    linear-gradient(var(--primary-100), var(--primary-100)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--primary-300)) border-box;
+  border: 1px solid transparent;
+  color: var(--primary-800);
+}
+.chip--muted {
+  background:
+    linear-gradient(var(--surface-100), var(--surface-100)) padding-box,
+    linear-gradient(135deg, var(--surface-200), var(--surface-200)) border-box;
+  border: 1px solid transparent;
+  color: var(--secondary-700);
+}
+:root.dark .chip {
+  color: #dbeafe;
+  background:
+    linear-gradient(#0e1628, #0e1628) padding-box,
+    linear-gradient(135deg, #2a3a4a, #2a3a4a) border-box;
+}
+:root.dark .chip--muted {
+  color: #94a3b8;
+  background:
+    linear-gradient(#0b1220, #0b1220) padding-box,
+    linear-gradient(135deg, #1f2c38, #1f2c38) border-box;
+}
+
+/* Meta grid */
+.meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+@media (max-width: 560px) { .meta-grid { grid-template-columns: 1fr; } }
+
+.meta-item {
+  position: relative;
+  background:
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    linear-gradient(135deg, var(--surface-200), var(--surface-300)) border-box;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 12px 38px; /* space for meta-actions */
+}
+.meta-label { display: block; font-size: 12px; color: var(--secondary-700); margin-bottom: 4px; }
+.meta-value { font-weight: 600; color: var(--secondary-900); }
+.meta-value.wrap { word-break: break-word; }
+
+.meta-actions { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+.mini-btn {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  background:
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    linear-gradient(135deg, var(--surface-200), var(--surface-300)) border-box;
+  border: 1px solid transparent;
+  color: var(--secondary-800);
+  cursor: pointer;
+  transition: transform .08s ease, background .2s ease, opacity .2s ease;
+}
+.mini-btn:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(var(--primary-100), var(--primary-100)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--primary-300)) border-box;
+}
+.mini-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+:root.dark .meta-item {
+  background:
+    linear-gradient(#0f141a, #0f141a) padding-box,
+    linear-gradient(135deg, #1f2c38, #1f2c38) border-box;
+}
+:root.dark .meta-value { color: #e2e8f0; }
+:root.dark .meta-label { color: #94a3b8; }
+:root.dark .mini-btn {
+  color: #e2e8f0;
+  background:
+    linear-gradient(#0b1220, #0b1220) padding-box,
+    linear-gradient(135deg, #1f2c38, #1f2c38) border-box;
+}
+:root.dark .mini-btn:hover {
+  background:
+    linear-gradient(#0e1628, #0e1628) padding-box,
+    linear-gradient(135deg, #2a3a4a, #2a3a4a) border-box;
+}
+
+/* Dark theme surfaces */
+:root.dark .modal-card {
+  background:
+    linear-gradient(#0f141a, #0f141a) padding-box,
+    linear-gradient(135deg, #0E7C64, #2C3E50) border-box;
+}
+
+/* Actions footer */
+.modal-actions {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  flex: 0 0 auto;
+}
+:root.dark .modal-actions { border-top-color: #1f2c38; background: #0f141a; }
+.modal-actions .spacer { flex: 1; }
+
+/* Keyboard hints */
+.kbd-hints {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  color: var(--secondary-700);
+  font-size: 12px;
+  padding: 10px 0 2px;
+}
+:root.dark .kbd-hints { color: #94a3b8; }
+.kbd-hints .sep { opacity: .6; }
+.kbd {
+  display: inline-grid; place-items: center;
+  padding: 2px 6px; min-width: 18px;
+  font-weight: 700; font-size: 11px;
+  border-radius: 6px;
+  background:
+    linear-gradient(var(--surface-100), var(--surface-100)) padding-box,
+    linear-gradient(135deg, var(--surface-200), var(--surface-200)) border-box;
+  border: 1px solid transparent;
+  color: var(--secondary-900);
+}
+:root.dark .kbd {
+  color: #e2e8f0;
+  background:
+    linear-gradient(#0b1220, #0b1220) padding-box,
+    linear-gradient(135deg, #1f2c38, #1f2c38) border-box;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .modal-card { animation: none; }
+  .icon-close:hover,
+  .tool-btn:hover,
+  .mini-btn:hover { transform: none; }
+}

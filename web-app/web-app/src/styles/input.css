@@ -1,0 +1,148 @@
+/* Container */
+.form-control { display: grid; gap: 6px; }
+.form-control.is-block { width: 100%; }
+
+/* Label */
+.form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--secondary-800);
+}
+:root.dark .form-label { color: #e2e8f0; }
+
+/* Wrapper controls padding for prefix/suffix */
+.input-wrap {
+  --in-pad-y: 10px;
+  --in-pad-x: 12px;
+  --in-radius: 12px;
+
+  position: relative;
+  display: grid;
+  align-items: center;
+  width: 100%;
+}
+.input-sm { --in-pad-y: 7px;  --in-pad-x: 10px; --in-radius: 10px; }
+.input-md { /* defaults */ }
+.input-lg { --in-pad-y: 12px; --in-pad-x: 14px; --in-radius: 14px; }
+
+/* The input itself */
+.input {
+  width: 100%;
+  padding: var(--in-pad-y) var(--in-pad-x);
+  border: 1px solid var(--surface-200);
+  border-radius: var(--in-radius);
+  background: var(--surface-0);
+  color: var(--on-surface);
+  font-size: 14px;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  box-shadow: 0 4px 10px rgba(0,0,0,.04);
+}
+.input::placeholder {
+  color: color-mix(in srgb, var(--secondary-700) 60%, transparent);
+  opacity: .85;
+}
+
+/* Hover/Focus */
+.input:hover { border-color: var(--primary-300); }
+.input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow:
+    0 6px 16px rgba(0,0,0,.06),
+    0 0 0 4px color-mix(in srgb, var(--primary-500) 18%, transparent);
+}
+
+/* Dark theme */
+:root.dark .input {
+  background: #0f141a;
+  border-color: #1f2c38;
+  color: #f8fafc;
+  box-shadow: 0 4px 14px rgba(0,0,0,.28);
+}
+:root.dark .input:hover { border-color: #2a3a4a; }
+:root.dark .input:focus {
+  border-color: var(--primary-500);
+  box-shadow:
+    0 6px 18px rgba(0,0,0,.45),
+    0 0 0 4px color-mix(in srgb, var(--primary-500) 22%, transparent);
+}
+
+/* Prefix/Suffix affixes */
+.input-affix {
+  position: absolute;
+  inset-block: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--secondary-700);
+  pointer-events: none; /* icons/spinner ignore pointer */
+}
+.input-affix svg { display:block; stroke: currentColor; }
+:root.dark .input-affix { color: #a2b3c7; }
+
+.input-affix.-prefix { left: 10px; }
+.input-affix.-suffix { right: 8px; }
+
+/* Make room when affixes exist */
+.input-wrap[data-has-prefix] .input { padding-left: calc(var(--in-pad-x) + 26px); }
+.input-wrap[data-has-suffix] .input { padding-right: calc(var(--in-pad-x) + 36px); }
+
+/* Affix buttons (interactive) */
+.affix-btn {
+  pointer-events: auto; /* clickable */
+  display: inline-grid;
+  place-items: center;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--surface-200);
+  background: var(--surface-0);
+  color: var(--secondary-700);
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, transform .08s ease;
+}
+.affix-btn:hover {
+  transform: translateY(-1px);
+  background: var(--primary-100);
+  border-color: var(--primary-300);
+}
+:root.dark .affix-btn {
+  background: #0b1220; border-color: #1f2c38; color: #dbeafe;
+}
+:root.dark .affix-btn:hover { background: #0e1628; border-color: #2a3a4a; }
+
+/* Small inline spinner */
+.in-spinner { display: inline-grid; place-items: center; width: 18px; height: 18px; pointer-events:none; }
+.in-spinner .ring { fill: none; stroke: currentColor; opacity: .2; stroke-width: 3; }
+.in-spinner .bar  {
+  fill: none; stroke: currentColor; stroke-width: 3;
+  stroke-linecap: round; stroke-dasharray: 56; stroke-dashoffset: 44;
+  animation: spin .9s linear infinite, dash 1.8s ease-in-out infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes dash {
+  0% { stroke-dashoffset: 56; }
+  50% { stroke-dashoffset: 14; }
+  100% { stroke-dashoffset: 56; }
+}
+
+/* Validation */
+.input-wrap.is-invalid .input {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 6%, var(--surface-0));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--error) 18%, transparent);
+}
+:root.dark .input-wrap.is-invalid .input {
+  background: color-mix(in srgb, var(--error) 10%, #0f141a);
+}
+
+/* Helper & error text */
+.form-hint { font-size: 12px; color: var(--secondary-700); }
+.form-error { font-size: 12px; color: var(--error); }
+
+/* Disabled */
+.input:disabled {
+  opacity: .85;
+  cursor: not-allowed;
+  background: var(--surface-100);
+}
+:root.dark .input:disabled { background: #0d1218; }
