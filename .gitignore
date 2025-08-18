@@ -3,3 +3,10 @@
 /weights/sam2.1_hiera_base_plus.pt
 /weights/groundingdino_swinb_cogcoor.pth
 /static
+/tempo-wal/
+/tempo-gen-wal/
+/tempo-gen-traces/
+/tailscale-state/
+/promtail-data/
+/.expo/
+.idea
