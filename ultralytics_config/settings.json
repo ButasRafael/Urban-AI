@@ -3,7 +3,7 @@
   "datasets_dir": "/app/datasets",
   "weights_dir": "weights",
   "runs_dir": "runs",
-  "uuid": "995d7f9af8f15ac56c65241c19e086bfcfbed6f1071bf9dcc8a68b7a80278e8a",
+  "uuid": "bde2c81643069e9e91a2ac56fa00d9b6cb8b3c7849aec146220c4282d45a0583",
   "sync": true,
   "api_key": "",
   "openai_api_key": "",

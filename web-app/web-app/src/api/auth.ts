@@ -1,7 +1,9 @@
+// src/api/auth.ts
 import client from './client'
+
 export interface User {
   username: string
-  role: 'user'|'authority'|'admin'
+  role: 'user' | 'authority' | 'admin'
 }
 
 export async function login(username: string, password: string): Promise<User> {
@@ -22,13 +24,16 @@ export async function login(username: string, password: string): Promise<User> {
   return me
 }
 
-
-export async function register(username: string, password: string) {
-  await client.post("/auth/register", { username, password });
+export async function register(
+  username: string,
+  password: string,
+  role: 'authority' | 'admin'
+) {
+  await client.post('/auth/register', { username, password, role })
 }
 
 export async function logout() {
-  await client.post("/auth/logout");
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
+  await client.post('/auth/logout')
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
 }

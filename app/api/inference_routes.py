@@ -16,7 +16,6 @@ import cv2
 from prometheus_client import Counter, Histogram
 import sentry_sdk
 from app.core.security import require_roles, get_current_user
-from app.utils.exif import get_image_gps
 from sqlalchemy.orm import Session
 from typing import List
 import httpx

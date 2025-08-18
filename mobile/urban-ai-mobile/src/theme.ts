@@ -29,6 +29,8 @@ export const palette = {
     surface0:   '#FFFFFF',   // cards
     surface100: '#ECF0F1',   // app background
     onSurface:  '#34495E',   // default text colour
+
+    overlay: 'rgba(0,0,0,0.45)'
   },
 
   dark: {
@@ -54,6 +56,8 @@ export const palette = {
     surface0:   '#1E1E1E',
     surface100: '#2A2A2A',
     onSurface:  '#ECF0F1',
+
+    overlay: 'rgba(0,0,0,0.45)',
   },
 } as const
 
@@ -84,10 +88,9 @@ export const textVariants = {
 } as const
 
 // ----------  Restyle themes  ----------
-export const theme = createTheme({
+export const lightTheme = createTheme({
   colors: {
     ...palette.light,
-    // alias tokens expected by Navigation / components
     background: palette.light.surface100,
     card:       palette.light.surface0,
     text:       palette.light.onSurface,
@@ -98,15 +101,17 @@ export const theme = createTheme({
   textVariants,
 })
 
-export const darkTheme = {
-  ...theme,
+export const darkTheme = createTheme({
   colors: {
     ...palette.dark,
     background: palette.dark.surface0,
     card:       palette.dark.surface100,
     text:       palette.dark.onSurface,
-    muted:      palette.dark.secondary300,
+    muted:      palette.dark.secondary500,
   },
-} as const
+  spacing,
+  borderRadii: radii,
+  textVariants,
+})
 
-export type Theme = typeof theme
+export type Theme = typeof lightTheme

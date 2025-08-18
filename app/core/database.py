@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
@@ -15,6 +15,17 @@ Psycopg2Instrumentor().instrument()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+@event.listens_for(engine, "connect")
+def _set_ivfflat_probes(dbapi_conn, _conn_record):
+    cur = dbapi_conn.cursor()
+    try:
+        try:
+            cur.execute("SET ivfflat.probes = 10;")
+        except Exception:
+            pass
+    finally:
+        cur.close()
+
 def get_db():
     db = SessionLocal()
     try:
@@ -23,5 +34,16 @@ def get_db():
         db.close()
 
 def init_db() -> None:
-    from app.models import media
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+
+    from app.models import media, rag 
     Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_rag_chunks_embedding_ivfflat
+            ON rag_chunks
+            USING ivfflat (embedding vector_cosine_ops)
+            WITH (lists = 100);
+        """))

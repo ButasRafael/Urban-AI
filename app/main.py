@@ -29,6 +29,9 @@ import os
 import logging
 from app.core.security import require_roles
 from app.api.chat import router as chat_router
+from app.api.rag import router as rag_router
+from app.core.database import init_db
+
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +95,13 @@ app.add_middleware(PrometheusMiddleware)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/healthz",dependencies=[require_roles("admin")])
+@app.get("/healthz")
 def _ping():
     return {"status": "ok"}
+
+@app.on_event("startup")
+def _startup():
+    init_db()
 
 @app.get("/sentry-test",dependencies=[require_roles("admin")])
 def test():
@@ -110,6 +117,7 @@ app.include_router(infer_router)
 app.include_router(problems.router)
 app.include_router(analytics.router) 
 app.include_router(chat_router, prefix="/chat", tags=["Chat"])
+app.include_router(rag_router, prefix="/rag", tags=["RAG"])
 
 app.add_route(
     "/metrics/raw",

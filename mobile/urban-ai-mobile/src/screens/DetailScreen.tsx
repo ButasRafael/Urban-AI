@@ -8,12 +8,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   View,
+  ScrollView,
 } from 'react-native';
 import ImageZoomLib from 'react-native-image-pan-zoom';
 import { Video, ResizeMode } from 'expo-av';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '@shopify/restyle';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Box, Text } from '../components/restylePrimitives';
 import type { Theme } from '../theme';
@@ -22,12 +24,13 @@ import { RootStackParamList } from '../navigation/types';
 import { API_BASE } from '../config';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Detail'>;
-const ImageZoom: any = ImageZoomLib;              // avoid TS errors on lib types
+const ImageZoom: any = ImageZoomLib; // avoid TS errors on lib types
 
 export default function DetailScreen({ route }: Props) {
   const { media, showInfo } = route.params;
   const [showInfoModal, setShowInfoModal] = React.useState(false);
   const theme = useTheme<Theme>();
+  const insets = useSafeAreaInsets();
   const descriptions = media.descriptions ?? [];
 
   // -------------------- derive media uri -----------------------
@@ -44,104 +47,252 @@ export default function DetailScreen({ route }: Props) {
   if (uri.startsWith('/')) uri = `${API_BASE}${uri}`;
 
   const { width, height } = Dimensions.get('window');
+  const mediaHeight = Math.floor(height * 0.72);
+
+  const formattedDate =
+    media.created_at ? new Date(media.created_at).toLocaleString() : '-';
 
   // ----------------------------- UI ----------------------------
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <Box flex={1} bg="background" alignItems="center" justifyContent="center">
-        {/*  more / info button  */}
+        {/* MEDIA FRAME */}
+        <Box
+          width="100%"
+          style={{ maxWidth: 900 }}
+          px="m"
+        >
+          <Box
+            bg="card"
+            borderRadius="m"
+            borderWidth={1}
+            borderColor="muted"
+            overflow="hidden"
+            style={{
+              shadowColor: '#000',
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 4,
+            }}
+          >
+            {/* Media badge (top-left) */}
+            <Box
+              position="absolute"
+              top={8}
+              left={8}
+              px="s"
+              py="xs"
+              borderRadius="s"
+              borderWidth={1}
+              borderColor="muted"
+              bg="overlay"
+              flexDirection="row"
+              alignItems="center"
+            >
+              <Feather
+                name={media.media_type === 'video' ? 'video' : 'image'}
+                size={14}
+                color="#fff"
+              />
+              <Text ml="xs" variant="label" style={{ color: '#fff' }}>
+                {media.media_type === 'video' ? 'Video' : 'Image'}
+              </Text>
+            </Box>
+
+            {/* IMAGE */}
+            {media.annotated_image_url ? (
+              <ImageZoom
+                cropWidth={width}
+                cropHeight={mediaHeight}
+                imageWidth={width}
+                imageHeight={mediaHeight}
+                enableCenterFocus={false}
+                enableDoubleClickZoom
+                minScale={1}
+                maxScale={3}
+              >
+                <Image
+                  source={{ uri }}
+                  style={{ width, height: mediaHeight, backgroundColor: theme.colors.background }}
+                  resizeMode="contain"
+                />
+              </ImageZoom>
+            ) : (
+              // VIDEO
+              <View style={{ width, height: mediaHeight, backgroundColor: theme.colors.background }}>
+                <Video
+                  source={{ uri }}
+                  style={{ width, height: mediaHeight }}
+                  useNativeControls
+                  resizeMode={ResizeMode.CONTAIN}
+                  shouldPlay={false}
+                />
+              </View>
+            )}
+
+            {/* Caption strip (bottom-left) */}
+            <Box
+              position="absolute"
+              bottom={8}
+              left={8}
+              right={8}
+              px="s"
+              py="xs"
+              borderRadius="s"
+              bg="overlay"
+              >
+              <Text numberOfLines={1} variant="label" style={{ color: '#fff' }}>
+                {media.address || '-'}
+              </Text>
+              <Text numberOfLines={1} variant="label" style={{ color: '#fff' }}>
+                {formattedDate}
+              </Text>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* FAB: details (bottom-right) */}
         {showInfo && (
           <TouchableOpacity
-            style={styles.moreBtn}
+            activeOpacity={0.85}
             onPress={() => setShowInfoModal(true)}
+            style={[
+              styles.fab,
+              {
+                right: spacing.m,
+                bottom: Math.max(insets.bottom, spacing.m),
+              },
+            ]}
           >
-            <Feather name="more-vertical" size={24} color={theme.colors.text} />
+            <Box
+              width={56}
+              height={56}
+              borderRadius="l"
+              bg="card"
+              alignItems="center"
+              justifyContent="center"
+              borderWidth={1}
+              borderColor="muted"
+              style={{
+                shadowColor: '#000',
+                shadowOpacity: 0.12,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 6 },
+                elevation: 5,
+              }}
+            >
+              <Feather name="info" size={24} color={theme.colors.text} />
+            </Box>
           </TouchableOpacity>
         )}
 
-        {/*  IMAGE  */}
-        {media.annotated_image_url ? (
-          <ImageZoom
-            cropWidth={width}
-            cropHeight={height * 0.8}
-            imageWidth={width}
-            imageHeight={height * 0.8}
-            enableCenterFocus={false}
-          >
-            <Image
-              source={{ uri }}
-              style={{ width, height: height * 0.8 }}
-              resizeMode="contain"
-            />
-          </ImageZoom>
-        ) : (
-          /*  VIDEO  */
-          <View style={{ width, height: height * 0.8 }}>
-            <Video
-              source={{ uri }}
-              style={{ width, height: height * 0.8 }}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
-            />
-          </View>
-        )}
-
-        {/*  INFO MODAL  */}
+        {/* INFO MODAL (bottom sheet style) */}
         <Modal
           visible={showInfoModal}
           transparent
-          animationType="slide"
+          animationType="fade"
           onRequestClose={() => setShowInfoModal(false)}
         >
           <View style={styles.modalOverlay}>
             <Box
               bg="surface0"
-              p="l"
-              borderRadius="s"
-              width="80%"
+              borderTopLeftRadius="l"
+              borderTopRightRadius="l"
+              width="100%"
+              style={{ maxHeight: height * 0.7, paddingBottom: insets.bottom || spacing.m }}
             >
-              <Text mb="s" color="text">
-                <Text fontWeight="600">Date: </Text>
-                {media.created_at}
-              </Text>
-              <Text mb="s" color="text">
-                <Text fontWeight="600">Address: </Text>
-                {media.address}
-              </Text>
-              <Text mb="s" color="text">
-                <Text fontWeight="600">Type: </Text>
-                {media.media_type}
-              </Text>
-              <Text mb="s" color="text">
-                <Text fontWeight="600">Classes: </Text>
-                {(media.predicted_classes ?? []).length
-                  ? media.predicted_classes.join(', ')
-                  : '-'}
-              </Text>
-              <Text mb="s" color="text">
-                <Text fontWeight="600">Descriptions: </Text>
-                {descriptions.length > 0 ? (
-                  descriptions.map((d, i) => (
-                    <Text key={i}>
-                      {i + 1}. {d}
-                      {i < descriptions.length - 1 ? '\n' : ''}
+              {/* Handle / Header */}
+              <Box alignItems="center" pt="s" pb="m">
+                <Box
+                  width={40}
+                  height={4}
+                  borderRadius="s"
+                  bg="muted"
+                  opacity={0.7}
+                />
+              </Box>
+
+              <Box px="l">
+                <Box
+                  mb="m"
+                  flexDirection="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                >
+                  <Text variant="title" color="text">Details</Text>
+                  <TouchableOpacity onPress={() => setShowInfoModal(false)}>
+                    <Feather name="x" size={22} color={theme.colors.text} />
+                  </TouchableOpacity>
+                </Box>
+
+                <ScrollView
+                  contentContainerStyle={{ paddingBottom: spacing.l }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* Row: Date */}
+                  <Box flexDirection="row" alignItems="center" mb="s">
+                    <Feather name="calendar" size={16} color={theme.colors.text} />
+                    <Text ml="s" color="text">{formattedDate}</Text>
+                  </Box>
+
+                  {/* Row: Address */}
+                  <Box flexDirection="row" alignItems="center" mb="s">
+                    <Feather name="map-pin" size={16} color={theme.colors.text} />
+                    <Text ml="s" color="text">{media.address || '-'}</Text>
+                  </Box>
+
+                  {/* Row: Type */}
+                  <Box flexDirection="row" alignItems="center" mb="s">
+                    <Feather name={media.media_type === 'video' ? 'video' : 'image'} size={16} color={theme.colors.text} />
+                    <Text ml="s" color="text" textTransform="capitalize">
+                      {media.media_type}
                     </Text>
-                  ))
-                ) : (
-                  '-'
-                )}
-              </Text>
+                  </Box>
 
+                  {/* Row: Tags / Classes */}
+                  <Box flexDirection="row" alignItems="flex-start" mb="s">
+                    <Feather name="tag" size={16} color={theme.colors.text} style={{ marginTop: 2 }} />
+                    <Box ml="s" flexDirection="row" flexWrap="wrap">
+                      {(media.predicted_classes ?? []).length ? (
+                        (media.predicted_classes ?? []).map((cls, idx) => (
+                          <Box
+                            key={`${cls}-${idx}`}
+                            mr="s"
+                            mb="s"
+                            px="s"
+                            py="xs"
+                            borderRadius="s"
+                            bg="card"
+                            borderWidth={1}
+                            borderColor="muted"
+                          >
+                            <Text color="onSurface" variant="label">{cls}</Text>
+                          </Box>
+                        ))
+                      ) : (
+                        <Text color="text">-</Text>
+                      )}
+                    </Box>
+                  </Box>
 
-              <TouchableOpacity
-                style={{ alignSelf: 'flex-end', marginTop: theme.spacing.m }}
-                onPress={() => setShowInfoModal(false)}
-              >
-                <Text color="text" fontWeight="600">
-                  Close
-                </Text>
-              </TouchableOpacity>
+                  {/* Row: Descriptions */}
+                  <Box flexDirection="row" alignItems="flex-start" mb="s">
+                    <Feather name="align-left" size={16} color={theme.colors.text} style={{ marginTop: 2 }} />
+                    <Box ml="s" flex={1}>
+                      {descriptions.length > 0 ? (
+                        descriptions.map((d, i) => (
+                          <Text key={i} color="text" mb="xs">
+                            • {d}
+                          </Text>
+                        ))
+                      ) : (
+                        <Text color="text">-</Text>
+                      )}
+                    </Box>
+                  </Box>
+                </ScrollView>
+              </Box>
             </Box>
           </View>
         </Modal>
@@ -152,16 +303,12 @@ export default function DetailScreen({ route }: Props) {
 
 /* --------- only keeps numeric / positioning constants --------- */
 const styles = StyleSheet.create({
-  moreBtn: {
+  fab: {
     position: 'absolute',
-    top: spacing.m,
-    right: spacing.m,
-    zIndex: 10,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
   },
 });

@@ -1,239 +1,735 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { GoogleMap, InfoWindow, Marker, useLoadScript } from "@react-google-maps/api";
-import type { Problem } from "../api/problems";
-import { getProblems } from "../api/problems";
-import Input from "../components/Input";
-import Button from "../components/Button";
-import { colors, spacing } from "../theme";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  GoogleMap,
+  Marker,
+  InfoWindow,
+  useLoadScript,
+  MarkerClustererF,
+} from '@react-google-maps/api';
+import type { Problem } from '../api/problems';
+import { getProblems } from '../api/problems';
+import Input from '../components/Input';
+import Button from '../components/Button';
+import IssueModal from '../components/IssueModal';
+import '../styles/map-page.css';
 
-const MAP_STYLE: React.CSSProperties = {
-  width: "100%",
-  height: "calc(100vh - 72px)", // filter bar space
-};
+/* ---------- Map constants ---------- */
+const MAP_CONTAINER_CLASS = 'map-el';
 const CENTER_CLUJ = { lat: 46.7712, lng: 23.6236 } as const;
 
-function mulberry(a: number) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ lightness: 30 }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+];
 
-function fakeCoords(seed: string) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (h << 5) - h + seed.charCodeAt(i);
-  }
-  const rnd = mulberry(h);
-  return {
-    lat: CENTER_CLUJ.lat + (rnd() - 0.5) * 0.04,
-    lng: CENTER_CLUJ.lng + (rnd() - 0.5) * 0.04,
-  } as const;
-}
+const DARK_STYLE: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#0b1220' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1220' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2c38' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', stylers: [{ color: '#0e1628' }] },
+];
 
-interface MarkerData {
+/* ---------- Helpers ---------- */
+type MarkerGroup = {
+  key: string;
   address: string;
   position: google.maps.LatLngLiteral;
   problems: Problem[];
+};
+
+/** Read a CSS variable off :root */
+function cssVar(name: string, fallback: string) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+/** Brand-aware palette (fallbacks keep current red/blue behavior) */
+function usePinPalette(theme: 'light' | 'dark') {
+  return useMemo(() => {
+    const danger500 = cssVar('--danger-500', '#ef4444'); // fallback red
+    const info500 = cssVar('--info-500', '#3b82f6'); // fallback blue
+    const ringIdle = theme === 'dark' ? '#2a3a4a' : '#d9e2ee';
+    const ringActive =
+      theme === 'dark' ? cssVar('--primary-300', '#60a5fa') : cssVar('--primary-600', '#2563eb');
+
+    return {
+      imageTone: cssVar('--pin-image', danger500),
+      videoTone: cssVar('--pin-video', info500),
+      ringIdle,
+      ringActive,
+    };
+  }, [theme]);
+}
+
+type PinState = 'default' | 'hover' | 'active';
+
+const iconCache = new Map<string, google.maps.Icon>();
+
+function makePinSvg(opts: {
+  tone: string;
+  theme: 'light' | 'dark';
+  size?: number;
+  state?: PinState;
+  ringIdle: string;
+  ringActive: string;
+  label?: string; // optional count
+}) {
+  const { tone, theme, size = 32, state = 'default', ringIdle, ringActive, label } = opts;
+  const w = size;
+  const h = Math.round(size * 1.2667);
+  const dark = theme === 'dark';
+
+  const ringStroke = state === 'active' ? ringActive : ringIdle;
+  const ringOpacity = state === 'active' ? (dark ? 0.55 : 0.7) : (dark ? 0.28 : 0.45);
+  const topHi = dark ? '#203247' : '#ffffff';
+  const topHiOpacity = dark ? (state !== 'default' ? 0.28 : 0.2) : (state !== 'default' ? 0.95 : 0.82);
+  const dropGlow = dark ? (state !== 'default' ? 0.55 : 0.45) : (state !== 'default' ? 0.26 : 0.2);
+
+  const textFill = dark ? '#e6eef9' : '#0b1220';
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 30 38">
+  <defs>
+    <radialGradient id="rg" cx="50%" cy="36%" r="70%">
+      <stop offset="0%" stop-color="${topHi}" stop-opacity="${topHiOpacity}"/>
+      <stop offset="100%" stop-color="${tone}"/>
+    </radialGradient>
+    <filter id="sh" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.4" flood-opacity="${dropGlow}"/>
+    </filter>
+  </defs>
+
+  <!-- base pin -->
+  <path filter="url(#sh)"
+        d="M15 1C8.373 1 3 6.318 3 12.9 3 24.2 15 37 15 37s12-12.8 12-24.1C27 6.318 21.627 1 15 1Z"
+        fill="url(#rg)"/>
+
+  <!-- inner ring -->
+  <path d="M15 3.2c-5.4 0-9.8 4.24-9.8 9.56 0 9.73 9.8 20.67 9.8 20.67s9.8-10.94 9.8-20.67C24.8 7.44 20.4 3.2 15 3.2Z"
+        fill="none" stroke="${ringStroke}" stroke-opacity="${ringOpacity}" stroke-width="1.6"/>
+
+  <!-- center capsule (shows text when label present) -->
+  <circle cx="15" cy="13" r="5.8" fill="${label ? (dark ? '#0f141a' : '#ffffff') : (dark ? '#0b1220' : '#ffffff')}"
+          fill-opacity="${label ? (dark ? 0.95 : 0.98) : (dark ? 0.85 : 0.95)}"/>
+
+  ${label ? `
+    <text x="15" y="13.6" text-anchor="middle" dominant-baseline="central"
+      font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto"
+      font-size="8.8" font-weight="800" fill="${textFill}">${label}</text>
+  ` : ''}
+
+</svg>`;
+}
+
+function pinIcon(params: {
+  theme: 'light' | 'dark';
+  tone: string;
+  state?: PinState;
+  ringIdle: string;
+  ringActive: string;
+  size?: number;
+  label?: string;
+}): google.maps.Icon {
+  const { theme, tone, state = 'default', ringIdle, ringActive, size, label } = params;
+  const w = size ?? (state === 'active' ? 38 : state === 'hover' ? 34 : 30);
+  const key = `${theme}|${tone}|${state}|${w}|${ringIdle}|${ringActive}|${label ?? ''}`;
+  const cached = iconCache.get(key);
+  if (cached) return cached;
+
+  const h = Math.round(w * 1.2667);
+  const svg = makePinSvg({ tone, theme, size: w, state, ringIdle, ringActive, label });
+  const icon: google.maps.Icon = {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(w, h),
+    anchor: new google.maps.Point(Math.round(w / 2), h),
+  };
+  iconCache.set(key, icon);
+  return icon;
+}
+
+/** Brand-aware tone per marker group */
+function useToneFor(palette: ReturnType<typeof usePinPalette>) {
+  return useCallback(
+    (group: { problems: { media_type?: 'image' | 'video' }[] }) => {
+      const hasVideo = group.problems.some((p) => p.media_type === 'video');
+      return hasVideo ? palette.videoTone : palette.imageTone;
+    },
+    [palette]
+  );
+}
+
+function myLocationIcon(theme: 'light' | 'dark'): google.maps.Icon {
+  const ring = theme === 'dark' ? '#0f141a' : '#ffffff';
+  const pulse = '#3b82f6';
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <circle cx="13" cy="13" r="8.5" fill="${ring}" opacity=".9"/>
+  <circle cx="13" cy="13" r="6.4" fill="${pulse}" opacity=".25"/>
+  <circle cx="13" cy="13" r="4.2" fill="${pulse}"/>
+</svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(26, 26),
+    anchor: new google.maps.Point(13, 13),
+  };
+}
+
+function isDark(): 'light' | 'dark' {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+}
+
+/* ---- Pretty cluster SVG ---- */
+function clusterCircleSvg(theme: 'light' | 'dark', s: number, tone: string) {
+  const isDark = theme === 'dark';
+  const stroke = isDark ? '#2a3a4a' : '#d9e2ee';
+  const glow = isDark ? '.45' : '.18';
+  const cx = s / 2,
+    cy = s / 2,
+    r = s / 2 - 2;
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+  <defs>
+    <radialGradient id="rg" cx="50%" cy="38%" r="70%">
+      <stop offset="0%"  stop-color="${isDark ? '#203247' : '#ffffff'}" stop-opacity="${isDark ? 0.22 : 1}"/>
+      <stop offset="100%" stop-color="${tone}" />
+    </radialGradient>
+    <filter id="sh" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="${glow}"/>
+    </filter>
+  </defs>
+
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#rg)" stroke="${stroke}" stroke-width="1.5" filter="url(#sh)"/>
+  <circle cx="${cx}" cy="${cy}" r="${r - 5}" fill="none" stroke="rgba(255,255,255,${isDark ? 0.18 : 0.55})" stroke-width="2"/>
+  <circle cx="${cx}" cy="${cy}" r="${Math.max(1, s*0.04)}" fill="${isDark ? '#b6c2d1' : '#6b7a90'}" opacity="${isDark ? 0.35 : 0.25}"/>
+</svg>`;
+}
+const clusterUrl = (theme: 'light' | 'dark', size: number, tone: string) =>
+  'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(clusterCircleSvg(theme, size, tone));
+
+function getClusterStyles(theme: 'light' | 'dark') {
+  const textColor = theme === 'dark' ? '#e6eef9' : '#0b1220';
+  const sizes = [34, 40, 48, 58, 72] as const;
+  const tones =
+    theme === 'dark'
+      ? ['#182635', '#1e3a5f', '#284a82', '#365fa6', '#4a75c6']
+      : ['#eef4ff', '#dbeafe', '#c7d2fe', '#bcd2ff', '#a8c0ff'];
+
+  return sizes.map((s, i) => ({
+    url: clusterUrl(theme, s, tones[i]),
+    height: s,
+    width: s,
+    textColor,
+    textSize: i >= 3 ? 14 : 13,
+  }));
+}
+
+/** MarkerClustererPlus calculator */
+type MCCalcResult = { text: string; index: number; title?: string };
+type MCCalculator = (markers: google.maps.Marker[], numStyles: number) => MCCalcResult;
+
+const clusterCalculator: MCCalculator = (markers, numStyles) => {
+  const count = markers.length;
+
+  let idx =
+    count >= 1000 ? 5 : count >= 200 ? 4 : count >= 50 ? 3 : count >= 10 ? 2 : 1;
+  idx = Math.min(idx, numStyles);
+
+  const formatCount = (n: number) =>
+    n >= 1_000_000 ? (n / 1_000_000).toFixed(n % 1_000_000 >= 100_000 ? 1 : 0) + 'M' :
+    n >= 1_000     ? (n / 1_000).toFixed(n % 1_000 >= 100 ? 1 : 0) + 'k' :
+    String(n);
+
+  return { text: formatCount(count), index: idx, title: `${count} locations` };
+};
+
+/** Padding that avoids the sticky top bar */
+function fitPadding(): google.maps.Padding {
+  return { top: 100, right: 64, bottom: 64, left: 64 };
+}
+
+/** Smooth pin size ramp vs zoom */
+function pinSizeForZoom(z?: number | null) {
+  if (!z) return 30;
+  return Math.round(28 + Math.min(6, Math.max(0, (z - 12) * 1.1)));
 }
 
 export default function MapPage() {
-  // 1) Load Google Maps script
+  /* ---------- Load Google Maps ---------- */
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string,
+    id: 'urban-ai-map',
   });
 
-  // 2) App state
-  const [mediaType, setMediaType] = useState<"all" | "image" | "video">("all");
-  const [klass, setKlass] = useState("");
-  const [problems, setProblems] = useState<Problem[]>([]);
-  const [active, setActive] = useState<MarkerData | null>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
+  /* ---------- State ---------- */
+  const [mediaType, setMediaType] = useState<'all' | 'image' | 'video'>(() => {
+    const sp = new URLSearchParams(location.search);
+    const t = sp.get('type');
+    return t === 'image' || t === 'video' ? t : 'all';
+  });
 
-  // 3) Map onLoad callback
-  const onLoad = useCallback((mapInstance: google.maps.Map) => {
-    setMap(mapInstance);
+  // Split live input vs. applied filter (debounced)
+  const [klassInput, setKlassInput] = useState(
+    () => new URLSearchParams(location.search).get('q') ?? ''
+  );
+  const [klass, setKlass] = useState(klassInput);
+
+  const [allProblems, setAllProblems] = useState<Problem[]>([]);
+  const [problems, setProblems] = useState<Problem[]>([]);
+  const [active, setActive] = useState<MarkerGroup | null>(null);
+  const [modalProblem, setModalProblem] = useState<Problem | null>(null);
+  const [myLoc, setMyLoc] = useState<google.maps.LatLngLiteral | null>(null);
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(isDark());
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  const clusterStyles = useMemo(() => getClusterStyles(theme), [theme]);
+
+  const palette = usePinPalette(theme);
+  const toneFor = useToneFor(palette);
+  const isTouch = useMemo(
+    () => window.matchMedia?.('(pointer: coarse)').matches ?? false,
+    []
+  );
+
+  /* Keep theme in sync (works with your Layout theme toggle) */
+  useEffect(() => {
+    const handler = () => setTheme(isDark());
+    window.addEventListener('themechange', handler);
+    const obs = new MutationObserver(handler);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => {
+      window.removeEventListener('themechange', handler);
+      obs.disconnect();
+    };
   }, []);
 
-  // 4) Fetch data when filters change
+  /* ---------- Fetch problems (only on media type) ---------- */
   useEffect(() => {
-    // Fetch by media type only; do substring filter client-side
     getProblems({
-      media_type: mediaType === "all" ? undefined : mediaType,
-    }).then(items => {
-      const filtered = klass
-        ? items.filter(p =>
-            p.predicted_classes.some(c =>
-              c.toLowerCase().includes(klass.toLowerCase())
-            )
-          )
-        : items;
-      setProblems(filtered);
-    });
-  }, [mediaType, klass]);
-  // 5) Prepare marker icons once API is ready
-  const PIN_ICONS = useMemo(() => {
-    if (!isLoaded || !window.google) {
-      return { image: undefined, video: undefined };
-    }
-    return {
-      image: {
-        url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-        scaledSize: new window.google.maps.Size(32, 32),
-      },
-      video: {
-        url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-        scaledSize: new window.google.maps.Size(32, 32),
-      },
-    };
-  }, [isLoaded]);
+      media_type: mediaType === 'all' ? undefined : mediaType,
+    }).then((items) => setAllProblems(items));
+  }, [mediaType]);
 
-  // 6) Group problems by address and generate fake coords
-  // 6) Use exact lat/lng and group by those
-  const markers = useMemo<MarkerData[]>(() => {
-    const grouping = new Map<string, MarkerData>();
-    problems.forEach(p => {
-      if (p.latitude == null || p.longitude == null) return;
+  /* ---------- Filter problems (client-side) ---------- */
+  useEffect(() => {
+    const filtered = klass
+      ? allProblems.filter((p) =>
+          p.predicted_classes?.some((c) =>
+            c.toLowerCase().includes(klass.toLowerCase())
+          )
+        )
+      : allProblems;
+    setProblems(filtered);
+  }, [klass, allProblems]);
+
+  /* ---------- Debounce klass input ---------- */
+  useEffect(() => {
+    const t = setTimeout(() => setKlass(klassInput.trim()), 240);
+    return () => clearTimeout(t);
+  }, [klassInput]);
+
+  /* ---------- Sync URL (q & type) ---------- */
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    if (klass) sp.set('q', klass);
+    else sp.delete('q');
+    if (mediaType !== 'all') sp.set('type', mediaType);
+    else sp.delete('type');
+    const newUrl = `${location.pathname}?${sp.toString()}`;
+    history.replaceState(null, '', newUrl);
+  }, [klass, mediaType]);
+
+  /* ---------- Group by exact lat/lng ---------- */
+  const markers = useMemo<MarkerGroup[]>(() => {
+    const map = new Map<string, MarkerGroup>();
+    for (const p of problems) {
+      if (p.latitude == null || p.longitude == null) continue;
       const key = `${p.latitude},${p.longitude}`;
-      const md = grouping.get(key);
-      if (!md) {
-        grouping.set(key, {
+      const mg = map.get(key);
+      if (!mg) {
+        map.set(key, {
+          key,
           address: p.address ?? '(unknown)',
           position: { lat: p.latitude, lng: p.longitude },
           problems: [p],
         });
       } else {
-        md.problems.push(p);
+        mg.problems.push(p);
       }
-    });
-    return Array.from(grouping.values());
+    }
+    return Array.from(map.values());
   }, [problems]);
 
-  // 7) Early returns after all hooks
+  /* ---------- Map lifecycle ---------- */
+  const onLoad = useCallback(
+    (m: google.maps.Map) => {
+      mapRef.current = m;
+      setZoom(m.getZoom() ?? null);
+      m.addListener('zoom_changed', () => setZoom(m.getZoom() ?? null));
+      m.setOptions({
+        styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE,
+      });
+
+      // initial fit
+      const bounds = new google.maps.LatLngBounds();
+      markers.forEach((g) => bounds.extend(g.position));
+      if (!bounds.isEmpty()) {
+        m.fitBounds(bounds, fitPadding());
+      } else {
+        m.setCenter(CENTER_CLUJ);
+        m.setZoom(12);
+      }
+    },
+    [theme, markers]
+  );
+
+  const onUnmount = useCallback(() => {
+    mapRef.current = null;
+  }, []);
+
+  /* Update map styles on theme change */
+  useEffect(() => {
+    const m = mapRef.current;
+    if (m) m.setOptions({ styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE });
+  }, [theme]);
+
+  /* Auto-fit when markers (or my location) change */
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || markers.length === 0) return;
+    const b = new google.maps.LatLngBounds();
+    for (const g of markers) b.extend(g.position);
+    if (myLoc) b.extend(myLoc);
+    m.fitBounds(b, fitPadding());
+  }, [markers, myLoc]);
+
+  /* Controls */
+  const fitToMarkers = useCallback(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    const b = new google.maps.LatLngBounds();
+    markers.forEach((g) => b.extend(g.position));
+    if (myLoc) b.extend(myLoc);
+    if (!b.isEmpty()) {
+      m.fitBounds(b, fitPadding());
+    } else {
+      m.panTo(CENTER_CLUJ);
+      m.setZoom(12);
+    }
+  }, [markers, myLoc]);
+
+  const locateMe = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setMyLoc(pt);
+        mapRef.current?.panTo(pt);
+        mapRef.current?.setZoom(Math.max(mapRef.current?.getZoom() ?? 14, 15));
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }, []);
+
+  /* Keyboard shortcuts: / focus, F fit, L locate */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName.toLowerCase();
+      const inField = tag === 'input' || tag === 'textarea' || el?.isContentEditable;
+
+      if (e.key === '/' && !e.shiftKey) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (inField) return;
+
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        fitToMarkers();
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        locateMe();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fitToMarkers, locateMe]);
+
+  /* ---------- Early returns ---------- */
   if (loadError) {
-    return <p>Map failed to load.</p>;
-  }
-  if (!isLoaded) {
-    return <p>Loading maps…</p>;
+    return (
+      <div className="map-fallback card">
+        <div className="map-fallback__inner">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
+            <path
+              d="M12 9v4m0 4h.01M10.29 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.71-3.14l-8-14a2 2 0 0 0-3.42 0Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+          </svg>
+          <div>
+            <strong>Map failed to load</strong>
+            <p className="muted">Check your API key/connection then refresh.</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  // 8) Main render
+  if (!isLoaded) {
+    return (
+      <div className="map-skeleton">
+        <div className="sk shimmer" />
+      </div>
+    );
+  }
+
+  /* ---------- Render ---------- */
   return (
     <>
-      <div
-        style={{
-          display: "flex",
-          gap: spacing.s,
-          padding: spacing.s,
-          background: colors.surface,
-          borderBottom: `1px solid ${colors.muted}`,
-        }}
-      >
-        <Input
-          placeholder="filter by class…"
-          value={klass}
-          onChange={(e) => setKlass(e.target.value)}
-          style={{ maxWidth: 230 }}
-        />
-
-        <select
-          value={mediaType}
-          onChange={(e) => setMediaType(e.target.value as "all" | "image" | "video")}
-          style={{ padding: spacing.s }}
-        >
-          <option value="all">all types</option>
-          <option value="image">images</option>
-          <option value="video">videos</option>
-        </select>
-
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setKlass("");
-            setMediaType("all");
-            if (map) {
-              map.panTo(CENTER_CLUJ);
-              map.setZoom(12);
+      {/* Filter bar */}
+      <div className="mapbar">
+        <div className="mapbar-left">
+          <Input
+            ref={searchRef}
+            placeholder="Filter by class…"
+            value={klassInput}
+            onChange={(e) => setKlassInput(e.target.value)}
+            stopGlobalKeys
+            prefixIcon={
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+              </svg>
             }
-          }}
-        >
-          reset
-        </Button>
+            clearable
+          />
 
-        <div style={{ marginLeft: "auto", padding: spacing.s, color: colors.muted }}>
-          {problems.length} uploads → {markers.length} locations
+          <div className="select-wrap">
+            <select
+              className="select"
+              value={mediaType}
+              onChange={(e) => setMediaType(e.target.value as 'all' | 'image' | 'video')}
+              title="Media type"
+              aria-label="Media type"
+            >
+              <option value="all">All types</option>
+              <option value="image">Images</option>
+              <option value="video">Videos</option>
+            </select>
+          </div>
+
+          {(klass || mediaType !== 'all') && (
+            <div className="active-filters">
+              {klass && <span className="pill">class: “{klass}”</span>}
+              {mediaType !== 'all' && <span className="pill">{mediaType}</span>}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setKlassInput('');
+                  setKlass('');
+                  setMediaType('all');
+                }}
+                leftIcon={
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                }
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="mapbar-right">
+          <div className="stat">
+            <span className="dot -uploads" />
+            {problems.length} uploads
+          </div>
+          <div className="stat">
+            <span className="dot -locs" />
+            {markers.length} locations
+          </div>
+
+          <div className="kbd-hint" aria-hidden>
+            <kbd>/</kbd> search · <kbd>F</kbd> fit · <kbd>L</kbd> locate
+          </div>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            iconOnly
+            title="Fit to markers"
+            aria-label="Fit to markers"
+            onClick={fitToMarkers}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path d="M3 3h7M3 3v7M21 3h-7M21 3v7M3 21h7M3 21v-7M21 21h-7M21 21v-7" fill="none" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            iconOnly
+            title="My location"
+            aria-label="My location"
+            onClick={locateMe}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path d="M12 8v8m-4-4h8" stroke="currentColor" strokeWidth="2" fill="none" />
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+            </svg>
+          </Button>
         </div>
       </div>
 
+      {/* Map */}
       <GoogleMap
-        mapContainerStyle={MAP_STYLE}
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+        mapContainerClassName={MAP_CONTAINER_CLASS}
         center={CENTER_CLUJ}
         zoom={12}
-        onLoad={onLoad}
         options={{
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: false,
+          clickableIcons: false,
+          gestureHandling: 'greedy',
+          disableDefaultUI: true,
+          keyboardShortcuts: false,
         }}
       >
-        {markers.map((m) => (
-          <Marker
-            key={m.address}
-            position={m.position}
-            onClick={() => setActive(m)}
-            icon={
-              m.problems.some((p) => p.media_type === "video")
-                ? PIN_ICONS.video
-                : PIN_ICONS.image
-            }
-          />
-        ))}
+        <MarkerClustererF
+          key={`clusters-${theme}`} // re-mount on theme change so styles swap cleanly
+          averageCenter
+          gridSize={64}
+          options={{
+            styles: clusterStyles,
+            calculator: clusterCalculator,
+            minimumClusterSize: 2,
+            maxZoom: 18,
+          }}
+        >
+          {(clusterer) => (
+            <>
+              {markers.map((m) => {
+                const tone = toneFor(m);
+                const isActive = active?.key === m.key;
+                const isHover = hoveredKey === m.key;
+                const state: PinState = isActive ? 'active' : isHover ? 'hover' : 'default';
+                const label = m.problems.length > 1 ? String(m.problems.length) : undefined;
+
+                // lift hovered/active pins above others
+                const baseZ = Math.round((m.position.lat + 90) * 100);
+                const z = baseZ + (isHover ? 100000 : 0) + (isActive ? 200000 : 0);
+
+                return (
+                  <Marker
+                    key={m.key}
+                    position={m.position}
+                    clusterer={clusterer}
+                    title={`${m.address} — ${m.problems.length} upload${m.problems.length > 1 ? 's' : ''}`}
+                    zIndex={z}
+                    icon={pinIcon({
+                      theme,
+                      tone,
+                      state,
+                      ringIdle: palette.ringIdle,
+                      ringActive: palette.ringActive,
+                      label,
+                      size: pinSizeForZoom(zoom),
+                    })}
+                    onMouseOver={() => !isTouch && setHoveredKey(m.key)}
+                    onMouseOut={() => !isTouch && setHoveredKey((k) => (k === m.key ? null : k))}
+                    onClick={() => setActive(m)}
+                  />
+                );
+              })}
+            </>
+          )}
+        </MarkerClustererF>
+
+        {myLoc && (
+          <Marker position={myLoc} icon={myLocationIcon(theme)} zIndex={Number.MAX_SAFE_INTEGER} />
+        )}
 
         {active && (
-          <InfoWindow position={active.position} onCloseClick={() => setActive(null)}>
-            <div style={{ maxWidth: 260 }}>
-              <h4 style={{ margin: "0 0 4px" }}>{active.address}</h4>
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: colors.muted }}>
-                {active.problems.length} upload
-                {active.problems.length > 1 && "s"} here
-              </p>
+          <InfoWindow
+            position={active.position}
+            onCloseClick={() => setActive(null)}
+            options={{ maxWidth: 300 }}
+          >
+            <div className="infocard">
+              <div className="infocard__head">
+                <h4 className="infocard__title">{active.address}</h4>
+                <span className="pill">
+                  {active.problems.length} upload{active.problems.length > 1 ? 's' : ''}
+                </span>
+              </div>
 
-              {active.problems.map((p) => (
-                <div
-                  key={p.media_id}
-                  style={{
-                    borderTop: `1px solid ${colors.muted}`,
-                    paddingTop: 4,
-                    marginTop: 4,
-                  }}
-                >
-                  <strong>#{p.media_id}</strong>{" "}
-                  <em style={{ fontSize: 11 }}>
-                    {new Date(p.created_at).toLocaleString()}
-                  </em>
-                  <br />
-                  {p.predicted_classes.join(", ") || "(no classes)"}
-                  {p.annotated_image_url && (
-                    <img
-                      src={`${import.meta.env.VITE_API_BASE}/static/${p.media_id}.jpg`}
-                      style={{
-                        width: "100%",
-                        borderRadius: 4,
-                        marginTop: 4,
-                        boxShadow: "0 1px 3px rgba(0,0,0,.3)",
-                      }}
-                    />
-                  )}
-                  {p.annotated_video_url && <div style={{ marginTop: 4 }}>🎞️ video</div>}
-                </div>
-              ))}
+              <div className="infocard__list">
+                {active.problems.map((p) => (
+                  <div key={p.media_id} className="infocard__item">
+                    <div className="infocard__meta">
+                      <strong>#{p.media_id}</strong>
+                      <span className="muted">{new Date(p.created_at).toLocaleString()}</span>
+                    </div>
+                    <div className="infocard__classes">
+                      {(p.predicted_classes?.slice(0, 4) ?? []).map((c, i) => (
+                        <span key={`${c}-${i}`} className="chip">
+                          {c}
+                        </span>
+                      ))}
+                      {(p.predicted_classes?.length ?? 0) > 4 && (
+                        <span className="chip chip--muted">+{p.predicted_classes!.length - 4}</span>
+                      )}
+                    </div>
+
+                    {p.annotated_image_url && (
+                      <img
+                        className="infocard__img"
+                        src={`${import.meta.env.VITE_API_BASE}/static/${p.media_id}.jpg`}
+                        alt=""
+                        loading="lazy"
+                      />
+                    )}
+
+                    {p.annotated_video_url && <div className="infocard__video">🎞️ video</div>}
+
+                    <div className="infocard__actions">
+                      <Button variant="secondary" size="sm" onClick={() => setModalProblem(p)}>
+                        Open details
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </InfoWindow>
         )}
       </GoogleMap>
+
+     {modalProblem && (
+  <IssueModal problem={modalProblem} onClose={() => setModalProblem(null)} />
+)}
+
     </>
   );
 }

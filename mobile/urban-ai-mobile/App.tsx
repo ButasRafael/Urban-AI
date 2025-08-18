@@ -19,7 +19,7 @@ import {
 
 import { navigationRef }         from './src/navigation/RootNavigation';
 import { RootStackParamList }    from './src/navigation/types';
-import { theme as lightTheme, darkTheme } from './src/theme';
+import { lightTheme, darkTheme } from './src/theme';
 import { StatusBar } from 'react-native';
 // ← your shared-element navigator + fade-through defaults
 import { Stack, screenOptions } from './src/navigation/Stack';
@@ -30,14 +30,15 @@ import HomeScreen        from './src/screens/HomeScreen';
 import GalleryScreen     from './src/screens/GalleryScreen';
 import DetailScreen      from './src/screens/DetailScreen';
 import TestRefreshScreen from './src/screens/TestRefreshScreen';
-
+import { RootToaster } from './src/components/ui/Toast';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 export default function App() {
   const systemScheme = useColorScheme();
   const [themeMode, setThemeMode] = React.useState<'system'|'light'|'dark'>('system');
 
   // pick actual scheme
   const effectiveScheme = themeMode === 'system' ? systemScheme : themeMode;
-  const currentRestyleTheme = effectiveScheme === 'dark' ? darkTheme : lightTheme;
+  const currentRestyleTheme = effectiveScheme === 'dark' ? darkTheme : lightTheme
   const baseNavTheme        = effectiveScheme === 'dark' ? DarkNavTheme : LightNavTheme;
   const isDark = effectiveScheme === 'dark';
 
@@ -81,6 +82,7 @@ export default function App() {
   );
 
   return (
+    <SafeAreaProvider>
     <ThemeProvider theme={currentRestyleTheme}>
        <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
@@ -140,6 +142,8 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
+      <RootToaster />
     </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

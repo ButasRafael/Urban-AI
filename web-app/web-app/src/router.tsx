@@ -7,6 +7,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import MapPage from './pages/MapPage';
 import ListPage from './pages/ListPage';
 import ChatPage from "./pages/ChatPage";
+import Register from './pages/Register';
 
 export default function AppRouter() {
   return (
@@ -15,6 +16,7 @@ export default function AppRouter() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
           <Route
             path="/analytics"

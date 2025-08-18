@@ -150,3 +150,33 @@ h3 { font-size: 1.25rem; }
   font-weight: 500;
   color: var(--secondary-700);
 }
+
+/* -----------------------------------------
+   Global color-scheme + scrollbars (ADD)
+   ----------------------------------------- */
+
+:root { color-scheme: light; }
+
+:root.dark,
+:root.dark body {
+  color-scheme: dark;          /* makes native UI (incl. scrollbars) dark */
+  background: #0b1220;         /* ensure the gutter matches the page */
+}
+
+/* Firefox: dark scrollbars for everything that scrolls */
+:root.dark * {
+  scrollbar-color: #475569 #0b1220;
+}
+
+/* Chromium/WebKit: dark scrollbars everywhere */
+:root.dark *::-webkit-scrollbar        { width: 12px; height: 12px; }
+:root.dark *::-webkit-scrollbar-track  { background: #0b1220; }
+:root.dark *::-webkit-scrollbar-thumb  { background: #475569; border-radius: 10px; border: 3px solid #0b1220; }
+:root.dark *::-webkit-scrollbar-corner { background: #0b1220; }
+
+/* Explicitly cover the page scrollbar too */
+:root.dark html::-webkit-scrollbar,
+:root.dark body::-webkit-scrollbar { width: 12px; }
+:root.dark html::-webkit-scrollbar-track,
+:root.dark body::-webkit-scrollbar-track { background: #0b1220; }
+

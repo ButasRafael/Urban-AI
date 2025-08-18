@@ -3,9 +3,6 @@ import client from "./client";
 export interface ChatRequest {
   message: string;
   session_id?: number;
-  latitude?: number;
-  longitude?: number;
-  radius_km?: number;
 }
 
 export interface ChatResponse {
@@ -23,6 +20,13 @@ export interface SessionSummary {
   id: number;
   created_at: string;
   last_message_at: string;
+}
+
+export interface RagChunk {
+  id: number;
+  media_id: number;
+  chunk: string;
+  image_url?: string;
 }
 
 export async function sendChat(req: ChatRequest): Promise<ChatResponse> {
@@ -46,4 +50,9 @@ export async function getSessionHistory(
 
 export async function deleteSession(sessionId: number): Promise<void> {
   await client.delete(`/chat/sessions/${sessionId}`);
+}
+
+export async function getRagChunk(id: number): Promise<RagChunk> {
+  const { data } = await client.get<RagChunk>(`/rag/chunk/${id}`);
+  return data;
 }
