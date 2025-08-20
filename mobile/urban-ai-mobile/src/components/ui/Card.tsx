@@ -1,4 +1,3 @@
-// src/components/ui/Card.tsx
 import React, { forwardRef, PropsWithChildren, useRef } from 'react';
 import { Platform, Pressable, ViewStyle, Animated } from 'react-native';
 import { useTheme } from '@shopify/restyle';
@@ -10,16 +9,11 @@ type CardVariant = 'elevated' | 'outlined' | 'tonal' | 'flat';
 
 type Props = PropsWithChildren<{
   style?: ViewStyle;
-  /** Visual style of the card */
   variant?: CardVariant;
-  /** Optional gradient border wrapper */
   gradientBorder?: boolean;
-  /** Header/footer convenience slots */
   header?: React.ReactNode;
   footer?: React.ReactNode;
-  /** Make the whole card tappable */
   onPress?: () => void;
-  /** Override paddings/radius using theme tokens */
   padding?: keyof Theme['spacing'];
   radius?: keyof Theme['borderRadii'];
 }>;
@@ -77,7 +71,6 @@ const Card = forwardRef<any, Props>(function Card(
     </Box>
   );
 
-  // Optional gradient border wrapper
   const withGradientBorder = (node: React.ReactNode) => (
     <LinearGradient
       colors={[theme.colors.primary300, theme.colors.primary500]}
@@ -95,7 +88,6 @@ const Card = forwardRef<any, Props>(function Card(
 
   if (!onPress) return <>{body}</>;
 
-  // Clickable: gentle scale + ripple
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () =>
     Animated.spring(scale, { toValue: 0.98, useNativeDriver: true }).start();

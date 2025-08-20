@@ -10,9 +10,7 @@ type Props = {
   height?: number;
   title: string;
   subtitle?: string;
-  /** Optional right-side slot (e.g., logo/icon box) */
   rightSlot?: React.ReactNode;
-  /** Show soft decorative blobs */
   blobs?: boolean;
 };
 
@@ -123,10 +121,6 @@ export default function HeroHeader({
         preserveAspectRatio="none"
         style={{ position: 'absolute', bottom: -1, left: 0 }}
       >
-        {/*
-          The path draws a smooth concave curve. We fill it with the app's background
-          to "carve" the gradient and create a custom-shaped header bottom.
-        */}
         <Path
           d="
             M0,0

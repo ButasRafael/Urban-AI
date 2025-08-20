@@ -1,4 +1,3 @@
-// App.tsx
 import React from 'react';
 import 'react-native-get-random-values';  
 import { useColorScheme } from 'react-native';
@@ -21,7 +20,6 @@ import { navigationRef }         from './src/navigation/RootNavigation';
 import { RootStackParamList }    from './src/navigation/types';
 import { lightTheme, darkTheme } from './src/theme';
 import { StatusBar } from 'react-native';
-// ← your shared-element navigator + fade-through defaults
 import { Stack, screenOptions } from './src/navigation/Stack';
 
 import RegisterScreen    from './src/screens/RegisterScreen';
@@ -36,7 +34,6 @@ export default function App() {
   const systemScheme = useColorScheme();
   const [themeMode, setThemeMode] = React.useState<'system'|'light'|'dark'>('system');
 
-  // pick actual scheme
   const effectiveScheme = themeMode === 'system' ? systemScheme : themeMode;
   const currentRestyleTheme = effectiveScheme === 'dark' ? darkTheme : lightTheme
   const baseNavTheme        = effectiveScheme === 'dark' ? DarkNavTheme : LightNavTheme;
@@ -53,7 +50,6 @@ export default function App() {
     },
   }), [baseNavTheme, currentRestyleTheme]);
 
-  // load fonts
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -62,11 +58,9 @@ export default function App() {
   });
   if (!fontsLoaded) return null;
 
-  // theme toggle handler
   const toggleTheme = () =>
     setThemeMode(m => m === 'light' ? 'dark' : m === 'dark' ? 'system' : 'light');
 
-  // day/night icon helper
   const ThemeIcon = () => (
     <MaterialCommunityIcons
       name={
@@ -92,19 +86,16 @@ export default function App() {
         <Stack.Navigator
           initialRouteName="Login"
           screenOptions={({ route }) => {
-            // base fade‐through animation
             const opts = {
               ...screenOptions,
-              // show toggle on every screen
               headerRight: ThemeIcon,
             };
 
             if (route.name === 'Login') {
-              // no back arrow on Login
               return {
                 ...opts,
                 headerLeft: () => null,
-                title: '',        // or "Sign In"
+                title: '',
               };
             }
 

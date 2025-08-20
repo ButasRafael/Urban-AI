@@ -1,5 +1,4 @@
-
-import { 
+import {
     createNavigationContainerRef, 
     CommonActions 
   } from '@react-navigation/native'

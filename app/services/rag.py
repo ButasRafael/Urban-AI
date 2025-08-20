@@ -1,4 +1,3 @@
-# app/services/rag.py
 from __future__ import annotations
 
 import os
@@ -11,38 +10,25 @@ from openai import AsyncOpenAI
 
 from app.models.rag import RAGChunk
 
-# --------------------------
-# Embeddings (always unit-norm)
-# --------------------------
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 EMB_MODEL = "text-embedding-3-small"
 EMB_DIM = 1536
 
 
 async def embed(text: str) -> list[float]:
-    """Create a unit-normalized embedding vector."""
     resp = await client.embeddings.create(model=EMB_MODEL, input=text)
     v = np.array(resp.data[0].embedding, dtype=np.float32)
     n = float(np.linalg.norm(v))
     return (v / n).tolist() if n > 0 else v.tolist()
 
 
-# --------------------------
-# MMR (deterministic)
-# --------------------------
 def _mmr(
     query_vec: np.ndarray,
     cand_vecs: np.ndarray,
     k: int,
     lam: float = 0.6,
 ) -> list[int]:
-    """
-    Maximal Marginal Relevance.
-    - query_vec: (D,) unit vector
-    - cand_vecs: (N,D) unit vectors
-    - lam in [0,1]: 1.0 -> pure relevance; 0.0 -> pure diversity
-    Returns indices into cand_vecs.
-    """
+
     if cand_vecs.size == 0 or k <= 0:
         return []
 
@@ -64,25 +50,16 @@ def _mmr(
 
     return selected
 
-
-# --------------------------
-# Retrieval (no geo)
-# --------------------------
 def retrieve(
     db: Session,
     query_emb: List[float],
     *,
     k: int = 8,
-    pool_factor: int = 6,     # pull more candidates, then MMR
-    mmr_lambda: float = 0.6,  # 0.6 favors relevance; lower -> more diversity
-    per_media_cap: int = 2,   # limit from same media
+    pool_factor: int = 6,
+    mmr_lambda: float = 0.6,
+    per_media_cap: int = 2,
 ) -> list[RAGChunk]:
-    """
-    Pipeline (geo-agnostic):
-      1) ANN order by cosine distance (ivfflat).
-      2) MMR for diversity.
-      3) Per-media cap + exact-k backfill.
-    """
+
     pool_n = max(k * pool_factor, k + 2)
 
     # 1) ANN candidates
@@ -126,7 +103,6 @@ def retrieve(
         if len(picked) == k:
             return picked
 
-    # backfill in ANN arrival order
     for r in cand_rows:
         if len(picked) == k:
             break
@@ -141,15 +117,8 @@ def retrieve(
 
     return picked[:k]
 
-
-# --------------------------
-# Ingestion
-# --------------------------
 async def ingest_media(db: Session, media_id: int):
-    """
-    Generate & store RAG chunks for every detection belonging to *media*.
-    Each chunk is embedded (unit-norm). No geo recorded/used.
-    """
+
     from app.models.media import Media, Detection  # avoid cycles
 
     media = db.query(Media).filter(Media.id == media_id).first()
@@ -176,7 +145,6 @@ async def ingest_media(db: Session, media_id: int):
                 media_id=media_id,
                 chunk=chunk_txt,
                 embedding=emb,
-                # latitude/longitude intentionally omitted
             )
         )
     db.commit()

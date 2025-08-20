@@ -1,8 +1,6 @@
-from typing import List, Optional
-from pydantic import BaseModel
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field
 from datetime import datetime
-
-
 
 class Mask(BaseModel):
     rle: dict
@@ -18,6 +16,8 @@ class Detection(BaseModel):
     mask: Mask
     description: Optional[str] = None
     solution:    Optional[str] = None
+    severity: Optional[Literal["low", "medium", "high"]] = "medium"
+    source: Optional[Literal["yolo", "gpt_dino", "sam_fallback"]] = None
 
 
 class FrameOut(BaseModel):
@@ -33,7 +33,7 @@ class ImageResponse(BaseModel):
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    suggestions: List[Detection] = []
+    suggestions: List[Detection] = Field(default_factory=list)
 
 
 class VideoResponse(BaseModel):
@@ -53,9 +53,9 @@ class MediaListItem(BaseModel):
     address: Optional[str]
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    predicted_classes: List[str] = []
-    descriptions: list[str]
-    solutions: list[str]
+    predicted_classes: List[str] = Field(default_factory=list)
+    descriptions: List[str] = Field(default_factory=list)
+    solutions: List[str] = Field(default_factory=list)
 
 
 

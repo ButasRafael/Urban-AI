@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import cv2
 import numpy as np
@@ -64,9 +63,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 _GPT_SEMAPHORE = asyncio.Semaphore(2)
 
 async def _wait_for_file(path: Path, timeout: float = 5.0, poll: float = 0.05):
-    """
-    Wait until path exists and is non‐zero‐length (or timeout).
-    """
+
     elapsed = 0.0
     while elapsed < timeout:
         try:
@@ -144,45 +141,34 @@ def draw_label(
     x1, y1, x2, y2 = box
     h_img, w_img = img.shape[:2]
 
-    # base font settings
     font = cv2.FONT_HERSHEY_SIMPLEX
     base_scale = float(np.clip((y2-y1) / 200.0, 0.8, 2.0))
     thickness  = int(np.clip((y2-y1) // 120, 1, 5))
 
-    # measure text size at base scale
     (tw, th), _ = cv2.getTextSize(text, font, base_scale, thickness)
     avail_w = min(w_img, x2 - x1) - 2*pad
-    # if too wide, shrink the scale proportionally
     if tw + 2*pad > avail_w and tw > 0:
         scale = base_scale * (avail_w / (tw + 2*pad))
         (tw, th), _ = cv2.getTextSize(text, font, scale, thickness)
     else:
         scale = base_scale
 
-    # initial position: above the box (or inside if too high)
     x0 = int(np.clip(x1, 0, w_img - tw - 2*pad))
     y0 = y1 - th - 2*pad
     if y0 < 0:
-        y0 = y2 + 2  # put inside/below box
+        y0 = y2 + 2
 
-    # define our new label rect
     rect = (x0, y0, x0 + tw + 2*pad, y0 + th + 2*pad)
 
-    # nudge it down if it overlaps any previous label
     for prev in _label_rects:
         if rects_overlap(rect, prev):
-            # bump below the previous label
             y0 = prev[3] + pad
-            # clamp inside image
             y0 = int(min(y0, h_img - th - 2*pad))
             rect = (x0, y0, x0 + tw + 2*pad, y0 + th + 2*pad)
 
-    # record this rect for future overlap checks
     _label_rects.append(rect)
 
-    # draw background
     cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), color, thickness=-1)
-    # draw text
     cv2.putText(
         img,
         text,
@@ -234,25 +220,16 @@ def _ground_phrase_weights(
     if not keep:                          
         return None
 
-    # pick the best of the remaining boxes
     idx = int(max(keep, key=lambda i: detections.confidence[i]))
     x1, y1, x2, y2 = detections.xyxy[idx]
     score          = float(detections.confidence[idx])
     return int(x1), int(y1), int(x2), int(y2), score
 
 
-
-
 def _run_yolo(img: np.ndarray, run_id: str | None = None,) -> List[Dict[str, Any]]:
-    """
-    Run YOLO detection on the input BGR image and return a list of
-    dicts with keys: track_id, class_name (with '-yolo' suffix),
-    confidence, and bbox [x1, y1, x2, y2].
-    """
-    # load the YOLO model (and ignore SAM predictor/mask_gen)
+
     yolo, _, _ = _load_models()
 
-    # perform detection
     results = yolo.predict(
         img,
         imgsz=IMG_SZ,
@@ -269,10 +246,9 @@ def _run_yolo(img: np.ndarray, run_id: str | None = None,) -> List[Dict[str, Any
         exist_ok=True,
     )[0]
 
-    # pull out boxes, confidences, and class indices
-    boxes = results.boxes.xyxy.cpu().numpy()      # shape: (N, 4)
-    confs = results.boxes.conf.cpu().numpy()     # shape: (N,)
-    clss  = results.boxes.cls.int().cpu().numpy()  # shape: (N,)
+    boxes = results.boxes.xyxy.cpu().numpy()
+    confs = results.boxes.conf.cpu().numpy()
+    clss  = results.boxes.cls.int().cpu().numpy()
 
     output: List[Dict[str, Any]] = []
     for idx, (box, conf, cls_idx) in enumerate(zip(boxes, confs, clss)):
@@ -284,6 +260,7 @@ def _run_yolo(img: np.ndarray, run_id: str | None = None,) -> List[Dict[str, Any
             "class_name": f"{name}-yolo",
             "confidence": float(conf),
             "bbox":       [x1, y1, x2, y2],
+            "source": "yolo",
         })
 
     return output
@@ -300,42 +277,44 @@ async def _gpt_refine_and_find(
     async with httpx.AsyncClient() as http:
         resp = await http.get(image_url, timeout=5.0)
         resp.raise_for_status()
-    
+
     prompt_text = (
-    "You are analyzing an urban-planning scenario based on an input image and its corresponding YOLO detections (bounding boxes)."
-    " Perform the following tasks:\n"
-    "\n"
-    "1. For each YOLO detection **present in the array** (if the YOLO array is empty, skip this section entirely and output **no fields named \"track_id\" or \"keep\"):**\n"
-    "   - \"track_id\": integer (the YOLO track-ID provided)\n"
-    "   - \"keep\": boolean (true if YOLO correctly identified the object; false if it is a mis-identification)\n"
-    "   - \"description\": string (a clear one-sentence description of the detected object or issue)\n"
-    "   - \"solution\": string — if the object is an issue, give a concise, practical, one-sentence remediation proposal; "
-    "     if the object is NOT an issue, write \"No solution needed\".\n"
-    "\n"
-    "   Do NOT include bounding-box coordinates in your response; YOLO’s geometry will be used directly.\n"
-    "\n"
-    "2. Only add **new** JSON objects for additional urban issues **when they are BOTH important and realistically solvable**:\n"
-    "   - \"new\": true\n"
-    "   - \"class_name\": string (the specific type or category of urban issue identified)\n"
-    "   - \"confidence\": float between 0 and 1 (your confidence in this additional issue)\n"
-    "   - \"description\": string (a clear one-sentence description of the newly identified issue)\n"
-    "   - \"solution\": string (a concise, practical, one-sentence remediation proposal)\n"
-    "   - \"dino_prompt\": string\n"
-    "       • 1 – 3 **lower-case tokens**, each ≤ 2 words.\n"
-    "       • Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. \"traffic light\", \"trash bin\").\n"
-    "       • NO commas, punctuation, verbs, prepositions, or numerals.\n"
-    "       • Color/material adjectives when they are the *sole* reliable cue (e.g. \"red cone\").\n"
-    "       • Put the **most visually distinctive token first**; order the rest by distinctiveness.\n"
-    "       • Prefer the canonical dataset label (\"fire hydrant\" not \"hydrant\").\n"
-    "       • Use singular form unless plurality is visually obvious.\n"
-    "       • Hard cap of three tokens — if unsure, pick ONE high-precision noun.\n"
-    "       • Separate tokens with ONE space exactly.\n"
-    "\n"
-    "   Skip minor, cosmetic, or trivial issues entirely — return ZERO new detections if the photo appears clean.\n"
-    "   Do NOT specify exact bounding-box coordinates; these additional detections will be logged as coarse issues.\n"
-    "\n"
-    "3. Return **ONLY** a JSON-formatted array containing all of the above-described objects, and NOTHING ELSE."
-)
+        "You are analyzing an urban-planning scenario based on an input image and its corresponding YOLO detections (bounding boxes)."
+        " Perform the following tasks:\n"
+        "\n"
+        "1. For each YOLO detection **present in the array** (if the YOLO array is empty, skip this section entirely and output **no fields named \"track_id\" or \"keep\"):**\n"
+        "   - \"track_id\": integer (the YOLO track-ID provided)\n"
+        "   - \"keep\": boolean (true if YOLO correctly identified the object; false if it is a mis-identification)\n"
+        "   - \"description\": string (a clear one-sentence description of the detected object or issue)\n"
+        "   - \"solution\": string — if the object is an issue, give a concise, practical, one-sentence remediation proposal; "
+        "     if the object is NOT an issue, write \"No solution needed\".\n"
+        "   - \"severity\": \"low\" | \"medium\" | \"high\" (lowercase only). Use this rubric: high = acute safety/operational hazard or large impact; medium = material degradation or likely to become hazardous soon; low = minor/cosmetic. If uncertain, choose the lower severity.\n"
+        "\n"
+        "   Do NOT include bounding-box coordinates in your response; YOLO’s geometry will be used directly.\n"
+        "\n"
+        "2. Only add **new** JSON objects for additional urban issues **when they are BOTH important and realistically solvable**:\n"
+        "   - \"new\": true\n"
+        "   - \"class_name\": string (the specific type or category of urban issue identified)\n"
+        "   - \"confidence\": float between 0 and 1 (your confidence in this additional issue)\n"
+        "   - \"description\": string (a clear one-sentence description of the newly identified issue)\n"
+        "   - \"solution\": string (a concise, practical, one-sentence remediation proposal)\n"
+        "   - \"severity\": \"low\" | \"medium\" | \"high\" (lowercase only; same rubric as above).\n"
+        "   - \"dino_prompt\": string\n"
+        "       • 1 – 3 **lower-case tokens**, each ≤ 2 words.\n"
+        "       • Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. \"traffic light\", \"trash bin\").\n"
+        "       • NO commas, punctuation, verbs, prepositions, or numerals.\n"
+        "       • Color/material adjectives when they are the *sole* reliable cue (e.g. \"red cone\").\n"
+        "       • Put the **most visually distinctive token first**; order the rest by distinctiveness.\n"
+        "       • Prefer the canonical dataset label (\"fire hydrant\" not \"hydrant\").\n"
+        "       • Use singular form unless plurality is visually obvious.\n"
+        "       • Hard cap of three tokens — if unsure, pick ONE high-precision noun.\n"
+        "       • Separate tokens with ONE space exactly.\n"
+        "\n"
+        "   Skip minor, cosmetic, or trivial issues entirely — return ZERO new detections if the photo appears clean.\n"
+        "   Do NOT specify exact bounding-box coordinates; these additional detections will be logged as coarse issues.\n"
+        "\n"
+        "3. Return **ONLY** a JSON-formatted array containing all of the above-described objects, and NOTHING ELSE."
+    )
 
     initial = sorted(initial, key=lambda d: -d["confidence"])[:50]
 
@@ -362,11 +341,9 @@ async def _gpt_refine_and_find(
                 )
                 break
             except (RateLimitError, APIConnectionError) as e:
-                # exponential back-off for rate / network errors
                 await asyncio.sleep(backoff + random.random() * 0.2)
                 backoff *= 2
             except InternalServerError as e:
-                # 5) bubble up the real status and body to logs and HTTPException
                 status = e.response.status_code if e.response else 502
                 body   = e.response.text if e.response else "<no body>"
                 logger.error("OpenAI 5xx: %s – %s", status, body)
@@ -375,7 +352,6 @@ async def _gpt_refine_and_find(
                     f"Upstream service error (OpenAI {status}): {body}"
                 )
         else:
-            # all retries failed without raising InternalServerError
             raise HTTPException(502, "Upstream service error (OpenAI). Please try again.")
 
     raw = resp.output_text or ""
@@ -450,7 +426,7 @@ async def _ground_phrase(
     img_bgr: np.ndarray,
     classes: list[str],
     *,                    
-    backend: str = "1.6pro",  # "1.6pro" (default)  |  "swinb"
+    backend: str = "1.6pro",
     bbox_threshold: float = 0.25,
     iou_threshold : float = 0.8,
     existing: list[list[float]] | None = None,
@@ -466,12 +442,11 @@ async def _ground_phrase(
         )
 
         by_cat: dict[str, list[dict]] = {c: [] for c in classes}
-        for o in objs:                               # bucket detections
+        for o in objs:
             cat = o["category"]
             if cat in by_cat:
                 by_cat[cat].append(o)
 
-        # keep only highest-score hit per category
         for c, hits in by_cat.items():
             by_cat[c] = [max(hits, key=lambda h: h["score"])] if hits else []
         return by_cat
@@ -502,9 +477,6 @@ async def _ground_phrase(
 
     else:
         raise ValueError(f"Unknown backend {backend!r}; use '1.6pro' or 'swinb'.")
-
-
-
 
 def overlay_masks(
     image: np.ndarray,
@@ -538,13 +510,12 @@ def overlay_masks(
     h_img, w_img = image.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
 
-    # base size based on image
+
     raw_scale = min(w_img, h_img) * 0.003
     raw_th    = int(min(w_img, h_img) * 0.004)
     base_scale = float(np.clip(raw_scale, 0.8, 2.0))
     thickness = int(np.clip(raw_th, 2, 6))
 
-    # measure and possibly shrink to image width
     (w_txt, h_txt), _ = cv2.getTextSize(label, font, base_scale, thickness)
     pad = int(thickness * 2)
     max_w = w_img - 2*pad
@@ -554,29 +525,23 @@ def overlay_masks(
     else:
         scale = base_scale
 
-    # start at mask centroid
     x_c, y_c = int(xs.mean()), int(ys.mean())
     x0 = x_c - w_txt//2 - pad
     y0 = y_c - h_txt - pad - 5
-    # keep on‐screen
     x0 = int(np.clip(x0, 0, w_img - w_txt - 2*pad))
     if y0 < 0:
         y0 = int(np.clip(y_c + 5, 0, h_img - h_txt - 2*pad))
 
-    # pack rect
     rect = (x0, y0, x0 + w_txt + 2*pad, y0 + h_txt + 2*pad)
 
-    # bump if overlaps any existing
     for prev in _label_rects:
         if not (rect[2] < prev[0] or prev[2] < rect[0] or rect[3] < prev[1] or prev[3] < rect[1]):
-            # move below prev
             y0 = prev[3] + pad
             y0 = int(min(y0, h_img - h_txt - 2*pad))
             rect = (x0, y0, x0 + w_txt + 2*pad, y0 + h_txt + 2*pad)
 
     _label_rects.append(rect)
 
-    # draw bg & text
     cv2.rectangle(image, (rect[0], rect[1]), (rect[2], rect[3]), color, thickness=-1)
     cv2.putText(
         image,
@@ -702,11 +667,9 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
     # 2) GPT tells us KEEP/REMOVE + description/solution (+ any “new” issues)
     refinements = await _gpt_refine_and_find(initial, run_id)
 
-    # make a copy to draw on
     annotated = img_bgr.copy()
     final     = []
 
-    # prep SAM (and mask generator) if requested
     if use_sam:
         _, predictor, mask_gen = _load_models()
         rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
@@ -714,7 +677,6 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
     else:
         _, _, mask_gen = _load_models()
 
-    # compute font size & thickness once
     h, w = img_bgr.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
     scale = max(0.6, min(w, h) * 0.002)
@@ -729,11 +691,9 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
         x1, y1, x2, y2 = map(int, det["bbox"])
         color = colors.get(det["class_id"], (0,255,0))
 
-        # always draw the YOLO box first
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
 
         if use_sam:
-            # overlay the best SAM mask (centroid label only)
             masks, scores, _ = predictor.predict(
                 box=np.array([[x1, y1, x2, y2]]), multimask_output=True
             )
@@ -742,20 +702,18 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
             det["mask"] = {"rle": _encode(mask), "polygon": _poly(mask)}
 
         else:
-            # YOLO‐only: we already have the box, now add the label
             draw_label(annotated, det["class_name"], (x1, y1, x2, y2), color)
             det["mask"] = {"rle": {}, "polygon": []}
 
-        # attach GPT’s description + solution
         det["description"] = info["description"]
         det["solution"]    = info["solution"]
+        det["severity"]    = (info.get("severity") or "medium").lower()
+        det["source"] = "yolo"
         final.append(det)
     
     existing_boxes = [d["bbox"] for d in final]
 
     # 4) handle any “new” coarse GPT issues
-        # 4) handle any “new” coarse GPT issues
-    # 4) handle any “new” coarse GPT issues — ONE DDS call for all of them
     new_items   = [r for r in refinements if r.get("new")]
     if new_items:
         class_phrases = [
@@ -771,7 +729,6 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
         color = tuple(random.randint(0, 255) for _ in range(3))
         hits  = dino_hits.get(phrase, [])
 
-        # fallback: full-frame box if DINO found nothing
         if not hits:
             H, W = img_bgr.shape[:2]
             hits = [{"bbox": [0, 0, W, H], "score": r.get("confidence", 0.0)}]
@@ -804,6 +761,8 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
                 "mask":       mask_data,
                 "description": r["description"],
                 "solution":    r["solution"],
+                "severity": (r.get("severity") or "medium").lower(),
+                "source": "gpt_dino",
             })
     
      # 5) full-image SAM fallback if nothing kept
@@ -822,6 +781,8 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
                 "mask":       {"rle": _encode(seg), "polygon": _poly(seg)},
                 "description": None,
                 "solution":    None,
+                "severity":    "low",
+                "source": "sam_fallback",
             })
 
     return annotated, final
@@ -936,6 +897,7 @@ def process_video(video_path: Path, use_sam: bool = True):
                 "confidence": float(conf),
                 "bbox": box.tolist(),
                 "mask": {"rle": {}, "polygon": []},
+                "source": "yolo",
             })
 
         vw.write(frame)

@@ -7,54 +7,29 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import MapPage from './pages/MapPage';
 import ListPage from './pages/ListPage';
 import ChatPage from "./pages/ChatPage";
+import IssuesPage from './pages/IssuesPage';
 import Register from './pages/Register';
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+      <Routes>
+        {/* Auth pages – no shell, so they can be full-bleed */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/" element={<Landing />} />
 
-          <Route
-            path="/analytics"
-            element={
-              <Protected role="admin">
-                <AnalyticsPage />
-              </Protected>
-            }
-          />
-          <Route
-            path="/map"
-            element={
-              <Protected>
-                <MapPage />
-              </Protected>
-            }
-          />
-          <Route
-            path="/list"
-            element={
-              <Protected>
-                <ListPage />
-              </Protected>
-            }
-          />
-          <Route
-            path="/chat"
-            element={
-              <Protected role="authority">
-                <ChatPage />
-              </Protected>
-            }
-          />
+        {/* App pages – wrapped by the shell */}
+        <Route element={<Layout />}>
+          <Route path="/analytics" element={<Protected role="admin"><AnalyticsPage /></Protected>} />
+          <Route path="/map"       element={<Protected><MapPage /></Protected>} />
+          <Route path="/list"      element={<Protected><ListPage /></Protected>} />
+          <Route path="/chat"      element={<Protected role="authority"><ChatPage /></Protected>} />
+          <Route path="/issues"    element={<Protected><IssuesPage /></Protected>} />
+        </Route>
 
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </BrowserRouter>
   );
 }

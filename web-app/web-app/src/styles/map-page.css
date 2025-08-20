@@ -3,53 +3,114 @@
   --pin-image: var(--danger-500, #ef4444);
   --pin-video: var(--info-500,   #3b82f6);
 }
+
+:root {
+  /* Brand-aware selection styling (light) */
+  --select-stroke: var(--primary-700, #0E7C64);
+  --select-stroke-outer: color-mix(in srgb, var(--primary-500, #16A085) 40%, transparent);
+  --select-fill: color-mix(in srgb, var(--primary-500, #16A085) 14%, transparent);
+  --select-hatch-opacity: .12; /* hatch strength */
+}
+:root.dark {
+  /* Slightly brighter edge + fill in dark for contrast */
+  --select-stroke: var(--primary-300, #A8E0D6);
+  --select-stroke-outer: color-mix(in srgb, var(--select-stroke) 52%, transparent);
+  --select-fill: color-mix(in srgb, var(--select-stroke) 20%, transparent);
+  --select-hatch-opacity: .16;
+}
+
+/* Floating selection chip – keep as-is, but colors now follow the vars above */
+.selection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--select-fill);
+  border: 1px solid var(--select-stroke-outer);
+  color: var(--select-stroke);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  animation: chip-in .22s ease-out;
+}
+.selection-chip__txt { white-space: nowrap; }
+.selection-chip__clear {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  display: inline-grid;
+  place-items: center;
+  width: 18px; height: 18px;
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+}
+.selection-chip__clear:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
+@keyframes chip-in { from { transform: translateY(-4px); opacity: 0; } to { transform: none; opacity: 1; } }
+
 :root.dark {
   /* brighten slightly in dark so pins pop on a dark basemap */
   --pin-image: color-mix(in srgb, var(--danger-500, #ef4444) 88%, white 12%);
   --pin-video: color-mix(in srgb, var(--info-500,   #3b82f6)  88%, white 12%);
 }
 
-/* Map container */
+/* ====== Fullscreen layout ====== */
+.map-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;           /* full viewport, no scroll */
+  overflow: hidden;        /* prevent any accidental scrollbars */
+  background: var(--surface-100, #f4f6f8);
+}
 .map-el {
   width: 100%;
-  height: calc(100vh - 72px); /* space for the bar */
+  height: 100%;            /* occupies whole viewport behind the overlay bar */
   outline: none;
 }
 
-/* Filter / action bar */
+/* ====== Floating Filter / Action Bar (glass) ====== */
 .mapbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  background:
-    linear-gradient(#fff, #fff) padding-box,
-    linear-gradient(135deg, var(--primary-300), var(--secondary-300)) border-box;
-  border-bottom: 1px solid transparent;
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: saturate(1.1) blur(2px);
+  border-radius: 14px;
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-sm, 0 10px 24px rgba(0,0,0,.08));
+  backdrop-filter: saturate(1.2) blur(8px);
 }
-:root.dark .mapbar {
+.mapbar--floating {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(1100px, calc(100% - 24px));
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.86)) padding-box,
+    linear-gradient(135deg, var(--primary-300, #A8E0D6), var(--secondary-300, #C7DCEC)) border-box;
+  border-bottom: 1px solid transparent;
+}
+:root.dark .mapbar--floating {
   background:
     linear-gradient(180deg, rgba(15,20,26,.78), rgba(15,20,26,.68)) padding-box,
     linear-gradient(135deg, #0E7C64, #2C3E50) border-box;
-  border-bottom-color: #1f2c38;
+  border-color: #1f2c38;
 }
 
 .mapbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .mapbar-right { display: flex; align-items: center; gap: 8px; }
 
 /* Small keyboard hint */
-.kbd-hint { display: none; font-size: 12px; color: var(--secondary-700); }
+.kbd-hint { display: none; font-size: 12px; color: var(--secondary-700, #4b5563); }
 .kbd-hint kbd {
   font: inherit; font-weight: 700;
   padding: 2px 6px; border-radius: 6px;
-  border: 1px solid var(--surface-200);
-  background: var(--surface-0); color: var(--on-surface);
+  border: 1px solid var(--surface-200, #e5e7eb);
+  background: var(--surface-0, #fff); color: var(--on-surface, #0b1220);
   box-shadow: 0 1px 0 rgba(0,0,0,.05);
 }
 :root.dark .kbd-hint { color: #94a3b8; }
@@ -63,9 +124,9 @@
   -webkit-appearance: none;
   padding: 8px 28px 8px 10px;
   border-radius: 10px;
-  border: 1px solid var(--surface-200);
-  background: var(--surface-0);
-  color: var(--on-surface);
+  border: 1px solid var(--surface-200, #e5e7eb);
+  background: var(--surface-0, #fff);
+  color: var(--on-surface, #0b1220);
   font-size: 14px;
   background-image:
     linear-gradient(45deg, transparent 50%, currentColor 50%),
@@ -76,7 +137,7 @@
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
 }
-.select:hover { border-color: var(--primary-300); }
+.select:hover { border-color: var(--primary-300, #A8E0D6); }
 :root.dark .select { background: #0b1220; border-color: #1f2c38; color: #e2e8f0; }
 
 /* Active filter pills */
@@ -85,15 +146,15 @@
   display: inline-flex; align-items: center;
   gap: 6px; padding: 6px 10px;
   border-radius: 999px;
-  background: var(--primary-100);
-  border: 1px solid var(--primary-300);
-  color: var(--primary-800);
+  background: var(--primary-100, #E8F6F3);
+  border: 1px solid var(--primary-300, #A8E0D6);
+  color: var(--primary-800, #0E7C64);
   font-size: 12px; font-weight: 700;
 }
 :root.dark .pill { background: #0e1628; border-color: #2a3a4a; color: #dbeafe; }
 
 /* Small stats */
-.stat { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--secondary-700); }
+.stat { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--secondary-700, #4b5563); }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot.-uploads { background: #ef4444; }
 .dot.-locs    { background: #3b82f6; }
@@ -105,28 +166,28 @@
   display: flex; align-items: center; gap: 10px; justify-content: space-between;
   margin-bottom: 6px;
 }
-.infocard__title { margin: 0; font-size: 16px; color: var(--on-surface); }
+.infocard__title { margin: 0; font-size: 16px; color: var(--on-surface, #0b1220); }
 .infocard__list { display: grid; gap: 10px; }
 
 .infocard__item {
-  border: 1px solid var(--surface-200);
+  border: 1px solid var(--surface-200, #e5e7eb);
   border-radius: 12px;
   padding: 8px 10px;
-  background: var(--surface-0);
+  background: var(--surface-0, #fff);
 }
 :root.dark .infocard__item { background: #0f141a; border-color: #1f2c38; }
 
 .infocard__meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.infocard__meta .muted { font-size: 11px; color: var(--secondary-700); }
+.infocard__meta .muted { font-size: 11px; color: var(--secondary-700, #4b5563); }
 :root.dark .infocard__meta .muted { color: #94a3b8; }
 
 .infocard__classes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .chip {
   display: inline-flex; align-items: center; padding: 4px 8px;
   border-radius: 999px; font-size: 11px; font-weight: 700;
-  background: var(--primary-100); border: 1px solid var(--primary-300); color: var(--primary-800);
+  background: var(--primary-100, #E8F6F3); border: 1px solid var(--primary-300, #A8E0D6); color: var(--primary-800, #0E7C64);
 }
-.chip--muted { background: var(--surface-100); border-color: var(--surface-200); color: var(--secondary-700); }
+.chip--muted { background: var(--surface-100, #f3f4f6); border-color: var(--surface-200, #e5e7eb); color: var(--secondary-700, #4b5563); }
 :root.dark .chip { background: #0e1628; border-color: #2a3a4a; color: #dbeafe; }
 :root.dark .chip--muted { background: #0b1220; border-color: #1f2c38; color: #94a3b8; }
 
@@ -135,21 +196,21 @@
   box-shadow: 0 1px 6px rgba(0,0,0,.2);
 }
 
-.infocard__video { margin-top: 6px; font-size: 12px; color: var(--secondary-700); }
+.infocard__video { margin-top: 6px; font-size: 12px; color: var(--secondary-700, #4b5563); }
 :root.dark .infocard__video { color: #94a3b8; }
 
 .infocard__actions {
   display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;
 }
 
-/* Loading skeleton */
-.map-skeleton { height: calc(100vh - 72px); display: grid; place-items: center; }
+/* Loading skeleton — full-viewport */
+.map-skeleton { height: 100%; display: grid; place-items: center; }
 .map-skeleton .sk {
-  width: min(1100px, 92vw);
+  width: min(1100px, 92%);
   height: 70vh;
   border-radius: 16px;
   background:
-    repeating-linear-gradient(90deg, var(--surface-100), var(--surface-100) 30px, var(--surface-200) 30px, var(--surface-200) 60px);
+    repeating-linear-gradient(90deg, var(--surface-100, #f3f4f6), var(--surface-100, #f3f4f6) 30px, var(--surface-200, #e5e7eb) 30px, var(--surface-200, #e5e7eb) 60px);
 }
 .shimmer { position: relative; overflow: hidden; }
 .shimmer::after {
@@ -162,23 +223,23 @@
 /* Fallback card */
 .map-fallback.card {
   max-width: 720px; margin: 24px auto; padding: 16px;
-  border-radius: 14px; border: 1px solid var(--surface-200); background: var(--surface-0);
+  border-radius: 14px; border: 1px solid var(--surface-200, #e5e7eb); background: var(--surface-0, #fff);
 }
 .map-fallback__inner { display: flex; gap: 12px; align-items: center; }
 :root.dark .map-fallback.card { background: #0f141a; border-color: #1f2c38; }
 
 /* ==== Google Maps InfoWindow theming (host shell) ==== */
 .gm-style .gm-style-iw-c {
-  background: var(--surface-0) !important;
-  border: 1px solid var(--surface-200) !important;
+  background: var(--surface-0, #fff) !important;
+  border: 1px solid var(--surface-200, #e5e7eb) !important;
   border-radius: 12px !important;
   box-shadow: 0 10px 30px rgba(0,0,0,.18) !important;
 }
 .gm-style .gm-style-iw-t::after {
-  background: var(--surface-0) !important;
-  box-shadow: 0 0 0 1px var(--surface-200) !important;
+  background: var(--surface-0, #fff) !important;
+  box-shadow: 0 0 0 1px var(--surface-200, #e5e7eb) !important;
 }
-.gm-style .gm-style-iw-d { color: var(--on-surface) !important; }
+.gm-style .gm-style-iw-d { color: var(--on-surface, #0b1220) !important; }
 
 /* Dark theme overrides for GM shell */
 :root.dark .gm-style .gm-style-iw-c {
@@ -199,8 +260,6 @@
    Works with BOTH modern renderer (.gm-cluster) and classic
    MarkerClustererF (fallback selectors below).
    ========================================================= */
-
-/* --- Modern: AdvancedMarkerElement content (renderer) --- */
 .gm-cluster {
   width: var(--cluster-size, 44px);
   height: var(--cluster-size, 44px);
@@ -208,23 +267,18 @@
   position: relative;
   display: grid;
   place-items: center;
-
-  /* Material depth */
   background:
     radial-gradient(38% 38% at 50% 36%, var(--cluster-hi, #ffffff) 0%, transparent 100%),
     var(--cluster-tone, #dbeafe);
   border: 1.25px solid var(--cluster-border, #d9e2ee);
   box-shadow:
     0 calc(2px * var(--cluster-dpr, 1)) calc(8px * var(--cluster-dpr, 1)) var(--cluster-glow, rgba(0,0,0,.18));
-
   transform: translateZ(0);
   transition: transform .14s ease, box-shadow .18s ease, filter .18s ease;
   will-change: transform, box-shadow, filter;
   user-select: none;
   cursor: pointer;
 }
-
-/* inner ring highlight */
 .gm-cluster__ring {
   position: absolute;
   inset: 5px;
@@ -234,8 +288,6 @@
 :root.dark .gm-cluster__ring {
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
 }
-
-/* label */
 .gm-cluster__label {
   position: relative;
   z-index: 1;
@@ -244,10 +296,8 @@
   line-height: 1;
   letter-spacing: .2px;
   color: var(--cluster-text, #0b1220);
-  transform: translateY(.5px); /* optical centering */
+  transform: translateY(.5px);
 }
-
-/* hover/press */
 .gm-cluster:hover {
   transform: translateZ(0) scale(1.06);
   box-shadow:
@@ -255,8 +305,6 @@
   filter: saturate(1.05);
 }
 .gm-cluster:active { transform: translateZ(0) scale(0.985); }
-
-/* subtle intro pop */
 .gm-cluster::after {
   content: "";
   position: absolute;
@@ -271,14 +319,13 @@
   40%  { transform: scale(1.08); opacity: .35; }
   100% { transform: scale(1); opacity: 0; }
 }
-
 @media (pointer: coarse) {
   .gm-cluster,
   .gm-cluster:hover,
   .gm-cluster:active { transform: none; }
 }
 
-/* --- Classic: image/background-based clusters (MarkerClustererF) --- */
+/* --- Classic (MarkerClustererF) label text overrides --- */
 .gm-style .cluster,
 .gm-style .gm-cluster-marker,
 .gm-style .map-marker-cluster {
@@ -289,11 +336,8 @@
   transition: transform .14s ease, filter .18s ease, box-shadow .18s ease;
   will-change: transform, filter, box-shadow;
   cursor: pointer;
-
-  /* Soft shadow & slight saturation lift for depth */
   filter: drop-shadow(0 2px 8px rgba(0,0,0,.18));
 }
-
 .gm-style .cluster:hover,
 .gm-style .gm-cluster-marker:hover,
 .gm-style .map-marker-cluster:hover {
@@ -302,8 +346,6 @@
     saturate(1.05)
     drop-shadow(0 4px 16px rgba(0,0,0,.22));
 }
-
-/* Optional: inner ring highlight via overlay (works if cluster DOM is a DIV) */
 .gm-style .cluster::before,
 .gm-style .gm-cluster-marker::before,
 .gm-style .map-marker-cluster::before {
@@ -319,8 +361,6 @@
 :root.dark .gm-style .map-marker-cluster::before {
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
 }
-
-/* Label text inside classic clusters */
 .gm-style .cluster div,
 .gm-style .cluster span,
 .gm-style .gm-cluster-marker div,

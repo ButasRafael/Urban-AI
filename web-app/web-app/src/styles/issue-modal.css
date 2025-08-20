@@ -1,4 +1,3 @@
-/* lock page scroll when modal is open (fixes white scrollbar gutter) */
 html.has-modal,
 html.has-modal body { overflow: hidden !important; }
 
@@ -326,3 +325,25 @@ html.has-modal body { overflow: hidden !important; }
   .tool-btn:hover,
   .mini-btn:hover { transform: none; }
 }
+/* Dark mode: deeper primary button inside Issue Modal (keeps hover glow) */
+:root.dark .modal-card .btn.btn-primary {
+  /* calmer top/bottom — no minty shine */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 86%, #000 14%),
+    color-mix(in srgb, var(--primary-300) 92%, #000 8%)
+  );
+  border-color: color-mix(in srgb, var(--primary-300) 84%, #000 16%);
+  color: #E8F6F3;
+}
+
+/* Slightly deepen on hover but don't touch your glow shadow */
+:root.dark .modal-card .btn.btn-primary:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 90%, #000 10%),
+    color-mix(in srgb, var(--primary-300) 96%, #000 4%)
+  );
+}
+
+

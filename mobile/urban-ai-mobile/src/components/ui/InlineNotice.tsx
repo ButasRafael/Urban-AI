@@ -13,7 +13,6 @@ type Props = {
   message?: string | React.ReactNode;
   onClose?: () => void;
   style?: ViewStyle;
-  /** compact = smaller paddings & text */
   compact?: boolean;
 };
 
@@ -45,7 +44,6 @@ export default function InlineNotice({
     ]).start();
   }, [fade, slide]);
 
-  // color mapping (keep to tokens you already have)
   const colorMap: Record<Variant, string> = {
     error: theme.colors.error,
     success: theme.colors.primary500,

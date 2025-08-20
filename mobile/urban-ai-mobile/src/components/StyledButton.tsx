@@ -1,4 +1,3 @@
-// src/components/StyledButton.tsx
 import React, { ReactNode, useRef } from 'react';
 import {
   Pressable,
@@ -18,7 +17,6 @@ import type { Theme } from '../theme';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'tonal' | 'danger';
 type BoxColor = keyof Theme['colors'] | 'transparent';
 
-// tighten Text variant so it can’t be "defaults"
 type TextVariantKey = 'display' | 'title' | 'body' | 'label';
 type Size = 'sm' | 'md' | 'lg';
 
@@ -32,18 +30,18 @@ interface Props {
   flex?: number;
 
   /** ——— Niceties ——— */
-  size?: Size;                           // default 'md'
-  fullWidth?: boolean;                   // make it block-level
-  radius?: keyof Theme['borderRadii'];   // default 'm'
-  haptic?: boolean;                      // default true
-  gradient?: boolean;                    // gradient fill for solid variants
+  size?: Size;
+  fullWidth?: boolean;
+  radius?: keyof Theme['borderRadii'];
+  haptic?: boolean;
+  gradient?: boolean;
   leftIconName?: React.ComponentProps<typeof Feather>['name'];
   rightIconName?: React.ComponentProps<typeof Feather>['name'];
-  leftIcon?: ReactNode;                  // custom node (overrides leftIconName)
-  rightIcon?: ReactNode;                 // custom node
-  iconGap?: number;                      // px gap between icon and text
-  loadingText?: string;                  // optional label while loading
-  showSpinnerOnly?: boolean;             // keep old behavior (default true)
+  leftIcon?: ReactNode;
+  rightIcon?: ReactNode;
+  iconGap?: number;
+  loadingText?: string;
+  showSpinnerOnly?: boolean;
   testID?: string;
   accessibilityLabel?: string;
 }
@@ -86,7 +84,6 @@ export default function StyledButton({
     onPress();
   };
 
-  // Sizing
   const sizeMap: Record<
     Size,
     { py: keyof Theme['spacing']; px: keyof Theme['spacing']; font: TextVariantKey; icon: number }
@@ -97,7 +94,6 @@ export default function StyledButton({
   };
   const S = sizeMap[size];
 
-  // Colors
   let bgColor: BoxColor;
   let borderColor: BoxColor;
   let textColor = '#fff';
@@ -123,7 +119,6 @@ export default function StyledButton({
       bgColor = borderColor = 'primary500';
   }
 
-  // Shadow / elevation
   const tactileShadow: ViewStyle =
     Platform.OS === 'ios'
       ? {
@@ -136,13 +131,11 @@ export default function StyledButton({
 
   const computedRadius = theme.borderRadii[radius];
 
-  // Common container style
   const containerStyle: ViewStyle = {
     borderRadius: computedRadius,
     overflow: 'hidden',
   };
 
-  // Content wrapper (used both for solid and gradient)
   const content = (
     <Box
       backgroundColor={variant === 'ghost' ? 'transparent' : bgColor}
@@ -194,9 +187,8 @@ export default function StyledButton({
     </Box>
   );
 
-  // Optionally wrap solid variants in a gradient
   const isSolidVariant = variant === 'primary' || variant === 'secondary' || variant === 'danger';
-  const useGradient = gradient && isSolidVariant; // <- remove redundant comparisons that caused TS 2367
+  const useGradient = gradient && isSolidVariant;
 
   const gradientColors: readonly [ColorValue, ColorValue] =
   variant === 'danger'

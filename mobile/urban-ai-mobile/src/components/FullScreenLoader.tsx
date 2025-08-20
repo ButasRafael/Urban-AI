@@ -1,4 +1,3 @@
-// src/components/FullScreenLoader.tsx
 import React from 'react';
 import { View, StyleSheet, Modal } from 'react-native';
 import LottieView from 'lottie-react-native';

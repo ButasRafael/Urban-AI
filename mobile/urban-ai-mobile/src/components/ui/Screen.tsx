@@ -1,4 +1,3 @@
-// src/components/ui/Screen.tsx
 import React from 'react';
 import {
   KeyboardAvoidingView,
@@ -15,31 +14,16 @@ import type { Theme } from '../../theme';
 import { Box } from '../restylePrimitives';
 
 type Props = React.PropsWithChildren<{
-  /** Wrap children in a ScrollView */
   scroll?: boolean;
-  /** Apply standard page padding to the content box */
   padded?: boolean;
-  /** Extra style for the content box */
   contentStyle?: ViewStyle;
-  /** Extra style for the outer container */
   style?: ViewStyle;
-
-  /** Safe edges to respect. Default: left/right only so headers can “bleed” top/bottom */
   edges?: ReadonlyArray<Edge>;
-
-  /** Keyboard behavior; 'none' disables KAV */
   keyboard?: 'padding' | 'position' | 'height' | 'none';
-  /** Extra vertical offset if you have a custom header */
   keyboardOffset?: number;
-
-  /** Tap anywhere to dismiss the keyboard */
   dismissKeyboardOnTap?: boolean;
-
-  /** Center content and constrain max width (nice on tablets/landscape) */
   center?: boolean;
   maxWidth?: number;
-
-  /** Status bar controls for edge-to-edge layouts */
   statusBarStyle?: 'light-content' | 'dark-content';
   translucentStatusBar?: boolean;
 }>;
@@ -66,12 +50,10 @@ export default function Screen({
     <Box
       flex={1}
       bg="background"
-      // when centered, the padding feels nicer on large screens
       padding={padded ? 'l' : undefined}
       style={style}
     >
       <Box
-        // constrain inner width on big screens
         style={[
           center ? { alignSelf: 'center', width: '100%', maxWidth } : null,
           contentStyle,
@@ -88,9 +70,7 @@ export default function Screen({
       contentInsetAdjustmentBehavior="never"
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === 'ios' ? 'on-drag' : 'none'}
-      // removes Android blue glow; optional
       overScrollMode="never"
-      // keep indicators away from rounded corners
       scrollIndicatorInsets={{ top: 0, bottom: Math.max(0, insets.bottom - 2) }}
     >
       {content}

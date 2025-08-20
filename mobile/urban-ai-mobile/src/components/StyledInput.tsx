@@ -17,26 +17,15 @@ type Props = {
   onChangeText: (text: string) => void;
   placeholder?: string;
   secureTextEntry?: boolean;
-  /** show an eye/eye-off toggle when secureTextEntry is true */
   passwordToggle?: boolean;
-  /** optional left icon name from Feather, e.g. "user" | "lock" */
   leftIcon?: React.ComponentProps<typeof Feather>['name'];
-  /** container style */
   style?: ViewStyle;
-  /** input element style */
   inputStyle?: TextStyle;
-  /** optional error text (renders small helper under the field) */
   errorText?: string;
-
-  /** NEW — disable input */
   disabled?: boolean;
-  /** NEW — show tiny helper text under input (not error) */
   helperText?: string;
-  /** NEW — show an 'x' clear button when not secure and has value (default true) */
   allowClear?: boolean;
-  /** NEW — custom right adornment (e.g. icon/button) when not using password toggle */
   rightAdornment?: React.ReactNode;
-  /** NEW — called when right adornment pressed (if it's a simple icon) */
   onRightPress?: () => void;
 } & Omit<
   TextInputProps,

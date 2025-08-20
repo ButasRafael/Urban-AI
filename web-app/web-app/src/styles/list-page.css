@@ -1,4 +1,4 @@
-.page { padding: var(--spacing-m); }
+.page { padding: var(--m); }
 
 /* ---------- Toolbar ---------- */
 .toolbar {
@@ -24,8 +24,8 @@
   border-bottom-color: #1f2c38;
 }
 
-.left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar .left  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toolbar .right { display: flex; align-items: center; gap: 8px;  flex-wrap: wrap; }
 
 /* select */
 .selectWrap { position: relative; }
@@ -292,7 +292,8 @@
   vertical-align: middle;
   color: var(--on-surface);
 }
-.left { text-align: left; }
+.th.left, .td.left { text-align: left; }
+
 
 /* zebra */
 .tbody tr:nth-child(odd) { background: var(--surface-50); }

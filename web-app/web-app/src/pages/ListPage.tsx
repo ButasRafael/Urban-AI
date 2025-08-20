@@ -4,6 +4,7 @@ import type { Problem } from "../api/problems";
 import Input from "../components/Input";
 import Button from "../components/Button";
 import IssueModal from "../components/IssueModal";
+import { issuesSummaryByMedia, type IssuesSummary } from "../api/issues";
 import "../styles/list-page.css";
 
 type MediaType = "all" | "image" | "video";
@@ -11,7 +12,6 @@ type SortKey = "date" | "id";
 type SortDir = "desc" | "asc";
 
 export default function ListPage() {
-  /* ---------- URL → initial filters ---------- */
   const initialType = (() => {
     const sp = new URLSearchParams(location.search);
     const t = sp.get("type");
@@ -20,13 +20,14 @@ export default function ListPage() {
 
   const initialQuery = new URLSearchParams(location.search).get("q") ?? "";
 
-  /* ---------- State ---------- */
+  const initialMedia = Number(new URLSearchParams(location.search).get("media") || "") || null;
+  const [mediaFilter, setMediaFilter] = useState<number | null>(initialMedia);
+
   const [allItems, setAllItems] = useState<Problem[]>([]);
   const [type, setType] = useState<MediaType>(initialType);
 
   const handleCloseModal = useCallback(() => setModalProblem(null), []);
 
-  // live input vs applied query (debounced)
   const [klassInput, setKlassInput] = useState(initialQuery);
   const [klass, setKlass] = useState(initialQuery);
 
@@ -41,9 +42,41 @@ export default function ListPage() {
 
   const [modalProblem, setModalProblem] = useState<Problem | null>(null);
 
+  const [summByMedia, setSummByMedia] = useState<Record<number, IssuesSummary>>({});
+
+  useEffect(() => {
+  let cancelled = false;
+  (async () => {
+    if (allItems.length === 0) { setSummByMedia({}); return; }
+    const ids = Array.from(new Set(allItems.map(p => p.media_id)));
+    const data = await issuesSummaryByMedia(ids);
+    if (!cancelled) setSummByMedia(data);
+  })().catch(()=>{ /* ignore */ });
+  return () => { cancelled = true; };
+}, [allItems]);
+
+  function summarize(s?: IssuesSummary) {
+  if (!s) return "No detections";
+  const segs: string[] = [];
+
+  const add = (sev: "high" | "medium" | "low", label: string) => {
+    const open = s[sev]?.open ?? 0;
+    const closed = (s[sev]?.resolved ?? 0) + (s[sev]?.ignored ?? 0);
+    const parts: string[] = [];
+    if (open > 0) parts.push(`${open} ${label} open`);
+    if (closed > 0) parts.push(`${closed} ${label} closed`);
+    if (parts.length) segs.push(parts.join(", "));
+  };
+
+  add("high", "high");
+  add("medium", "medium");
+  add("low", "low");
+
+  return segs.length ? `Severity: ${segs.join(" · ")}` : "No detections";
+}
+
   const searchRef = useRef<HTMLInputElement | null>(null);
 
-  /* ---------- Fetch on media type only ---------- */
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -65,51 +98,54 @@ export default function ListPage() {
     };
   }, [type]);
 
-  /* ---------- Debounce query ---------- */
   useEffect(() => {
     const t = setTimeout(() => setKlass(klassInput.trim()), 240);
     return () => clearTimeout(t);
   }, [klassInput]);
 
-  /* ---------- Sync URL ---------- */
   useEffect(() => {
-    const sp = new URLSearchParams(location.search);
-    if (klass) sp.set("q", klass);
-    else sp.delete("q");
-    if (type !== "all") sp.set("type", type);
-    else sp.delete("type");
-    const newUrl = `${location.pathname}?${sp.toString()}`;
-    history.replaceState(null, "", newUrl);
-  }, [klass, type]);
+  const sp = new URLSearchParams(location.search);
+  if (klass) sp.set("q", klass); else sp.delete("q");
+  if (type !== "all") sp.set("type", type); else sp.delete("type");
 
-  /* ---------- Client-side filter + sort ---------- */
+  // NEW: reflect media filter in the URL
+  if (mediaFilter) sp.set("media", String(mediaFilter));
+  else sp.delete("media");
+
+  const newUrl = `${location.pathname}?${sp.toString()}`;
+  history.replaceState(null, "", newUrl);
+}, [klass, type, mediaFilter]);
+
+
   const filtered = useMemo(() => {
-    const base = klass
-      ? allItems.filter((p) =>
-          (p.predicted_classes ?? []).some((c) =>
-            c.toLowerCase().includes(klass.toLowerCase())
-          )
+  let base = klass
+    ? allItems.filter((p) =>
+        (p.predicted_classes ?? []).some((c) =>
+          c.toLowerCase().includes(klass.toLowerCase())
         )
-      : allItems.slice();
+      )
+    : allItems.slice();
 
-    base.sort((a, b) => {
-      if (sortKey === "date") {
-        const da = new Date(a.created_at).getTime();
-        const db = new Date(b.created_at).getTime();
-        return sortDir === "asc" ? da - db : db - da;
-      } else {
-        const ia = a.media_id;
-        const ib = b.media_id;
-        return sortDir === "asc" ? ia - ib : ib - ia;
-      }
-    });
+  if (mediaFilter) base = base.filter((p) => p.media_id === mediaFilter);
 
-    return base;
-  }, [allItems, klass, sortKey, sortDir]);
+  base.sort((a, b) => {
+    if (sortKey === "date") {
+      const da = new Date(a.created_at).getTime();
+      const db = new Date(b.created_at).getTime();
+      return sortDir === "asc" ? da - db : db - da;
+    } else {
+      const ia = a.media_id;
+      const ib = b.media_id;
+      return sortDir === "asc" ? ia - ib : ib - ia;
+    }
+  });
 
-  /* ---------- Pagination ---------- */
+  return base;
+}, [allItems, klass, mediaFilter, sortKey, sortDir]);
+
+
   useEffect(() => {
-    setPage(1); // reset page when filters/sort change
+    setPage(1);
   }, [klass, type, sortKey, sortDir, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -118,36 +154,41 @@ export default function ListPage() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize]);
 
-  /* ---------- Stats ---------- */
   const stats = useMemo(() => {
     const images = filtered.filter((p) => p.media_type === "image").length;
     const videos = filtered.filter((p) => p.media_type === "video").length;
     return { total: filtered.length, images, videos };
   }, [filtered]);
 
-  /* ---------- Shortcuts ---------- */
-
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      const tag = el?.tagName.toLowerCase();
-      const inField = tag === "input" || tag === "textarea" || (el as any)?.isContentEditable;
-      if (e.key === "/" && !e.shiftKey && !inField) {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-      if (e.key === "ArrowRight" && !inField && page < totalPages) setPage((p) => p + 1);
-      if (e.key === "ArrowLeft" && !inField && page > 1) setPage((p) => p - 1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [page, totalPages]);
+  const onKey = (e: KeyboardEvent) => {
+    const el = e.target as HTMLElement | null;
+    const tag = el?.tagName?.toLowerCase();
+    const inField =
+      tag === 'input' ||
+      tag === 'textarea' ||
+      (el?.isContentEditable ?? false);
 
-  /* ---------- Actions ---------- */
+    if (e.key === '/' && !e.shiftKey && !inField) {
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    if (e.key === 'ArrowRight' && !inField && page < totalPages) {
+      setPage(p => p + 1);
+    }
+    if (e.key === 'ArrowLeft' && !inField && page > 1) {
+      setPage(p => p - 1);
+    }
+  };
+  window.addEventListener('keydown', onKey);
+  return () => window.removeEventListener('keydown', onKey);
+}, [page, totalPages]);
+
   const clearFilters = () => {
     setKlassInput("");
     setKlass("");
     setType("all");
+    setMediaFilter(null);
   };
 
   const exportCsv = () => {
@@ -190,7 +231,6 @@ export default function ListPage() {
     URL.revokeObjectURL(url);
   };
 
-  /* ---------- Render ---------- */
   return (
     <div className="page">
       {/* Toolbar */}
@@ -232,10 +272,11 @@ export default function ListPage() {
             </select>
           </div>
 
-          {(klass || type !== "all") && (
+          {(klass || type !== "all" || mediaFilter) && (
             <div className="activeFilters">
               {klass && <span className="pill">class: “{klass}”</span>}
               {type !== "all" && <span className="pill">{type}</span>}
+              {mediaFilter && <span className="pill">media #{mediaFilter}</span>}
               <Button
                 variant="ghost"
                 size="sm"
@@ -255,6 +296,11 @@ export default function ListPage() {
               >
                 Clear
               </Button>
+               {mediaFilter && (
+                   <Button variant="ghost" size="sm" onClick={() => setMediaFilter(null)}>
+                     Clear media
+                   </Button>
+                )}
             </div>
           )}
         </div>
@@ -347,14 +393,14 @@ export default function ListPage() {
                   <span className="metaLabel">Classes</span>
                   <div className="chips">
                     {(it.predicted_classes ?? [])
-                      .slice(0, 4)
-                      .map((c, i) => (
-                        <span key={`${c}-${i}`} className="chip">
+                        .slice(0, 4)
+                        .map((c, i) => (
+                            <span key={`${c}-${i}`} className="chip">
                           {c}
                         </span>
-                      ))}
+                        ))}
                     {(it.predicted_classes?.length ?? 0) > 4 && (
-                      <span className="chip chipMuted">
+                        <span className="chip chipMuted">
                         +{(it.predicted_classes!.length - 4).toString()}
                       </span>
                     )}
@@ -375,22 +421,31 @@ export default function ListPage() {
                   </span>
                 </div>
 
+                <div className="cardRow">
+                  <span className="metaLabel">Detections</span>
+                  <span className="metaValue wrap">
+    {summarize(summByMedia[it.media_id])} ·{" "}
+                    <a href={`/issues?media_id=${it.media_id}`}>See detections →</a>
+                  </span>
+                </div>
+
                 {it.annotated_image_url && (
-                  <img
-                    className="thumb"
-                    src={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
-                    alt=""
-                    loading="lazy"
-                  />
+                    <img
+                        className="thumb"
+                        src={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                        alt=""
+                        loading="lazy"
+                    />
                 )}
+
               </div>
 
               <footer className="cardActions">
                 <Button
-                  variant="secondary"
-                  size="sm"
-                  className="view-btn"
-                  onClick={() => setModalProblem(it)}
+                    variant="secondary"
+                    size="sm"
+                    className="view-btn"
+                    onClick={() => setModalProblem(it)}
                 >
                   View details
                 </Button>
@@ -406,36 +461,37 @@ export default function ListPage() {
         {!loading && filtered.length > 0 && (
           <table className="table">
             <thead>
-              <tr>
-                <Th
+            <tr>
+              <Th
                   label="ID"
                   active={sortKey === "id"}
                   dir={sortDir}
                   onClick={() => {
                     setSortKey("id");
                     setSortDir((d) =>
-                      sortKey === "id" ? (d === "asc" ? "desc" : "asc") : "desc"
+                        sortKey === "id" ? (d === "asc" ? "desc" : "asc") : "desc"
                     );
                   }}
-                />
-                <Th
+              />
+              <Th
                   label="Date"
                   active={sortKey === "date"}
                   dir={sortDir}
                   onClick={() => {
                     setSortKey("date");
                     setSortDir((d) =>
-                      sortKey === "date" ? (d === "asc" ? "desc" : "asc") : "desc"
+                        sortKey === "date" ? (d === "asc" ? "desc" : "asc") : "desc"
                     );
                   }}
-                />
-                <th className="th">User</th>
-                <th className="th">Classes</th>
-                <th className="th left">Description</th>
-                <th className="th left">Solution</th>
-                <th className="th">Thumb</th>
-                <th className="th">Actions</th>
-              </tr>
+              />
+              <th className="th">User</th>
+              <th className="th">Classes</th>
+              <th className="th left">Description</th>
+              <th className="th left">Solution</th>
+              <th className="th">Thumb</th>
+              <th className="th left">Detections</th>
+              <th className="th">Actions</th>
+            </tr>
             </thead>
             <tbody className="tbody">
               {pageItems.map((it) => (
@@ -476,6 +532,12 @@ export default function ListPage() {
                       />
                     )}
                     {it.annotated_video_url && "🎞️"}
+                  </td>
+                  <td className="td left">
+                    <div className="chipsInline">
+                      <span className="muted">{summarize(summByMedia[it.media_id])}</span>
+                      <a className="ml8" href={`/issues?media_id=${it.media_id}`}>See detections →</a>
+                    </div>
                   </td>
                   <td className="td">
                     <Button
@@ -564,7 +626,6 @@ export default function ListPage() {
   );
 }
 
-/* ---------- Small clickable TH component ---------- */
 function Th({
   label,
   active,

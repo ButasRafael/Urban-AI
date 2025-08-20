@@ -1,4 +1,3 @@
-// src/screens/HomeScreen.tsx
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Image, Platform, Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -40,7 +39,6 @@ const REMEMBER_SAM_KEY = 'ui:useSamDefault';
 export default function HomeScreen({ navigation }: Props) {
   const theme = useTheme<Theme>();
   const sp = theme.spacing;
-  // ── state (reactive UI) ────────────────────────────────────────────────
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +53,6 @@ export default function HomeScreen({ navigation }: Props) {
   const hasLocation = !!pin;
   const canUpload = hasMedia && hasLocation;
 
-  // ── header: move Logout to nav header ──────────────────────────────────
   useLayoutEffect(() => {
     navigation.setOptions({
       title: 'Upload',
@@ -71,10 +68,8 @@ export default function HomeScreen({ navigation }: Props) {
         </Pressable>
       ),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation, theme.colors.error]);
 
-  // ── persist SAM preference ─────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       const saved = await AsyncStorage.getItem(REMEMBER_SAM_KEY);
@@ -85,7 +80,6 @@ export default function HomeScreen({ navigation }: Props) {
     AsyncStorage.setItem(REMEMBER_SAM_KEY, useSam ? '1' : '0').catch(() => {});
   }, [useSam]);
 
-  // ── helpers ────────────────────────────────────────────────────────────
   const friendlyFileName = (name: string) => (name?.length > 36 ? name.slice(0, 33) + '…' : name);
   const getMimeFromUri = (uri: string, fallback: string) => {
     const lower = uri.split('?')[0].toLowerCase();
@@ -116,7 +110,6 @@ export default function HomeScreen({ navigation }: Props) {
     setMapAdjustVisible(false);
   };
 
-  // ── auth ───────────────────────────────────────────────────────────────
   async function handleLogout() {
     try {
       await logout();
@@ -126,7 +119,6 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }
 
-  // ── media pickers (stateful) ───────────────────────────────────────────
   const pickImage = useCallback(async () => {
     setError(null);
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -168,7 +160,6 @@ export default function HomeScreen({ navigation }: Props) {
     notify.info('Selecție ștearsă');
   }, []);
 
-  // ── location ───────────────────────────────────────────────────────────
   const useCurrentLocation = useCallback(async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -199,7 +190,6 @@ export default function HomeScreen({ navigation }: Props) {
     if (finalAddress) notify.success('Locație setată', finalAddress);
   }, []);
 
-  // ── upload (reads from state) ──────────────────────────────────────────
   const performUpload = useCallback(async () => {
     if (!selected || !pin) return;
     setUploading(true);
@@ -219,9 +209,7 @@ export default function HomeScreen({ navigation }: Props) {
       });
 
       notify.success('Încărcare reușită');
-      // Optional: clear selection so Home looks fresh on return
       setSelected(null);
-      // setPin(null); // if you prefer to clear location too
       navigation.navigate('Detail', { media: data, showInfo: false });
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Încărcare eșuată';
@@ -233,7 +221,6 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }, [selected, pin, useSam, navigation]);
 
-  // ── UI helpers ─────────────────────────────────────────────────────────
   const SelectedPreview = () =>
     selected ? (
       <Box
@@ -361,7 +348,7 @@ export default function HomeScreen({ navigation }: Props) {
                 }
                 onPress={pickImage}
                 flex={1}
-                gradient                 // primary action within step
+                gradient
               />
               <StyledButton
                 title={

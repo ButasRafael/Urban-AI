@@ -1,5 +1,4 @@
-# app/api/rag_routes.py
-from fastapi import APIRouter, Depends, HTTPException, Request   # ⬅ add Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from typing import Optional
@@ -23,19 +22,10 @@ class ChunkOut(BaseModel):
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 def _abs_static_url(request: Request, filename: str) -> str:
-    """
-    Build an absolute URL to /static/<filename> using the API request origin.
-    Works even when frontend is on a different origin.
-    """
-    base = str(request.base_url).rstrip("/")  # e.g. https://api.example.com
+    base = str(request.base_url).rstrip("/")
     return f"{base}/static/{filename}"
 
 def _image_url_for_media(media, request: Request) -> Optional[str]:
-    """
-    Files live in /static. We prefer annotated <media.id>.jpg,
-    otherwise try media.filename (normalized to .jpg), otherwise best-effort.
-    Returns an **absolute** URL.
-    """
     if not media:
         return None
 

@@ -1,4 +1,3 @@
-// src/api/auth.ts
 import client from './client';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 

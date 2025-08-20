@@ -1,4 +1,3 @@
-// src/components/ui/Toast.tsx
 import React from 'react';
 import Toast, { BaseToastProps } from 'react-native-toast-message';
 import * as Haptics from 'expo-haptics';
@@ -35,7 +34,7 @@ const ToastView = ({ text1, text2, props }: BaseToastProps & { props: { kind: Ki
         shadowOpacity: 0.08,
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 3 },
-        elevation: 4,                // ensure it draws above headers on Android
+        elevation: 4,
       }}
     >
       <Box flexDirection="row" alignItems="flex-start">
@@ -59,17 +58,13 @@ const ToastView = ({ text1, text2, props }: BaseToastProps & { props: { kind: Ki
 
 export const RootToaster = () => {
   const insets = useSafeAreaInsets();
-
-  // Compute a sane header height for the current platform
   const { width, height } = Dimensions.get('window');
-  // `getDefaultHeaderHeight` matches React Navigation's header sizing
   const headerHeight = getDefaultHeaderHeight(
     { width, height },
-    Platform.OS === 'ios' ? false : false, // stackPresentation modal? false is fine for normal stacks
+    Platform.OS === 'ios' ? false : false,
     insets.top
   );
 
-  // Final offset: status bar inset + header height + a small gap
   const topOffset = Math.round(insets.top + headerHeight - 24);
 
   return (

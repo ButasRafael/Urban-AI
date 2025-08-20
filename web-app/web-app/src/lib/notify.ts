@@ -1,4 +1,3 @@
-// src/lib/notify.ts
 import { toast } from 'sonner';
 
 export const notify = {

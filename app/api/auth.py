@@ -1,7 +1,7 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from jose import jwt, JWTError
 import sentry_sdk
 
@@ -37,7 +37,6 @@ def unauthorized(detail: str):
 def register(user: UserCreate, db: Session = Depends(get_db)):
     logger.info("Register attempt", extra={"username": user.username})
 
-    # early check (optional, but catches sooner)
     if db.query(UserModel).filter_by(username=user.username).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -54,14 +53,12 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     try:
         db.commit()
     except IntegrityError as e:
-        # e.g. unique constraint failure
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already exists",
         )
     except Exception as e:
-        # anything else is a genuine 500
         sentry_sdk.capture_exception(e)
         logger.exception("DB commit failed", extra={"username": user.username})
         db.rollback()

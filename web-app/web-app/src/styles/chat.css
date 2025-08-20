@@ -8,12 +8,6 @@
 @media (max-width: 980px) {
   .chat { grid-template-columns: 1fr; }
 }
-
-
-/* ===========================
-   Card
-   =========================== */
-
 .card {
   position: relative;
   background:
@@ -36,7 +30,6 @@
   padding: 1px;
   opacity: .35;
 }
-
 
 /* ===========================
    Sidebar (conversations)
@@ -495,11 +488,6 @@
   background: linear-gradient(180deg, #0e1628, #0b1220);
 }
 
-
-/* ===========================
-   Titles
-   =========================== */
-
 .title-stack { display: grid; gap: 2px; }
 
 .eyebrow {
@@ -529,4 +517,106 @@
   :root.dark .grad-title {
     background-image: linear-gradient(135deg, #34d399, #60a5fa);
   }
+}
+
+/* Modal */
+.modalRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.modalOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.38);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+}
+
+.confirmDialog {
+  position: relative;
+  z-index: 1;
+  margin: auto;
+  inset: 0;
+  max-width: 520px;
+  width: calc(100% - 24px);
+  border-radius: 14px;
+  background:
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--secondary-300)) border-box;
+  border: 1px solid transparent;
+  box-shadow: 0 12px 40px rgba(0,0,0,.22);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.confirmHead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--surface-200);
+}
+.confirmHead h3 { margin: 0; font-size: 16px; }
+
+.confirmBody { padding: 12px 14px; }
+.confirmText { margin: 0; color: var(--secondary-800); }
+:root.dark .confirmText { color: #94a3b8; }
+
+.confirmFoot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 14px; border-top: 1px solid var(--surface-200);
+}
+
+.iconX {
+  display: grid; place-items: center;
+  width: 28px; height: 28px;
+  border-radius: 8px; border: 1px solid var(--surface-200);
+  background: var(--surface-0); color: var(--secondary-900);
+  cursor: pointer;
+}
+:root.dark .confirmDialog {
+  background:
+    linear-gradient(#0f141a, #0f141a) padding-box,
+    linear-gradient(135deg, #0E7C64, #2C3E50) border-box;
+  border-color: transparent;
+}
+:root.dark .iconX { background: #0b1220; border-color: #1f2c38; color: #e2e8f0; }
+
+
+/* Chat composer primary button — match the darker auth styling in dark mode */
+:root.dark .composer .btn.btn-primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 88%, #000 12%),
+    color-mix(in srgb, var(--primary-300) 92%, #000 8%)
+  );
+  border-color: color-mix(in srgb, var(--primary-300) 85%, #000 15%);
+  color: #E8F6F3;
+}
+
+/* Slightly deepen on hover, keep your existing glow/shadow behavior */
+:root.dark .composer .btn.btn-primary:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 90%, #000 10%),
+    color-mix(in srgb, var(--primary-300) 96%, #000 4%)
+  );
+}
+
+:root.dark .composer .send-btn.btn.btn-primary,
+:root.dark .composer .send-btn.btn-primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 88%, #000 12%),
+    color-mix(in srgb, var(--primary-300) 92%, #000 8%)
+  );
+  border-color: color-mix(in srgb, var(--primary-300) 85%, #000 15%);
+  color: #E8F6F3;
+}
+:root.dark .composer .send-btn.btn.btn-primary:hover,
+:root.dark .composer .send-btn.btn-primary:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 90%, #000 10%),
+    color-mix(in srgb, var(--primary-300) 96%, #000 4%)
+  );
 }

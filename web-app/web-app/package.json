@@ -17,6 +17,7 @@
     "@types/recharts": "^1.8.29",
     "axios": "^1.9.0",
     "jwt-decode": "^4.0.0",
+    "ngeohash": "^0.6.3",
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.1.0",

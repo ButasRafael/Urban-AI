@@ -32,12 +32,15 @@ services:
       uvicorn app.main:app
       --host 0.0.0.0
       --port 8000
-      --workers 4
+      --reload
+      --reload-dir /app/app
+      --reload-dir /app/ultralytics_config
+      --reload-dir /app/static
     volumes:
       - "./:/app"
-      - "./weights:/weights" 
-      - ./static:/app/static
-      - ./ultralytics_config:/app/ultralytics_config
+      - "./weights:/weights"
+      - "./static:/app/static"
+      - "./ultralytics_config:/app/ultralytics_config"
     env_file: .env
     ports:
       - "8000:8000"
@@ -62,6 +65,7 @@ services:
               capabilities: [gpu]
     environment:
       - YOLO_CONFIG_DIR=/app/ultralytics_config
+      - WATCHFILES_FORCE_POLLING=true
 
   prometheus:
     image: prom/prometheus:latest

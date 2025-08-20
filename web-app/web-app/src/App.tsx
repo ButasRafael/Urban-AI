@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useEffect, useState } from 'react';
 import { Toaster } from 'sonner';
 import AppRouter from './router';
@@ -13,14 +12,11 @@ export default function App() {
   const [toastTheme, setToastTheme] = useState<'light' | 'dark'>(getTheme);
 
   useEffect(() => {
-    // Update when the root <html> class changes (e.g., your login toggle)
     const root = document.documentElement;
     const update = () => setToastTheme(getTheme());
 
-    // 1) Listen for a custom "themechange" event (optional but nice)
     window.addEventListener('themechange', update);
 
-    // 2) Also observe class attribute changes (works even without the event)
     const obs = new MutationObserver(update);
     obs.observe(root, { attributes: true, attributeFilter: ['class'] });
 
@@ -37,7 +33,7 @@ export default function App() {
       <Toaster
         position="top-right"
         closeButton
-        richColors
+        richColors={false}
         theme={toastTheme}
         toastOptions={{
           duration: 3200,

@@ -7,18 +7,6 @@ import type { Theme } from '../theme'
 import { GOOGLE_API_KEY } from '../config';
 import { Alert } from 'react-native';
 
-/**
- * MapAdjustModal – presents a draggable marker on a map so users can fine-tune
- * a picked location. Returns the final coords back to the caller.
- *
- * Improvements:
- * 1. Typed ref for MapView (default export) to enable future animations.
- * 2. Added showsUserLocation & location button for context.
- * 3. Enabled zoom controls on Android & compass for UX.
- * 4. Memoised handlers with useCallback.
- * 5. Layout safe-area awareness.
- */
-
 type Props = {
   visible: boolean;
   initial: LatLng;
@@ -32,7 +20,6 @@ export default function MapAdjustModal({
   onCancel,
   onConfirm,
 }: Props) {
-  // Ref to the MapView instance
   const mapRef = useRef<MapView>(null);
   const [coords, setCoords] = useState<LatLng>(initial);
   const [address, setAddress] = useState('');
@@ -54,10 +41,8 @@ export default function MapAdjustModal({
   const handlePoiClick = useCallback(
   async (placeId: string, coordinate: LatLng) => {
     try {
-      // 1) Center map & drop pin immediately
       setCoords(coordinate)
 
-      // 2) Fetch the place’s formatted address
       const res = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?` +
         `place_id=${placeId}&key=${GOOGLE_API_KEY}&fields=formatted_address`

@@ -1,0 +1,309 @@
+:root {
+  /* severity + status (alias to your existing semantic colors) */
+  --sev-low: var(--success);
+  --sev-med: var(--warning);
+  --sev-high: var(--error);
+
+  --stat-open: var(--info);
+  --stat-resolved: var(--success);
+  --stat-ignored: var(--muted);
+
+  /* extra surfaces used by Issues page (don't redefine 0/100) */
+  --surface-50:  color-mix(in srgb, var(--surface-0) 96%, var(--on-surface) 4%);
+  --surface-200: color-mix(in srgb, var(--surface-0) 86%, var(--on-surface) 14%);
+  --surface-300: color-mix(in srgb, var(--surface-0) 78%, var(--on-surface) 22%);
+
+  /* extra primary stops used by Issues page (keep your teal brand) */
+  --primary-50:  color-mix(in srgb, var(--primary-500) 8%,  white);
+  --primary-400: color-mix(in srgb, var(--primary-500) 85%, white);
+
+  /* control sizing (used by compact selects/pills) */
+  --ctl-h: 24px;
+  --ctl-w: 88px;
+  --ctl-pad-x: 8px;
+  --ctl-pad-r: 22px;
+  --pill-pad-x: 4px;
+  --pill-font: 10.5px;
+  --select-font: 11px;
+
+  /* row action buttons */
+  --action-h: 32px;
+  --action-w: 74px;
+}
+
+:root.dark {
+  /* keep semantic mappings; underlying dark values already change via your theme */
+  --sev-low: var(--success);
+  --sev-med: var(--warning);
+  --sev-high: var(--error);
+
+  --stat-open: var(--info);
+  --stat-resolved: var(--success);
+  --stat-ignored: var(--muted);
+
+  /* darker surface steps (derived from your dark surfaces) */
+  --surface-50:  color-mix(in srgb, var(--surface-0) 92%, var(--on-surface) 8%);
+  --surface-200: color-mix(in srgb, var(--surface-100) 70%, var(--on-surface) 30%);
+  --surface-300: color-mix(in srgb, var(--surface-100) 55%, var(--on-surface) 45%);
+
+  /* extra primary stops for dark; stay on-brand */
+  --primary-50:  color-mix(in srgb, var(--primary-100) 60%, transparent);
+  --primary-400: color-mix(in srgb, var(--primary-500) 90%, black);
+}
+
+/* ---- Utilities ---- */
+.ml8 { margin-left: 8px; }
+
+/* ---- Tiny dots (summary) ---- */
+.dotOpen     { background: var(--stat-open); }
+.dotResolved { background: var(--stat-resolved); }
+.dotIgnored  { background: var(--stat-ignored); }
+
+/* ---- Quick filters row ---- */
+.filtersQuick { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 10px; }
+.qGroup  { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qLabel  { font-size: 12px; color: var(--secondary-700); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.qChip   { cursor: pointer; user-select: none; border: 1px solid transparent; transition: transform .06s, box-shadow .18s, background .2s, border-color .2s; }
+.qChip.active       { transform: translateY(-1px); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 22%, transparent); }
+.qChip:focus-visible{ outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 28%, transparent); }
+
+/* ---- Colored chips (inline) ---- */
+.statusChip.-open     { background: linear-gradient(color-mix(in srgb, var(--stat-open)   18%, transparent), color-mix(in srgb, var(--stat-open)   18%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--stat-open)   45%, transparent), color-mix(in srgb, var(--stat-open)   45%, transparent)) border-box; }
+.statusChip.-resolved { background: linear-gradient(color-mix(in srgb, var(--stat-resolved)18%, transparent), color-mix(in srgb, var(--stat-resolved)18%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--stat-resolved)45%, transparent), color-mix(in srgb, var(--stat-resolved)45%, transparent)) border-box; }
+.statusChip.-ignored  { background: linear-gradient(color-mix(in srgb, var(--stat-ignored) 18%, transparent), color-mix(in srgb, var(--stat-ignored) 18%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--stat-ignored) 45%, transparent), color-mix(in srgb, var(--stat-ignored) 45%, transparent)) border-box; }
+.sevChip.-low    { background: linear-gradient(color-mix(in srgb, var(--sev-low) 18%, transparent), color-mix(in srgb, var(--sev-low) 18%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--sev-low) 45%, transparent), color-mix(in srgb, var(--sev-low) 45%, transparent)) border-box; }
+.sevChip.-medium { background: linear-gradient(color-mix(in srgb, var(--sev-med) 18%, transparent), color-mix(in srgb, var(--sev-med) 18%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--sev-med) 45%, transparent), color-mix(in srgb, var(--sev-med) 45%, transparent)) border-box; }
+.sevChip.-high   { background: linear-gradient(color-mix(in srgb, var(--sev-high)18%, transparent), color-mix(in srgb, var(--sev-high)18%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--sev-high)45%, transparent), color-mix(in srgb, var(--sev-high)45%, transparent)) border-box; }
+
+/* ---- Selects (generic) ---- */
+.issues-page .select,
+.issues-page select.select {
+  background: var(--surface-0);
+  border: 1px solid var(--surface-300);
+  color: var(--on-surface);
+  border-radius: 10px;
+}
+.issues-page .select:hover,
+.issues-page select.select:hover { border-color: var(--primary-300); }
+.issues-page .select:focus-visible,
+.issues-page select.select:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 25%, transparent); border-color: var(--primary-300); }
+
+/* ---- Focus ring for buttons/links on this page ---- */
+.issues-page button:focus-visible,
+.issues-page .btn:focus-visible,
+.issues-page a.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 28%, transparent) !important;
+}
+
+/* ---- Media cells ---- */
+.mediaCell { display: inline-flex; align-items: center; gap: 8px; }
+.mediaId   { font-size: 12px; color: var(--secondary-700); }
+.mediaThumb{ width: 64px; height: 40px; border-radius: 6px; object-fit: cover; background: var(--surface-100); border: 1px solid var(--surface-300); }
+.videoThumb{ display: inline-block; background: repeating-linear-gradient(45deg, var(--surface-200), var(--surface-200) 6px, var(--surface-300) 6px, var(--surface-300) 12px); }
+
+/* ---- Table layout ---- */
+.issuesTable {
+  table-layout: fixed;
+  width: 100%;
+  border-spacing: 0;
+}
+.issuesTable th, .issuesTable td { min-width: 0; }
+
+.issuesTable col.c-id       { width: 72px; }
+.issuesTable col.c-created  { width: 170px; }
+.issuesTable col.c-class    { width: 120px; }
+.issuesTable col.c-sev      { width: calc(var(--ctl-w) + 20px); }
+.issuesTable col.c-status   { width: calc(var(--ctl-w) + 20px); }
+.issuesTable col.c-source   { width: 110px; }
+.issuesTable col.c-media    { width: 160px; }
+.issuesTable col.c-assignee { width: 150px; }
+.issuesTable col.c-actions  { width: 148px; }
+.issuesTable col.c-address  { width: auto; } /* grows */
+
+.issuesTable th:last-child,
+.issuesTable td:last-child { text-align: center; }
+
+/* Long addresses wrap (never widen table) */
+.issuesTable td.c-address,
+.issuesTable th.c-address {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ---- Severity accent on rows ---- */
+.sevAccent { position: relative; }
+.sevAccent::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; border-top-left-radius: 12px; border-top-right-radius: 12px; background: transparent; }
+.sevAccent.-low::before    { background: var(--sev-low); }
+.sevAccent.-medium::before { background: var(--sev-med); }
+.sevAccent.-high::before   { background: var(--sev-high); }
+.tbody .tr[data-sev="high"]   { box-shadow: inset 3px 0 0 0 var(--sev-high); }
+.tbody .tr[data-sev="medium"] { box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--sev-med) 85%, transparent); }
+.tbody .tr[data-sev="low"]    { box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--sev-low) 75%, transparent); }
+
+/* ---- Assign / Confirm dialogs ---- */
+.assignOverlay   { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); z-index: 30; }
+.assignDialog,
+.confirmDialog   {
+  position: fixed; z-index: 31; inset: 50% auto auto 50%; transform: translate(-50%, -50%);
+  width: min(520px, calc(100% - 32px)); border-radius: 14px;
+  background: linear-gradient(var(--surface-0), var(--surface-0)) padding-box, linear-gradient(135deg, var(--surface-200), var(--surface-300)) border-box;
+  border: 1px solid transparent; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+:root.dark .assignDialog,
+:root.dark .confirmDialog {
+  background: linear-gradient(var(--surface-0), var(--surface-0)) padding-box, linear-gradient(135deg, var(--surface-200), var(--surface-200)) border-box;
+}
+.assignHead { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--surface-200); }
+.assignHead h3 { margin: 0; font-size: 16px; color: var(--on-surface); }
+.iconX { font-size: 20px; line-height: 1; background: none; border: 0; color: var(--on-surface); cursor: pointer; }
+.assignBody { padding: 12px 14px; }
+.assignErr  { color: #ef4444; font-size: 13px; margin-top: 6px; }
+.assignList { list-style: none; margin: 10px 0 0; padding: 0; max-height: 280px; overflow: auto; }
+.assignRow  { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--surface-200); background: var(--surface-0); cursor: pointer; margin-bottom: 8px; transition: border-color .18s, background .18s; }
+.assignRow:hover { border-color: var(--primary-300); background: var(--primary-50); }
+.uName { font-weight: 700; color: var(--on-surface); }
+.uRole { font-size: 12px; color: var(--secondary-700); }
+.assignFoot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--surface-200); }
+.confirmBody { padding: 12px 14px; display: grid; gap: 10px; }
+.confirmText { margin: 0; color: var(--on-surface); font-weight: 600; }
+.confirmMeta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---- Toolbar toggle pill ---- */
+.togglePill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; margin-left: 8px;
+  border-radius: 999px; border: 1px solid transparent; font-size: 12px; font-weight: 700; cursor: pointer;
+  background: linear-gradient(var(--surface-0), var(--surface-0)) padding-box, linear-gradient(135deg, var(--surface-200), var(--surface-300)) border-box;
+  color: var(--on-surface);
+  transition: background .18s, border-color .18s, transform .06s, box-shadow .18s;
+}
+.togglePill:hover  { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+.togglePill.active { background: linear-gradient(var(--primary-100), var(--primary-100)) padding-box, linear-gradient(135deg, var(--primary-300), var(--primary-300)) border-box; }
+
+/* ---- Row actions ---- */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.actionBtn {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  height: 32px; min-height: 32px; padding: 6px 12px; font-size: 14px; line-height: 1;
+  white-space: nowrap; border-radius: 10px;
+  border: 1px solid var(--primary-400);
+  background: var(--surface-0);
+  color: var(--on-surface);
+  transition: background .2s, box-shadow .2s, border-color .2s, transform .06s;
+}
+.actionBtn:hover { transform: translateY(-1px); background: var(--primary-100); border-color: var(--primary-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 18%, transparent); }
+.actionBtn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 28%, transparent); }
+:root.dark .actionBtn { background: #0f141a; color: #dbeafe; border-color: #3b82f6; box-shadow: 0 0 0 1px color-mix(in srgb, #3b82f6 35%, transparent); }
+:root.dark .actionBtn:hover { background: #0e1628; border-color: #60a5fa; box-shadow: 0 0 0 3px color-mix(in srgb, #3b82f6 25%, transparent); }
+:root.dark .actionBtn:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, #3b82f6 40%, transparent); }
+
+/* ---- Responsive actions ---- */
+@media (max-width: 900px) {
+  .row-actions { flex-direction: column; align-items: stretch; }
+  .actionBtn { width: 100%; }
+  .issuesTable col.c-actions { width: 120px; }
+}
+
+/* ===========================
+   Compact sev/status controls
+   =========================== */
+
+/* Stack pill above select */
+.pillControl {
+  display: grid;
+  grid-template-rows: auto auto; /* pill, then select */
+  gap: 4px;
+  align-items: start;
+}
+
+/* Shorter, rounded select */
+.issues-page .selectInline {
+  height: var(--ctl-h);
+  padding: 3px var(--ctl-pad-r) 3px var(--ctl-pad-x);
+  line-height: calc(var(--ctl-h) - 6px);
+  font-size: var(--select-font);
+  border-radius: 999px;
+  box-sizing: border-box;
+  width: 100%; /* full width by default (cards) */
+}
+
+/* Shorter pills */
+.sev-pill,
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: var(--ctl-h);
+  padding: 2px var(--pill-pad-x);
+  border-radius: 999px;
+  font-size: var(--pill-font);
+  font-weight: 700;
+  border: 1px solid transparent;
+  background: linear-gradient(var(--surface-100), var(--surface-100)) padding-box,
+              linear-gradient(135deg, var(--surface-200), var(--surface-300)) border-box;
+  color: var(--on-surface);
+}
+
+/* Color fills for pills */
+.sev-pill.-low    { background: linear-gradient(color-mix(in srgb, var(--sev-low)   12%, transparent), color-mix(in srgb, var(--sev-low)   12%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--sev-low)   45%, transparent), color-mix(in srgb, var(--sev-low)   45%, transparent)) border-box; }
+.sev-pill.-medium { background: linear-gradient(color-mix(in srgb, var(--sev-med)   12%, transparent), color-mix(in srgb, var(--sev-med)   12%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--sev-med)   45%, transparent), color-mix(in srgb, var(--sev-med)   45%, transparent)) border-box; }
+.sev-pill.-high   { background: linear-gradient(color-mix(in srgb, var(--sev-high)  12%, transparent), color-mix(in srgb, var(--sev-high)  12%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--sev-high)  45%, transparent), color-mix(in srgb, var(--sev-high)  45%, transparent)) border-box; }
+.status-pill.-open     { background: linear-gradient(color-mix(in srgb, var(--stat-open)    12%, transparent), color-mix(in srgb, var(--stat-open)    12%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--stat-open)    45%, transparent), color-mix(in srgb, var(--stat-open)    45%, transparent)) border-box; }
+.status-pill.-resolved { background: linear-gradient(color-mix(in srgb, var(--stat-resolved)12%, transparent), color-mix(in srgb, var(--stat-resolved)12%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--stat-resolved)45%, transparent), color-mix(in srgb, var(--stat-resolved)45%, transparent)) border-box; }
+.status-pill.-ignored  { background: linear-gradient(color-mix(in srgb, var(--stat-ignored) 12%, transparent), color-mix(in srgb, var(--stat-ignored) 12%, transparent)) padding-box, linear-gradient(135deg, color-mix(in srgb, var(--stat-ignored) 45%, transparent), color-mix(in srgb, var(--stat-ignored) 45%, transparent)) border-box; }
+
+/* Table context: constrain widths + center */
+.issuesTable .pillControl { justify-items: center; }
+.issuesTable .selectInline {
+  width: var(--ctl-w);
+  max-width: 100%;
+}
+.issuesTable .sev-pill,
+.issuesTable .status-pill {
+  max-width: var(--ctl-w);
+  white-space: nowrap;
+  justify-self: center;
+}
+
+
+.cards .pillControl { justify-items: start; }
+:root {
+  --action-h: 32px;   /* button height */
+  --action-w: 74px  /* button width  */
+}
+
+.issuesTable col.c-actions {
+  width: calc(var(--action-w) * 2 + 8px);
+}
+
+.row-actions {
+  display: grid;
+  grid-template-columns: repeat(2, var(--action-w));
+  justify-content: center;
+  gap: 8px;
+}
+
+.row-actions .actionBtn {
+  width: var(--action-w);
+  min-width: var(--action-w);
+  height: var(--action-h);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .issuesTable col.c-actions { width: 160px; }
+  .row-actions {
+    grid-template-columns: 1fr;
+  }
+  .row-actions .actionBtn {
+    width: 100%;
+    min-width: 0;
+  }
+}

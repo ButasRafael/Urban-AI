@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class ProblemOut(BaseModel):
     media_id: int
@@ -12,6 +12,6 @@ class ProblemOut(BaseModel):
     annotated_image_url: Optional[str]
     annotated_video_url: Optional[str]
     created_at: datetime
-    predicted_classes: List[str] = []
-    descriptions: List[str] = []
-    solutions: List[str] = []
+    predicted_classes: List[str] = Field(default_factory=list)
+    descriptions: List[str] = Field(default_factory=list)
+    solutions: List[str] = Field(default_factory=list)

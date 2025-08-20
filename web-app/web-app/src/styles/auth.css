@@ -1,5 +1,3 @@
-/* src/styles/auth.css */
-
 /* Layout */
 .auth-layout {
   min-height: 100vh;
@@ -526,3 +524,22 @@
 
 :root.dark .strength .bar:not(.active) { background: #1f2c38; }
 :root.dark .strength-label { color: #cbd5e1; }
+
+/* Dark mode: make the auth primary button deeper, keep the glow */
+:root.dark .auth-main .btn.btn-primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 88%, #000 12%),
+    color-mix(in srgb, var(--primary-300) 92%, #000 8%)
+  );
+  border-color: color-mix(in srgb, var(--primary-300) 85%, #000 15%);
+  color: #E8F6F3;
+}
+
+:root.dark .auth-main .btn.btn-primary:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 90%, #000 10%),
+    color-mix(in srgb, var(--primary-300) 96%, #000 4%)
+  );
+}

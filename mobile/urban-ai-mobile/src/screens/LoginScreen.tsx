@@ -34,7 +34,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 const REMEMBER_KEY = 'auth:rememberUsername';
 
-/* ───────────────── schema + types ───────────────── */
 const schema = z.object({
   username: z.string().min(3, 'Minim 3 caractere'),
   password: z.string().min(6, 'Minim 6 caractere'),
@@ -42,7 +41,6 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-/* ───────────────── screen ───────────────── */
 export default function LoginScreen({ navigation }: Props) {
   const theme = useTheme<Theme>();
 
@@ -57,13 +55,11 @@ export default function LoginScreen({ navigation }: Props) {
     defaultValues: { username: '', password: '', remember: true },
   });
 
-  // focus + animations
   const passwordRef = useRef<RNTextInput>(null);
   const cardY = useRef(new Animated.Value(16)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const shakeX = useRef(new Animated.Value(0)).current;
 
-  // error shake memo
   const lastErrorRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -83,7 +79,6 @@ export default function LoginScreen({ navigation }: Props) {
     ]).start();
   }, [cardOpacity, cardY]);
 
-  // preload remembered username
   useEffect(() => {
     (async () => {
       const saved = await AsyncStorage.getItem(REMEMBER_KEY);
@@ -91,7 +86,6 @@ export default function LoginScreen({ navigation }: Props) {
     })();
   }, [setValue]);
 
-  // shake when a new submit error occurs
   const triggerShake = () => {
     shakeX.setValue(0);
     Animated.sequence([

@@ -1,4 +1,3 @@
-// src/screens/GalleryScreen.tsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   SafeAreaView,
@@ -47,18 +46,15 @@ type GalleryItemProps = {
   isLastInRow: boolean;
 };
 
-/* ---------------- helpers ---------------- */
 const formatWhen = (iso?: string) => {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  // Short, language-aware date like "12 iun"
   return d.toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' });
 };
 
 const firstNonEmpty = (arr?: string[]) => (arr && arr.length ? arr[0] : '');
 
-/* ---------------- card ------------------- */
 const GalleryItem: React.FC<GalleryItemProps> = React.memo(
   ({ item, thumbUri, size, marginRight, navigation, isLastInRow }) => {
     const theme = useTheme<Theme>();
@@ -188,7 +184,6 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
   }
 );
 
-/* ---------------- screen ----------------- */
 export default function GalleryScreen({ navigation }: Props) {
   const theme = useTheme<Theme>();
   const { width } = useWindowDimensions();
@@ -200,10 +195,9 @@ export default function GalleryScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'images' | 'videos'>('all');
 
-  const horizontalPad = theme.spacing.m; // matches Box p="m"
+  const horizontalPad = theme.spacing.m;
   const gutter = theme.spacing.s;
 
-  // responsive columns
   const columns = useMemo(() => {
     if (width >= 1000) return 5;
     if (width >= 820) return 4;
@@ -261,7 +255,6 @@ export default function GalleryScreen({ navigation }: Props) {
     return withMedia;
   }, [data, filter]);
 
-  /* ---------- loading ---------- */
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -275,7 +268,6 @@ export default function GalleryScreen({ navigation }: Props) {
     );
   }
 
-  /* ---------- error ---------- */
   if (error) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -302,7 +294,6 @@ export default function GalleryScreen({ navigation }: Props) {
     );
   }
 
-  /* ---------- empty ---------- */
   if (!filtered.length) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -318,7 +309,6 @@ export default function GalleryScreen({ navigation }: Props) {
     );
   }
 
-  /* ---------- success ---------- */
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <Box flex={1} bg="background" p="m">
@@ -416,7 +406,6 @@ export default function GalleryScreen({ navigation }: Props) {
   );
 }
 
-/* ---------- styles ---------- */
 const styles = StyleSheet.create({
   cardContainer: {
     overflow: 'hidden',

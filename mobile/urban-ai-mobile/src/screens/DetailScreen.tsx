@@ -1,4 +1,3 @@
-// src/screens/DetailScreen.tsx
 import React from 'react';
 import {
   SafeAreaView,
@@ -24,7 +23,7 @@ import { RootStackParamList } from '../navigation/types';
 import { API_BASE } from '../config';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Detail'>;
-const ImageZoom: any = ImageZoomLib; // avoid TS errors on lib types
+const ImageZoom: any = ImageZoomLib;
 
 export default function DetailScreen({ route }: Props) {
   const { media, showInfo } = route.params;
@@ -33,7 +32,6 @@ export default function DetailScreen({ route }: Props) {
   const insets = useSafeAreaInsets();
   const descriptions = media.descriptions ?? [];
 
-  // -------------------- derive media uri -----------------------
   let uri = media.annotated_image_url ?? media.annotated_video_url;
   if (!uri) {
     return (
@@ -52,7 +50,6 @@ export default function DetailScreen({ route }: Props) {
   const formattedDate =
     media.created_at ? new Date(media.created_at).toLocaleString() : '-';
 
-  // ----------------------------- UI ----------------------------
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <Box flex={1} bg="background" alignItems="center" justifyContent="center">
@@ -301,7 +298,6 @@ export default function DetailScreen({ route }: Props) {
   );
 }
 
-/* --------- only keeps numeric / positioning constants --------- */
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',

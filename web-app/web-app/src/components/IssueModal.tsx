@@ -8,58 +8,62 @@ interface Props {
   onClose(): void;
 }
 
-export default function IssueModal({ problem, onClose }: Props) {
-  // ✅ Bail out BEFORE any hooks to keep hook order stable
-  if (!problem) return null;
+function toAbsolute(apiBase: string | undefined, path?: string | null): string | null {
+  if (!path) return null;
+  try {
+    return apiBase ? new URL(path, apiBase).toString() : path;
+  } catch {
+    return path;
+  }
+}
 
+export default function IssueModal({ problem, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
-   useEffect(() => {
+  const [toast, setToast] = useState<string | null>(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!problem) return;
     const html = document.documentElement;
     const prevHtmlOverflow = html.style.overflow;
     const prevBodyOverflow = document.body.style.overflow;
-
     html.classList.add('has-modal');
     html.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
-
     return () => {
       html.style.overflow = prevHtmlOverflow;
       document.body.style.overflow = prevBodyOverflow || '';
       html.classList.remove('has-modal');
     };
-  }, []);
+  }, [problem]);
 
+  const created = useMemo<Date | null>(() => {
+    if (!problem?.created_at) return null;
+    return new Date(problem.created_at);
+  }, [problem]);
 
-  const [toast, setToast] = useState<string | null>(null);
-  const [imgLoaded, setImgLoaded] = useState(false);
+  const { hasCoords, lat, lng, coordsStr } = useMemo(() => {
+    if (!problem || typeof problem.latitude !== 'number' || typeof problem.longitude !== 'number') {
+      return { hasCoords: false, lat: null as number | null, lng: null as number | null, coordsStr: '' };
+    }
+    const lat = problem.latitude;
+    const lng = problem.longitude;
+    return { hasCoords: true, lat, lng, coordsStr: `${lat.toFixed(6)}, ${lng.toFixed(6)}` };
+  }, [problem]);
 
-  const created = useMemo(
-    () => (problem.created_at ? new Date(problem.created_at) : null),
-    [problem.created_at]
-  );
-
-  const classes = (problem as any)?.predicted_classes ?? [];
-  const hasClasses = Array.isArray(classes) && classes.length > 0;
-
-  const hasCoords =
-    typeof (problem as any)?.latitude === 'number' &&
-    typeof (problem as any)?.longitude === 'number';
-
-  const lat = hasCoords ? ((problem as any).latitude as number) : null;
-  const lng = hasCoords ? ((problem as any).longitude as number) : null;
-  const coordsStr = hasCoords ? `${lat!.toFixed(6)}, ${lng!.toFixed(6)}` : '';
-
-  const gmapsUrl = useMemo(() => {
-    if (hasCoords) return `https://www.google.com/maps?q=${lat},${lng}`;
+  const gmapsUrl = useMemo<string | null>(() => {
+    if (!problem) return null;
+    if (hasCoords && lat != null && lng != null) return `https://www.google.com/maps?q=${lat},${lng}`;
     if (problem.address) return `https://www.google.com/maps?q=${encodeURIComponent(problem.address)}`;
     return null;
-  }, [hasCoords, problem, lat, lng]);
+  }, [problem, hasCoords, lat, lng]);
 
-   useEffect(() => {
+  useEffect(() => {
+    if (!problem) return;
     const keyHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current(); return; }
       if (e.key.toLowerCase() === 'c' && (e.metaKey || e.ctrlKey)) return;
@@ -73,14 +77,7 @@ export default function IssueModal({ problem, onClose }: Props) {
     window.addEventListener('keydown', keyHandler);
     closeBtnRef.current?.focus();
     return () => window.removeEventListener('keydown', keyHandler);
-  }, [gmapsUrl]);
-
-  // Media preview (annotated image/video if exposed by the API)
-  const apiBase = import.meta.env.VITE_API_BASE as string | undefined;
-  const imagePreview =
-    (problem as any)?.annotated_image_url ? `${apiBase}/static/${problem.media_id}.jpg` : null;
-  const videoPreview =
-    (problem as any)?.annotated_video_url ? `${apiBase}/static/${problem.media_id}.mp4` : null;
+  }, [problem, gmapsUrl]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -89,17 +86,12 @@ export default function IssueModal({ problem, onClose }: Props) {
 
   async function copyAddress() {
     if (!problem?.address) return;
-    try {
-      await navigator.clipboard?.writeText(problem.address);
-      showToast('Address copied');
-    } catch { /* noop */ }
+    try { await navigator.clipboard?.writeText(problem.address); showToast('Address copied'); } catch { /* empty */ }
   }
+
   async function copyCoords() {
     if (!coordsStr) return;
-    try {
-      await navigator.clipboard?.writeText(coordsStr);
-      showToast('Coordinates copied');
-    } catch { /* noop */ }
+    try { await navigator.clipboard?.writeText(coordsStr); showToast('Coordinates copied'); } catch { /* empty */ }
   }
 
   async function share() {
@@ -107,21 +99,26 @@ export default function IssueModal({ problem, onClose }: Props) {
     const text = problem
       ? `Issue #${problem.media_id}${problem.address ? ` • ${problem.address}` : ''}`
       : 'Issue';
-    if ((navigator as any).share) {
-      try { await (navigator as any).share({ title: text, text, url }); }
-      catch { /* cancel */ }
+    type NavWithShare = Navigator & { share?: (data: ShareData) => Promise<void> };
+    const nav = navigator as NavWithShare;
+    if (typeof nav.share === 'function') {
+      try { await nav.share({ title: text, text, url }); } catch { /* empty */ }
     } else {
-      try {
-        await navigator.clipboard?.writeText(url!);
-        showToast('Link copied');
-      } catch { /* noop */ }
+      try { await navigator.clipboard?.writeText(url!); showToast('Link copied'); } catch { /* empty */ }
     }
   }
 
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const stop: React.MouseEventHandler<HTMLDivElement> = (e) => e.stopPropagation();
 
-  // Primary class badge color (stable hue)
-  const primary = (classes?.[0] as string | undefined) ?? 'Issue';
+  const apiBase = import.meta.env.VITE_API_BASE as string | undefined;
+  const imagePreview = toAbsolute(apiBase, problem?.annotated_image_url);
+  const videoPreview = toAbsolute(apiBase, problem?.annotated_video_url);
+
+  if (!problem) return null;
+
+  const classes: string[] = problem.predicted_classes ?? [];
+  const hasClasses = classes.length > 0;
+  const primary = (classes[0] as string | undefined) ?? 'Issue';
   const hue = Array.from(primary).reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 0);
 
   return (
@@ -134,7 +131,6 @@ export default function IssueModal({ problem, onClose }: Props) {
         aria-labelledby="issue-title"
         onClick={stop}
       >
-        {/* Tiny toast */}
         {toast && (
           <div className="modal-toast" role="status" aria-live="polite">
             {toast}
@@ -177,7 +173,6 @@ export default function IssueModal({ problem, onClose }: Props) {
           <div className="media-box">
             {!imgLoaded && <div className="media-skeleton shimmer" aria-hidden />}
             {imagePreview && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={imagePreview}
                 alt=""
@@ -222,7 +217,7 @@ export default function IssueModal({ problem, onClose }: Props) {
           <div className="chips">
             <span className="chip-label">Classes</span>
             {hasClasses ? (
-              classes.slice(0, 8).map((c: string, i: number) => (
+              classes.slice(0, 8).map((c, i) => (
                 <span key={`${c}-${i}`} className="chip">{c}</span>
               ))
             ) : (
@@ -312,9 +307,7 @@ export default function IssueModal({ problem, onClose }: Props) {
             rel="noreferrer"
             className="btn btn-sm btn-primary"
             aria-disabled={!gmapsUrl}
-            onClick={(e) => {
-              if (!gmapsUrl) e.preventDefault();
-            }}
+            onClick={(e) => { if (!gmapsUrl) e.preventDefault(); }}
           >
             <span className="btn__inner">
               <span className="btn__icon"><IconMap /></span>
@@ -327,7 +320,6 @@ export default function IssueModal({ problem, onClose }: Props) {
   );
 }
 
-/* ---------- Icons ---------- */
 function IconX() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

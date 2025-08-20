@@ -6,6 +6,7 @@ import {
   deleteSession,
   getRagChunk,
 } from '../api/chat';
+import type React from 'react';
 import type { ChatMessage, SessionSummary, RagChunk } from '../api/chat';
 import Button from '../components/Button';
 import Input from '../components/Input';
@@ -28,19 +29,18 @@ export default function ChatPage() {
   const logRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // RAG preview state & cache
   const [preview, setPreview] = useState<{ msgIdx: number; id: number; data?: RagChunk } | null>(null);
   const chunkCache = useRef(new Map<number, RagChunk>());
-  
-  /* ---------- data ---------- */
+
+  const [confirmDel, setConfirmDel] = useState<SessionSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => { listSessions().then(setSessions); }, []);
   useEffect(() => {
     if (selectedSession != null) getSessionHistory(selectedSession).then(setMessages);
     else setMessages([]);
   }, [selectedSession]);
 
-  /* ---------- UX niceties ---------- */
-  // autoscroll when appending near bottom
   useEffect(() => {
     const el = logRef.current;
     if (!el) return;
@@ -48,7 +48,6 @@ export default function ChatPage() {
     requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight, behavior: nearBottom ? 'smooth' : 'auto' }));
   }, [messages, busy]);
 
-  // quick focus (⌘/Ctrl + K)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
@@ -66,10 +65,40 @@ export default function ChatPage() {
   async function startNew() {
     setSelectedSession(undefined);
     setMessages([]);
+    setPreview(null);
     localStorage.removeItem('chatSessionId');
     const updated = await listSessions();
     setSessions(updated);
   }
+
+  useEffect(() => { setPreview(null); }, [selectedSession]);
+
+  useEffect(() => {
+    if (!preview) return;
+    const m = messages[preview.msgIdx];
+    if (!m || m.role !== 'assistant') { setPreview(null); return; }
+    const ids = Array.from(m.content.matchAll(/\[#(\d+)\]/g)).map(g => g[1]);
+    if (!ids.includes(String(preview.id))) setPreview(null);
+  }, [messages, preview]);
+
+  const openDelete = (s: SessionSummary, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setConfirmDel(s);
+  };
+  const closeDelete = () => setConfirmDel(null);
+  const doDelete = async () => {
+    if (!confirmDel) return;
+    setDeleting(true);
+    try {
+      await deleteSession(confirmDel.id);
+      const updated = await listSessions();
+      setSessions(updated);
+      if (selectedSession === confirmDel.id) await startNew();
+    } finally {
+      setDeleting(false);
+      closeDelete();
+    }
+  };
 
   async function handleSend(e: FormEvent) {
     e.preventDefault();
@@ -98,12 +127,12 @@ export default function ChatPage() {
 
   async function prefetchChunk(id: number) {
     if (chunkCache.current.has(id)) return;
-    try { chunkCache.current.set(id, await getRagChunk(id)); } catch {}
+    try { chunkCache.current.set(id, await getRagChunk(id)); } catch { /* empty */ }
   }
   async function openPreview(msgIdx: number, id: number) {
     let data = chunkCache.current.get(id);
     if (!data) {
-      try { data = await getRagChunk(id); chunkCache.current.set(id, data); } catch {}
+      try { data = await getRagChunk(id); chunkCache.current.set(id, data); } catch { /* empty */ }
     }
     setPreview({ msgIdx, id, data });
   }
@@ -182,14 +211,7 @@ export default function ChatPage() {
                   className="conv-item__del"
                   title="Delete conversation"
                   aria-label="Delete conversation"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (!confirm('Delete this conversation?')) return;
-                    await deleteSession(s.id);
-                    const updated = await listSessions();
-                    setSessions(updated);
-                    if (selectedSession === s.id) startNew();
-                  }}
+                  onClick={(e) => {openDelete(s, e)}}
                 >
                   <IconTrash />
                 </Button>
@@ -336,10 +358,10 @@ export default function ChatPage() {
             stopGlobalKeys
             fullWidth
             prefixIcon={<IconPrompt />}
-            onKeyDown={(e: any) => {
+             onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!busy && text.trim()) handleSend(e as any);
+                if (!busy && text.trim()) handleSend(e as unknown as FormEvent<HTMLFormElement>);
               }
               if (e.key === 'Escape') setPreview(null);
             }}
@@ -360,6 +382,27 @@ export default function ChatPage() {
           <span className="kbd">Shift</span> + <span className="kbd">Enter</span> to add a new line
         </div>
       </section>
+
+{confirmDel && (
+  <div className="modalRoot" role="presentation">
+    <div className="modalOverlay" onClick={closeDelete} />
+    <div className="confirmDialog" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+      <div className="confirmHead">
+        <h3 id="delTitle">Delete conversation #{confirmDel.id}?</h3>
+        <button className="iconX" onClick={closeDelete} aria-label="Close"><IconX /></button>
+      </div>
+      <div className="confirmBody">
+        <p className="confirmText">This will permanently remove all messages in this conversation.</p>
+      </div>
+      <div className="confirmFoot">
+        <Button variant="ghost" size="sm" onClick={closeDelete} autoFocus>Cancel</Button>
+        <Button className="actionBtn" size="sm" variant="secondary" onClick={doDelete} disabled={deleting}>
+          {deleting ? 'Deleting…' : 'Delete'}
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

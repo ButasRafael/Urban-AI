@@ -39,4 +39,5 @@ timm
 yapf
 pgvector
 sse-starlette
+geohash2
 --extra-index-url https://download.pytorch.org/whl/cu124

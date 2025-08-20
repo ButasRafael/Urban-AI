@@ -42,7 +42,6 @@ client.interceptors.response.use(
         return client(orig);
       } catch {
         rmLocal(ACCESS, REFRESH);
-        //window.location.href = "/login";
       }
     }
     return Promise.reject(err);

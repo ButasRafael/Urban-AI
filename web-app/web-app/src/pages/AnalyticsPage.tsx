@@ -1,19 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  uploadsByDay,
-  uploadsByUser,
-  type DayStat,
-  type UserStat,
+  uploadsByDay, uploadsByUser,
+  getKPIs, getLatencyByDay, getSeverityByDay,
+  getSourceBreakdown, getStatusBreakdown, getTopClasses,
+  getConfidenceSummary, getGeoHeatmap, getTimeToResolution,
+  getGeoHotspots, getIssuesAgingBuckets,
+  type DayStat, type UserStat, type KPIResponse, type LatencyByDay,
+  type SeverityByDay, type SourceBreakdown, type StatusBreakdown,
+  type TopClass, type ConfidenceSummary, type HeatBucket, type TTRow,
+  type MediaTypeFilter, type Hotspot, type AgingResponse, type AgingByAssigneeRow, type AgingBucketKey
 } from '../api/analytics';
 import {
   ResponsiveContainer,
-  AreaChart, Area, Line, LineChart,
-  XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Cell,
+  AreaChart, Area, LineChart, Line,
+  CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar, Cell,
+  ComposedChart, PieChart, Pie, Legend
 } from 'recharts';
+
 import { notify } from '../lib/notify';
 import '../styles/analytics.css';
 
-type LoadState = 'idle'|'loading'|'error'|'ready';
+type LoadState = 'idle'|'loading'|'ready'|'error';
+
+const SLA_DEFAULTS = { low: 168, medium: 72, high: 24 };
 
 function fmtDayLabel(iso: string) {
   const d = new Date(iso + 'T00:00:00');
@@ -35,7 +44,6 @@ function fillMissingDays(raw: DayStat[], days = 7): DayStat[] {
 }
 const sum = (arr: number[]) => arr.reduce((a,b)=>a+b,0);
 
-// tiny count-up hook for KPIs
 function useCountUp(value: number, duration = 600) {
   const [display, setDisplay] = useState(0);
   const raf = useRef<number | null>(null);
@@ -50,62 +58,191 @@ function useCountUp(value: number, duration = 600) {
     const step = (ts: number) => {
       if (!startTs.current) startTs.current = ts;
       const t = Math.min(1, (ts - startTs.current) / duration);
-      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      const eased = 1 - Math.pow(1 - t, 3);
       setDisplay(from.current + (value - from.current) * eased);
       if (t < 1) raf.current = requestAnimationFrame(step);
     };
     raf.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf.current ?? 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   return display;
 }
 
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try { return JSON.stringify(e); } catch { return 'Unknown error'; }
+}
+
+function timeAgo(iso: string) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!isFinite(ms)) return '—';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+type RangeOpt = 7 | 30 | 90;
+
+const BUCKETS: AgingBucketKey[] = ["0-24h","1-3d","3-7d","7-30d",">30d"];
+
+function sevOrder(s: "low"|"medium"|"high"): number {
+  return s === "high" ? 0 : s === "medium" ? 1 : 2;
+}
+
+
 export default function AnalyticsPage() {
+  const [range, setRange] = useState<RangeOpt>(7);
+  const [media, setMedia] = useState<"all" | MediaTypeFilter>("all");
+  const mediaParam: MediaTypeFilter = media === "all" ? undefined : media;
+
+  const [state, setState] = useState<LoadState>('idle');
+  
   const [daily, setDaily] = useState<DayStat[]>([]);
   const [byUser, setByUser] = useState<UserStat[]>([]);
-  const [state, setState] = useState<LoadState>('idle');
+  const [kpis, setKPIs] = useState<KPIResponse | null>(null);
+  const [latency, setLatency] = useState<LatencyByDay[]>([]);
+  const [sevByDay, setSevByDay] = useState<SeverityByDay[]>([]);
+  const [srcBreak, setSrcBreak] = useState<SourceBreakdown[]>([]);
+  const [stBreak, setStBreak] = useState<StatusBreakdown[]>([]);
+  const [topClasses, setTopClasses] = useState<TopClass[]>([]);
+  const [conf, setConf] = useState<ConfidenceSummary | null>(null);
+  const [heat, setHeat] = useState<HeatBucket[]>([]);
+  const [tTRows, setTTRows] = useState<TTRow[]>([]);
+  
+  const [precision, setPrecision] = useState<4 | 5 | 6>(6);
+  const [hotspots, setHotspots] = useState<Hotspot[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setState('loading');
-        const [d, u] = await Promise.all([uploadsByDay(), uploadsByUser()]);
-        if (cancelled) return;
-        setDaily(fillMissingDays(d, 7));
-        setByUser(u.slice().sort((a,b)=>b.count-a.count));
-        setState('ready');
-      } catch (e: any) {
-        notify.error('Failed to load analytics', e?.message ?? 'Unknown error');
-        setState('error');
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const [aging, setAging] = useState<AgingResponse | null>(null);
+  
+  async function load() {
+    setState('loading');
+    try {
+      const params = { days: range, media_type: mediaParam };
+      const [
+        d, u, kp, lat, sev, src, st, top, cnf, gh, tt, hs, ag
+      ] = await Promise.all([
+        uploadsByDay(params),
+        uploadsByUser(params),
+        getKPIs(params),
+        getLatencyByDay(params),
+        getSeverityByDay(params),
+        getSourceBreakdown(params),
+        getStatusBreakdown(params),
+        getTopClasses({ ...params, limit: 10 }),
+        getConfidenceSummary(params),
+        getGeoHeatmap({ ...params, min_count: 1 }),
+        getTimeToResolution(params),
+        getGeoHotspots({ ...params, precision, min_count: 1, limit: 300 }),
+        getIssuesAgingBuckets({ ...params })
+      ]);
+      setDaily(fillMissingDays(d, range));
+      setByUser(u.slice().sort((a,b)=>b.count-a.count));
+      setKPIs(kp);
+      setLatency(lat);
+      setSevByDay(sev);
+      setSrcBreak(src);
+      setStBreak(st);
+      setTopClasses(top);
+      setConf(cnf);
+      setHeat(gh);
+      setTTRows(tt);
+      setHotspots(hs);
+      setAging(ag);
+      setState('ready');
+    } catch (e: unknown) {
+      notify.error('Failed to load analytics', getErrorMessage(e));
+      setState('error');
+    }
+  }
 
-  // KPIs (derived)
-  const { total7, avgDay, peak, activeUsers, top, trendPct } = useMemo(() => {
+  useEffect(() => { load();   }, [range, media, precision]);
+  
+  const { total7, avgDay, top, trendPct } = useMemo(() => {
     const total7 = sum(daily.map(d => d.count));
     const avgDay = total7 / Math.max(daily.length, 1);
-    const peak = daily.reduce((m, d) => d.count > m.count ? d : m, { date: '', count: -1 });
-    const activeUsers = byUser.length;
     const top = byUser[0] ?? { user: '—', count: 0 };
-    const last3 = sum(daily.slice(-3).map(d=>d.count));
-    const prev3 = sum(daily.slice(-6, -3).map(d=>d.count));
+    const lastN = 3;
+    const last3 = sum(daily.slice(-lastN).map(d=>d.count));
+    const prev3 = sum(daily.slice(-2*lastN, -lastN).map(d=>d.count));
     const trendPct = prev3 === 0 ? (last3 > 0 ? 100 : 0) : ((last3 - prev3) / prev3) * 100;
-    return { total7, avgDay, peak, activeUsers, top, trendPct };
+    return { total7, avgDay, top, trendPct };
   }, [daily, byUser]);
+  
+  const sevTotals = useMemo(() => {
+    return sevByDay.reduce(
+      (a, d) => ({ low: a.low + d.low, medium: a.medium + d.medium, high: a.high + d.high }),
+      { low: 0, medium: 0, high: 0 }
+    );
+  }, [sevByDay]);
+  const sevSum = Math.max(1, sevTotals.low + sevTotals.medium + sevTotals.high);
+  const sevPct = {
+    low: Math.round((100 * sevTotals.low) / sevSum),
+    med: Math.round((100 * sevTotals.medium) / sevSum),
+    high: Math.round((100 * sevTotals.high) / sevSum),
+  };
+  
+  const imgCount = kpis?.uploads.images ?? 0;
+  const vidCount = kpis?.uploads.videos ?? 0;
+  const upTot = Math.max(1, imgCount + vidCount);
+  const imgPct = Math.round((100 * imgCount) / upTot);
+  const vidPct = 100 - imgPct;
 
-  const total7Anim = Math.round(useCountUp(total7));
-  const avgDayAnim = useCountUp(avgDay);
+  const totalAnim = Math.round(useCountUp(total7));
+  const avgAnim = useCountUp(avgDay);
   const topShare = total7 > 0 ? Math.round((100 * top.count) / total7) : 0;
 
+  const isEmpty = state === 'ready'
+    && daily.every(d=>d.count===0)
+    && (kpis?.detections.total ?? 0) === 0;
+
+  const maxUser = byUser.reduce((m,u)=>Math.max(m,u.count),0);
+
   function downloadCSV() {
-    const dailyRows = ['date,count', ...daily.map(d => `${d.date},${d.count}`)].join('\n');
-    const userRows  = ['user,count', ...byUser.map(u => `${u.user},${u.count}`)].join('\n');
-    const blob = new Blob([`# uploads-by-day\n${dailyRows}\n\n# uploads-by-user\n${userRows}\n`], { type: 'text/csv' });
+    const push = (title: string, rows: string[]) => [`# ${title}`, ...rows, ''].join('\n');
+    const dailyRows = ['date,count', ...daily.map(d => `${d.date},${d.count}`)];
+    const userRows  = ['user,count', ...byUser.map(u => `${u.user},${u.count}`)];
+    const latencyRows = ['date,avg_ms,p95_ms,count', ...latency.map(r=>`${r.date},${r.avg_ms},${r.p95_ms},${r.count}`)];
+    const sevRows = ['date,low,medium,high', ...sevByDay.map(r=>`${r.date},${r.low},${r.medium},${r.high}`)];
+    const srcRows = ['source,count', ...srcBreak.map(r=>`${r.source},${r.count}`)];
+    const stRows  = ['status,count', ...stBreak.map(r=>`${r.status},${r.count}`)];
+    const topRows = ['class_name,count', ...topClasses.map(r=>`${r.class_name},${r.count}`)];
+    const confRows = conf ? ['metric,value', `avg,${conf.avg}`, `p05,${conf.p05}`, `p50,${conf.p50}`, `p95,${conf.p95}`] : [];
+    const ttrRows = ['severity,avg_hours,p95_hours,count', ...tTRows.map(r=>`${r.severity},${r.avg_hours},${r.p95_hours},${r.count}`)];
+    const heatRows = ['geohash6,count,latest', ...heat.map(h=>`${h.geohash6},${h.count},${h.latest}`)];
+    const hotspotRows = ['geohash,precision,count,prev_count,trend_pct,latest,uploaders,low,medium,high,top1,top1_count,top2,top2_count,top3,top3_count',
+      ...hotspots.map(h=>{
+        const [t1,t2,t3] = (h.top_classes ?? []);
+        return [
+          h.geohash, h.precision, h.count, h.prev_count, Math.round(h.trend_pct),
+          h.latest ?? '', h.uploaders,
+          h.severity.low, h.severity.medium, h.severity.high,
+          t1?.class_name ?? '', t1?.count ?? '',
+          t2?.class_name ?? '', t2?.count ?? '',
+          t3?.class_name ?? '', t3?.count ?? '',
+        ].join(',');
+      })
+    ];
+
+    const content = [
+      push('uploads-by-day', dailyRows),
+      push('uploads-by-user', userRows),
+      push('latency-by-day', latencyRows),
+      push('severity-by-day', sevRows),
+      push('source-breakdown', srcRows),
+      push('status-breakdown', stRows),
+      push('top-classes', topRows),
+      confRows.length ? push('confidence-summary', confRows) : '',
+      push('time-to-resolution', ttrRows),
+      push('geo-heatmap', heatRows),
+      push('geo-hotspots', hotspotRows),
+    ].filter(Boolean).join('\n');
+
+    const blob = new Blob([content], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -114,34 +251,63 @@ export default function AnalyticsPage() {
     URL.revokeObjectURL(url);
   }
 
-  const isEmpty = state === 'ready' && daily.every(d=>d.count===0) && byUser.length === 0;
-  const maxUser = byUser.reduce((m,u)=>Math.max(m,u.count),0);
-
   return (
     <div className="analytics">
+      {/* Header */}
       <header className="analytics__header">
         <div className="title-stack">
           <div className="eyebrow">Dashboard</div>
           <h1 className="grad-title">Analytics</h1>
-          <p className="muted">Last 7 days overview and top contributors</p>
+          <p className="muted">Trends, quality, and processing across your inference pipeline</p>
         </div>
+
         <div className="header-actions">
+          {/* Range */}
           <div className="segmented" role="group" aria-label="Time range">
-            <button className="active" type="button">7d</button>
-            <button type="button" disabled>30d</button>
-            <button type="button" disabled>90d</button>
+            {[7,30,90].map((d)=>(
+              <button
+                key={d}
+                type="button"
+                className={range===d ? 'active' : ''}
+                onClick={()=>setRange(d as RangeOpt)}
+              >{d}d</button>
+            ))}
           </div>
-          <button className="btn btn-ghost" onClick={downloadCSV}>
+
+          {/* Media filter */}
+          <div className="segmented" role="group" aria-label="Media type">
+            {(['all','image','video'] as const).map((m)=>(
+              <button
+                key={m}
+                type="button"
+                className={media===m ? 'active' : ''}
+                onClick={()=>setMedia(m)}
+              >{m[0].toUpperCase()+m.slice(1)}</button>
+            ))}
+          </div>
+
+          <button className="btn btn-ghost" onClick={load} title="Refresh">↻ Refresh</button>
+          <button className="btn btn-ghost" onClick={downloadCSV} title="Export CSV">
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
             Export CSV
           </button>
         </div>
       </header>
 
+      {/* Window chip */}
+      <div className="window-chip-wrap">
+        <span className="badge">
+          Window:&nbsp;
+          {kpis ? new Date(kpis.window.start).toLocaleDateString() : '—'}
+          &nbsp;→&nbsp;
+          {kpis ? new Date(kpis.window.end).toLocaleDateString() : '—'}
+        </span>
+      </div>
+
       {/* KPI tiles */}
       <section className="kpis">
         {['loading','idle'].includes(state) ? (
-          Array.from({length:5}).map((_,i)=>(
+          Array.from({length:6}).map((_,i)=>(
             <div key={i} className="kpi kpi--skeleton" aria-hidden>
               <div className="sk-line" />
               <div className="sk-num" />
@@ -149,40 +315,63 @@ export default function AnalyticsPage() {
           ))
         ) : (
           <>
+            {/* Uploads */}
             <div className="kpi kpi--accent">
               <div className="kpi__top">
-                <span className="kpi__label">Uploads (7d)</span>
+                <span className="kpi__label">Uploads ({range}d)</span>
                 <TrendChip value={trendPct}/>
               </div>
-              <span className="kpi__value" aria-live="polite">{total7Anim}</span>
+              <span className="kpi__value" aria-live="polite">{totalAnim}</span>
               <MiniSparkline data={daily.map(d=>d.count)} />
             </div>
 
+            {/* Images / Videos with split bar */}
             <div className="kpi">
-              <span className="kpi__label">Avg / day</span>
-              <span className="kpi__value" aria-live="polite">{avgDayAnim.toFixed(1)}</span>
-              <small className="muted">based on last 7 days</small>
-            </div>
-
-            <div className="kpi">
-              <span className="kpi__label">Peak day</span>
+              <span className="kpi__label">Images / Videos</span>
               <span className="kpi__value">
-                {peak.count >= 0 ? (
-                  <>
-                    {fmtDayLabel(peak.date)} <small className="muted">({peak.count})</small>
-                  </>
-                ) : '—'}
+                {kpis ? `${imgCount} / ${vidCount}` : '—'}
               </span>
+              <div className="split-bar" title={`${imgCount} images / ${vidCount} videos`} aria-label="Images vs Videos">
+                <i className="seg seg--img" style={{ width: `${imgPct}%` }} />
+                <i className="seg seg--vid" style={{ width: `${vidPct}%` }} />
+              </div>
+              <small className="muted">{imgPct}% images · {vidPct}% videos</small>
             </div>
 
+            {/* Avg/day */}
             <div className="kpi">
-              <span className="kpi__label">Active uploaders</span>
-              <span className="kpi__value">{activeUsers}</span>
+              <span className="kpi__label">Avg uploads / day</span>
+              <span className="kpi__value" aria-live="polite">{avgAnim.toFixed(1)}</span>
+              <small className="muted">based on last {range} days</small>
             </div>
 
+            {/* Latency with sparkline */}
+            <div className="kpi">
+              <div className="kpi__top">
+                <span className="kpi__label">Processing avg / p95</span>
+              </div>
+              <span className="kpi__value">
+                {kpis ? `${Math.round(kpis.latency_ms.avg)} / ${Math.round(kpis.latency_ms.p95)} ms` : '—'}
+              </span>
+              <MiniSparkline data={latency.map(l => l.avg_ms)} colorVar="var(--secondary-500)" />
+            </div>
+
+            {/* Detections with mini severity mix */}
+            <div className="kpi">
+              <span className="kpi__label">Detections</span>
+              <span className="kpi__value">{kpis?.detections.total ?? '—'}</span>
+              <div className="sev-bar sev-bar--tiny" title={`low ${sevTotals.low} / medium ${sevTotals.medium} / high ${sevTotals.high}`}>
+                <i className="sev s-low"  style={{ width: `${sevPct.low}%` }} />
+                <i className="sev s-med"  style={{ width: `${sevPct.med}%` }} />
+                <i className="sev s-high" style={{ width: `${sevPct.high}%` }} />
+              </div>
+              <small className="muted">{sevPct.low}% low · {sevPct.med}% med · {sevPct.high}% high</small>
+            </div>
+
+            {/* Top uploader */}
             <div className="kpi">
               <span className="kpi__label">Top uploader</span>
-              <span className="kpi__value">{top.user}</span>
+              <span className="kpi__value">{(byUser[0]?.user) ?? '—'}</span>
               <small className="chip chip--soft">{topShare}% of uploads</small>
             </div>
           </>
@@ -200,22 +389,20 @@ export default function AnalyticsPage() {
           <svg width="36" height="36" viewBox="0 0 24 24" aria-hidden>
             <path d="M3 7h18M5 7v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7M9 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
-          <p>No uploads yet in the last 7 days.</p>
+          <p>No data yet for the selected range.</p>
         </div>
       )}
 
       {!isEmpty && (
         <>
-          {/* Area chart: uploads last 7 days */}
+          {/* Uploads over time */}
           <section className="card card--glow">
             <div className="section-head">
-              <h2>Uploads — last 7 days</h2>
+              <h2>Uploads — last {range} days</h2>
               <span className="muted">Daily volume</span>
             </div>
             <div className="chart-wrap">
-              {state !== 'ready' ? (
-                <div className="chart-skeleton" />
-              ) : (
+              {state !== 'ready' ? <div className="chart-skeleton" /> : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={daily} margin={{ left: 8, right: 8, top: 6, bottom: 0 }}>
                     <defs>
@@ -225,42 +412,23 @@ export default function AnalyticsPage() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={fmtDayLabel}
+                    <XAxis dataKey="date" tickFormatter={fmtDayLabel}
                       tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
-                      axisLine={{ stroke: 'var(--chart-axis)' }}
-                      tickLine={{ stroke: 'var(--chart-axis)' }}
-                      height={36}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      width={36}
+                      axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }} height={36}/>
+                    <YAxis allowDecimals={false} width={36}
                       tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
-                      axisLine={{ stroke: 'var(--chart-axis)' }}
-                      tickLine={{ stroke: 'var(--chart-axis)' }}
-                    />
+                      axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }}/>
                     <Tooltip
                       wrapperStyle={{ outline: 'none' }}
                       contentStyle={{
-                        borderRadius: 12,
-                        border: '1px solid var(--surface-200)',
-                        background: 'var(--surface-0)',
-                        boxShadow: 'var(--shadow-md)',
-                        color: 'var(--on-surface)',
+                        borderRadius: 12, border: '1px solid var(--surface-200)',
+                        background: 'var(--surface-0)', boxShadow: 'var(--shadow-md)', color: 'var(--on-surface)'
                       }}
                       labelStyle={{ color: 'var(--on-surface)', fontWeight: 700 }}
                       itemStyle={{ color: 'var(--on-surface)' }}
                       labelFormatter={(l)=>`📅 ${fmtDayLabel(String(l))}`}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="count"
-                      stroke="var(--primary-600)"
-                      strokeWidth={2}
-                      fill="url(#gradPrimary)"
-                      activeDot={{ r: 5 }}
-                    />
+                    <Area type="monotone" dataKey="count" stroke="var(--primary-600)" strokeWidth={2} fill="url(#gradPrimary)" activeDot={{ r: 5 }}/>
                     <Line type="monotone" dataKey="count" stroke="var(--primary-700)" strokeWidth={1.25} dot={false}/>
                   </AreaChart>
                 </ResponsiveContainer>
@@ -268,16 +436,310 @@ export default function AnalyticsPage() {
             </div>
           </section>
 
-          {/* Bar chart: top contributors */}
+          {/* Issue aging + SLA */}
+          <section className="card card--glow">
+            <div className="section-head">
+              <h2>Issue aging &amp; SLA</h2>
+              <span className="muted">
+      Buckets by age (open issues). SLA (h): L {aging?.sla_hours.low ?? SLA_DEFAULTS.low}
+                &nbsp;· M {aging?.sla_hours.medium ?? SLA_DEFAULTS.medium}
+                &nbsp;· H {aging?.sla_hours.high ?? SLA_DEFAULTS.high}
+    </span>
+
+            </div>
+
+
+            {/* Table: by severity */}
+            <div className="aging-scroll">
+              <div className="aging-table">
+                <div className="aging-row aging-head">
+                  <span>Severity</span>
+                  {BUCKETS.map(b => <span key={b} className="right">{b}</span>)}
+                  <span className="right">Open</span>
+                  <span className="right">SLA breach</span>
+                  <span className="right">% breach</span>
+                </div>
+
+                {(["high", "medium", "low"] as const).map(sev => {
+                  const r = aging?.by_severity?.[sev];
+                  const open = r?.total ?? 0;
+                  const breach = aging?.sla_breach_open?.[sev] ?? 0;
+                  const rate = aging ? Math.round((aging.sla_breach_rate?.[sev] ?? 0)) : 0;
+
+                  // NEW: clamp & style for the meter fill
+                  const clamped = open ? Math.min(100, Math.max(0, rate)) : 0;
+                  const ratioStyle: React.CSSProperties & { ['--ratio']?: string } = { '--ratio': `${clamped}%` };
+
+                  return (
+                    <div key={sev} className="aging-row">
+                      <span className={`sev-label sev-${sev}`}>{sev}</span>
+                      {BUCKETS.map(b => {
+                        const v = r ? r[b] : 0;
+                        return <span key={b} className={`right num ${v === 0 ? 'muted-0' : ''}`}>{v}</span>;
+                      })}
+                      <span className={`right num ${open === 0 ? 'muted-0' : ''}`}><strong>{open}</strong></span>
+                      <span className={`right num ${breach === 0 ? 'muted-0' : ''}`}>{breach}</span>
+
+                      {/* NEW: % breach meter pill */}
+                      <span className="right">
+                        <span className="rate-pill" style={ratioStyle}>
+                          <span>{open ? `${Math.round(rate)}%` : '—'}</span>
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+
+              </div>
+            </div>
+
+            {/* Table: by assignee & severity */}
+            <div className="section-subhead" style={{marginTop: 12}}>
+              <span className="muted">Split by assignee × severity</span>
+            </div>
+            <div className="aging-scroll">
+              <div className="aging-table assignee">
+                <div className="aging-row aging-head">
+                  <span>Assignee</span>
+                  <span>Severity</span>
+                  {BUCKETS.map(b => <span key={b} className="right">{b}</span>)}
+                  <span className="right">Total</span>
+                </div>
+
+                {(aging?.by_assignee ?? [])
+                    .slice()
+                    .sort((a, b) => (a.assignee ?? "").localeCompare(b.assignee ?? "") || sevOrder(a.severity) - sevOrder(b.severity))
+                    .map((row: AgingByAssigneeRow, i: number) => (
+                        <div key={`${row.assignee ?? '(unassigned)'}:${row.severity}:${i}`} className="aging-row">
+                          <span className="mono">{row.assignee ?? "(unassigned)"}</span>
+                          <span className={`sev-label sev-${row.severity}`}>{row.severity}</span>
+                          {BUCKETS.map(b => {
+                            const v = row.buckets[b] ?? 0;
+                            return <span key={b} className={`right num ${v === 0 ? 'muted-0' : ''}`}>{v}</span>;
+                          })}
+                          <span className={`right num ${row.total === 0 ? 'muted-0' : ''}`}><strong>{row.total}</strong></span>
+
+                        </div>
+                    ))
+                }
+
+                {(!aging || aging.by_assignee.length === 0) && (
+                    <div className="muted" style={{padding: 6}}>No open issues in this window.</div>
+                )}
+              </div>
+            </div>
+          </section>
+
+
+          {/* Latency + Severity over time */}
+          <section className="grid-2">
+            <div className="card card--glow">
+              <div className="section-head">
+                <h2>Processing latency</h2>
+                <span className="muted">Average & p95 (ms)</span>
+              </div>
+              <div className="chart-wrap">
+                {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={latency}>
+                      <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3"/>
+                      <XAxis dataKey="date" tickFormatter={fmtDayLabel}
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
+                        axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }} height={36}/>
+                      <YAxis width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
+                        axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }}/>
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        labelFormatter={(l)=>`📅 ${fmtDayLabel(String(l))}`}
+                      />
+                      <Line type="monotone" dataKey="avg_ms" stroke="var(--secondary-500)" strokeWidth={2} dot={false} name="avg"/>
+                      <Line type="monotone" dataKey="p95_ms" stroke="var(--primary-600)" strokeWidth={2} dot={false} name="p95"/>
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="card card--glow">
+              <div className="section-head">
+                <h2>Severity over time</h2>
+                <span className="muted">Detections per day</span>
+              </div>
+              <div className="chart-wrap">
+                {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={sevByDay} stackOffset="expand">
+                      <defs>
+                        <linearGradient id="gradLow" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--sev-low)" stopOpacity={0.55}/>
+                          <stop offset="100%" stopColor="var(--sev-low)" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="gradMed" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--sev-medium)" stopOpacity={0.55}/>
+                          <stop offset="100%" stopColor="var(--sev-medium)" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="gradHigh" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--sev-high)" stopOpacity={0.55}/>
+                          <stop offset="100%" stopColor="var(--sev-high)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tickFormatter={fmtDayLabel}
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
+                        axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }} height={36}/>
+                      <YAxis tickFormatter={(v)=>`${Math.round(v*100)}%`} width={44}
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
+                        axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }}/>
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        labelFormatter={(l)=>`📅 ${fmtDayLabel(String(l))}`}
+                      />
+                      <Area type="monotone" dataKey="low"    stackId="1" stroke="var(--sev-low)"    fill="url(#gradLow)" name="low"/>
+                      <Area type="monotone" dataKey="medium" stackId="1" stroke="var(--sev-medium)" fill="url(#gradMed)" name="medium"/>
+                      <Area type="monotone" dataKey="high"   stackId="1" stroke="var(--sev-high)"   fill="url(#gradHigh)" name="high"/>
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="legend">
+                <span><i className="dot dot--low" />Low</span>
+                <span><i className="dot dot--med" />Medium</span>
+                <span><i className="dot dot--high" />High</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Pies + Top classes */}
+          <section className="grid-3">
+            <div className="card card--glow">
+              <div className="section-head"><h2>Sources</h2><span className="muted">Model provenance</span></div>
+              <div className="chart-wrap sm">
+                {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={srcBreak} dataKey="count" nameKey="source" innerRadius={48} outerRadius={78} paddingAngle={2}>
+                        {srcBreak.map((s, i) => (
+                          <Cell key={i} fill={
+                            s.source === 'yolo' ? 'var(--secondary-500)' :
+                            s.source === 'gpt_dino' ? 'var(--primary-600)' :
+                            'var(--secondary-700)'
+                          }/>
+                        ))}
+                      </Pie>
+                      <Legend />
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="card card--glow">
+              <div className="section-head"><h2>Status</h2><span className="muted">Lifecycle</span></div>
+              <div className="chart-wrap sm">
+                {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={stBreak} dataKey="count" nameKey="status" innerRadius={48} outerRadius={78} paddingAngle={2}>
+                        {stBreak.map((s, i) => (
+                          <Cell key={i} fill={
+                            s.status === 'open' ? 'var(--info)' :
+                            s.status === 'resolved' ? 'var(--success)' :
+                            'var(--warning)'
+                          }/>
+                        ))}
+                      </Pie>
+                      <Legend />
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="card card--glow">
+              <div className="section-head"><h2>Top classes</h2><span className="muted">Most frequent</span></div>
+              <div className="chart-wrap">
+                {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[...topClasses].reverse()} layout="vertical" margin={{ left: 80, right: 8, top: 6, bottom: 0 }}>
+                      <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                      <XAxis type="number" tick={{ fill: 'var(--chart-axis)', fontSize: 12 }} />
+                      <YAxis type="category" dataKey="class_name" width={80} tick={{ fill: 'var(--chart-axis)', fontSize: 12 }} />
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      />
+                      <Bar dataKey="count" radius={[8,8,8,8]} fill="url(#barGradPrimary)">
+                        {topClasses.map((_, i) => <Cell key={i} fill="url(#barGradPrimary)" />)}
+                      </Bar>
+                      <defs>
+                        <linearGradient id="barGradPrimary" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--primary-500)" stopOpacity="1" />
+                          <stop offset="100%" stopColor="var(--primary-500)" stopOpacity="0.65" />
+                        </linearGradient>
+                      </defs>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Confidence + Time to resolution */}
+          <section className="grid-2">
+            <div className="card card--glow">
+              <div className="section-head"><h2>Detection confidence</h2><span className="muted">Avg / p05 / p50 / p95</span></div>
+              <div className="confidence-grid">
+                {conf ? (
+                  <>
+                    <div className="conf-pill"><span>avg</span><strong>{conf.avg.toFixed(2)}</strong></div>
+                    <div className="conf-pill"><span>p05</span><strong>{conf.p05.toFixed(2)}</strong></div>
+                    <div className="conf-pill"><span>p50</span><strong>{conf.p50.toFixed(2)}</strong></div>
+                    <div className="conf-pill"><span>p95</span><strong>{conf.p95.toFixed(2)}</strong></div>
+                  </>
+                ) : <div className="chart-skeleton" style={{ height: 120 }} />}
+              </div>
+            </div>
+
+            <div className="card card--glow">
+              <div className="section-head"><h2>Time to resolution</h2><span className="muted">Avg / p95 (hours)</span></div>
+              <div className="chart-wrap">
+                {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={tTRows}>
+                      <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3"/>
+                      <XAxis dataKey="severity" tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <YAxis width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      />
+                      <Bar dataKey="avg_hours" name="avg" radius={[8,8,0,0]} fill="var(--secondary-500)"/>
+                      <Line dataKey="p95_hours" name="p95" type="monotone" stroke="var(--primary-600)" strokeWidth={2} dot />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Contributors */}
           <section className="card card--glow">
             <div className="section-head">
               <h2>Top contributors</h2>
               <span className="muted">Uploads by user</span>
             </div>
             <div className="chart-wrap">
-              {state !== 'ready' ? (
-                <div className="chart-skeleton" />
-              ) : (
+              {state !== 'ready' ? <div className="chart-skeleton" /> : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={byUser}>
                     <defs>
@@ -291,32 +753,15 @@ export default function AnalyticsPage() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="user"
-                      interval={0}
-                      angle={-15}
-                      textAnchor="end"
-                      height={52}
+                    <XAxis dataKey="user" interval={0} angle={-15} textAnchor="end" height={52}
                       tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
-                      axisLine={{ stroke: 'var(--chart-axis)' }}
-                      tickLine={{ stroke: 'var(--chart-axis)' }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      width={36}
+                      axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }}/>
+                    <YAxis allowDecimals={false} width={36}
                       tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
-                      axisLine={{ stroke: 'var(--chart-axis)' }}
-                      tickLine={{ stroke: 'var(--chart-axis)' }}
-                    />
+                      axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }}/>
                     <Tooltip
                       wrapperStyle={{ outline: 'none' }}
-                      contentStyle={{
-                        borderRadius: 12,
-                        border: '1px solid var(--surface-200)',
-                        background: 'var(--surface-0)',
-                        boxShadow: 'var(--shadow-md)',
-                        color: 'var(--on-surface)',
-                      }}
+                      contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
                       labelStyle={{ color: 'var(--on-surface)', fontWeight: 700 }}
                       itemStyle={{ color: 'var(--on-surface)' }}
                       formatter={(v)=>[v,'Uploads']}
@@ -328,6 +773,85 @@ export default function AnalyticsPage() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+              )}
+            </div>
+          </section>
+
+          {/* Hotspots */}
+          <section className="card card--glow">
+            <div className="section-head">
+              <h2>Hotspots</h2>
+              <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span>Aggregated by</span>
+                <div className="segmented" role="group" aria-label="Geohash precision">
+                  {([4,5,6] as const).map((p)=>(
+                    <button
+                      key={p}
+                      type="button"
+                      className={precision===p ? 'active' : ''}
+                      onClick={()=>setPrecision(p)}
+                    >gh{p}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="hotspot-table">
+              <div className="hotspot-row hotspot-head">
+                <span>Area (geohash)</span>
+                <span className="right">Count</span>
+                <span className="right">Trend</span>
+                <span className="grow">Severity mix</span>
+                <span className="grow">Top classes</span>
+                <span className="right">Latest</span>
+                <span></span>
+              </div>
+
+              {(hotspots ?? []).map(h => {
+                const totalSev = Math.max(1, h.severity.low + h.severity.medium + h.severity.high);
+                const lowPct = (100 * h.severity.low) / totalSev;
+                const medPct = (100 * h.severity.medium) / totalSev;
+                const highPct = (100 * h.severity.high) / totalSev;
+
+                const trend = isFinite(h.trend_pct) ? h.trend_pct : 0;
+                const trendLabel = trend === 0 ? '—' : `${trend > 0 ? '▲' : '▼'} ${Math.abs(trend).toFixed(0)}%`;
+
+                const bboxQ = h.bbox ? `${h.bbox[0].toFixed(6)},${h.bbox[1].toFixed(6)},${h.bbox[2].toFixed(6)},${h.bbox[3].toFixed(6)}` : '';
+                const mapHref = h.bbox ? `/map?bbox=${encodeURIComponent(bboxQ)}` : `/map?geohash=${h.geohash}`;
+
+                return (
+                  <div key={`${h.precision}:${h.geohash}`} className="hotspot-row">
+                    <span className="mono">{h.geohash}</span>
+                    <span className="right"><strong>{h.count}</strong></span>
+                    <span className={`right chip ${trend===0 ? 'chip--neutral' : (trend>0?'chip--up':'chip--down')}`}>{trendLabel}</span>
+
+                    {/* centered severity bar */}
+                    <span className="grow sev-cell">
+                      <div className="sev-bar" title={`low ${h.severity.low} / medium ${h.severity.medium} / high ${h.severity.high}`}>
+                        <i style={{ width: `${lowPct}%` }}  className="sev s-low" />
+                        <i style={{ width: `${medPct}%` }}  className="sev s-med" />
+                        <i style={{ width: `${highPct}%` }} className="sev s-high" />
+                      </div>
+                    </span>
+
+                    <span className="grow hotspot-tags">
+                      {(h.top_classes ?? []).map(tc => (
+                        <span key={tc.class_name} className="tag">{tc.class_name} ×{tc.count}</span>
+                      ))}
+                      {(h.top_classes ?? []).length === 0 && <span className="muted">—</span>}
+                    </span>
+
+                    <span className="right">{h.latest ? timeAgo(h.latest) : '—'}</span>
+
+                    <span>
+                      <a className="btn btn-ghost" href={mapHref} title="View on map">View</a>
+                    </span>
+                  </div>
+                );
+              })}
+
+              {(!hotspots || hotspots.length === 0) && (
+                <div className="muted" style={{ padding: 6 }}>No hotspots for this filter.</div>
               )}
             </div>
           </section>
@@ -348,13 +872,13 @@ function TrendChip({ value }: { value: number }) {
   );
 }
 
-function MiniSparkline({ data }: { data: number[] }) {
+function MiniSparkline({ data, colorVar = 'var(--primary-600)' }: { data: number[]; colorVar?: string }) {
   const spark = data.map((v, i) => ({ i, v }));
   return (
     <div className="sparkline">
       <ResponsiveContainer width="100%" height={42}>
         <LineChart data={spark} margin={{ left: 0, right: 0, top: 6, bottom: 0 }}>
-          <Line type="monotone" dataKey="v" stroke="var(--primary-600)" strokeWidth={1.75} dot={false} />
+          <Line type="monotone" dataKey="v" stroke={colorVar} strokeWidth={1.75} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

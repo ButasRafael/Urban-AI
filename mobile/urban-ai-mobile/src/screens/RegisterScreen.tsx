@@ -1,4 +1,3 @@
-// src/screens/RegisterScreen.tsx
 import React, { useEffect, useMemo, useRef } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '@shopify/restyle';
@@ -27,7 +26,6 @@ import { register as apiRegister } from '../api/auth';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
-/* ───────────────── schema + types ───────────────── */
 const schema = z
   .object({
     username: z.string().min(3, 'Minim 3 caractere'),
@@ -44,7 +42,6 @@ type FormValues = z.infer<typeof schema>;
 export default function RegisterScreen({ navigation }: Props) {
   const theme = useTheme<Theme>();
 
-  // RHF + Zod
   const {
     control,
     handleSubmit,
@@ -55,7 +52,6 @@ export default function RegisterScreen({ navigation }: Props) {
     defaultValues: { username: '', password: '', confirm: '' },
   });
 
-  // focus + entrance + error shake
   const passwordRef = useRef<RNTextInput>(null);
   const confirmRef  = useRef<RNTextInput>(null);
   const cardY = useRef(new Animated.Value(16)).current;

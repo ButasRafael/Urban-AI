@@ -15,8 +15,6 @@ type Geocoded = Problem & { latlng: LatLng };
 
 const GOOGLE = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
 
-/* ---------------- Helpers ---------------- */
-
 function getTheme(): 'light' | 'dark' {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
@@ -27,9 +25,8 @@ function useExactCoords(problems: Problem[]): Geocoded[] {
     .map((p) => ({ ...p, latlng: { lat: p.latitude!, lng: p.longitude! } }));
 }
 
-function primaryClass(p: Problem) {
-  const c = (p as any)?.predicted_classes?.[0];
-  return c || 'Issue';
+function primaryClass(p: Pick<Problem, 'predicted_classes'>): string {
+  return p.predicted_classes?.[0] ?? 'Issue';
 }
 
 function hashHue(label: string): number {
@@ -42,11 +39,11 @@ function colorFor(label: string): string {
   return `hsl(${hashHue(label)} 85% 46%)`;
 }
 
-/** Themed pin (cached). Active pins get a subtle glow + larger size */
 const pinCache = new Map<string, google.maps.Icon>();
 function pinIcon(theme: 'light' | 'dark', color: string, active = false): google.maps.Icon {
   const key = `${theme}-${color}-${active ? 'a' : 'n'}`;
-  if (pinCache.has(key)) return pinCache.get(key)!;
+  const cached = pinCache.get(key);
+  if (cached) return cached;
 
   const stroke = theme === 'dark' ? '#0b1220' : '#ffffff';
   const halo = theme === 'dark' ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.12)';
@@ -76,7 +73,6 @@ function pinIcon(theme: 'light' | 'dark', color: string, active = false): google
   return icon;
 }
 
-/** Themed cluster bubbles */
 function clusterSVG(theme: 'light' | 'dark', size: number) {
   const bg = theme === 'dark' ? '#0e1628' : '#e8f1ff';
   const border = theme === 'dark' ? '#2a3a4a' : '#bcd7ff';
@@ -99,7 +95,6 @@ function clusterStyles(theme: 'light' | 'dark') {
   }));
 }
 
-/* Map styles */
 const lightStyle: google.maps.MapTypeStyle[] = [
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
@@ -117,8 +112,6 @@ const darkStyle: google.maps.MapTypeStyle[] = [
   { featureType: 'water', stylers: [{ color: '#0e1628' }] },
 ];
 
-/* ---------------- Component ---------------- */
-
 export default function IssueMap({ problems }: { problems: Problem[] }) {
   const geocoded = useExactCoords(problems);
 
@@ -126,13 +119,11 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
   const [modal, setModal] = useState<Geocoded | null>(null);
   const [myLoc, setMyLoc] = useState<LatLng | null>(null);
 
-  // NEW: unique primary classes for legend
   const classesList = useMemo(
     () => Array.from(new Set(geocoded.map(primaryClass))).slice(0, 6),
     [geocoded]
   );
 
-  /* Theme: reacts to app toggle + OS changes */
   const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
   useEffect(() => {
     const onClassChange = () => setTheme(getTheme());
@@ -267,7 +258,10 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
         {/* keep map style in sync with theme */}
         <StyleSync theme={theme} getMap={() => mapRef.current} />
 
-        <MarkerClustererF key={theme} options={{ styles: clusterStyles(theme), minimumClusterSize: 2, gridSize: 56 }}>
+        <MarkerClustererF
+          key={theme}
+          options={{ styles: clusterStyles(theme), minimumClusterSize: 2, gridSize: 56 }}
+        >
           {(clusterer) => (
             <>
               {geocoded.map((p) => {
@@ -283,7 +277,6 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
                     zIndex={isActive ? 20 : 10}
                     onClick={() => {
                       setActive(p);
-                      // Nudge camera a bit so info window is visible above the marker
                       const m = mapRef.current;
                       if (!m) return;
                       const off = m.getZoom() && (m.getZoom()! >= 15 ? 0.0012 : 0.003) || 0;
@@ -314,7 +307,9 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
             <div className="info">
               <div className="info__title">
                 {primaryClass(active)}
-                <span className="pill">{(active as any)?.predicted_classes?.slice(0, 3)?.join(' · ')}</span>
+                <span className="pill">
+                  {active.predicted_classes.slice(0, 3).join(' · ')}
+                </span>
               </div>
               {active.address && <div className="info__addr">{active.address}</div>}
               <div className="info__actions">
@@ -332,7 +327,9 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
           <div className="sheet-row">
             <div className="sheet-title" id="sheet-title">
               {primaryClass(active)}
-              <span className="pill">{(active as any)?.predicted_classes?.slice(0,3)?.join(' · ')}</span>
+              <span className="pill">
+                {active.predicted_classes.slice(0, 3).join(' · ')}
+              </span>
             </div>
             <button className="sheet-close" aria-label="Close" onClick={() => setActive(null)}>✕</button>
           </div>
@@ -352,7 +349,6 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
   );
 }
 
-/** Updates map styles when theme changes (no re-mount) */
 function StyleSync({
   theme,
   getMap,

@@ -1,7 +1,3 @@
-/* ===========================
-   Button – refined, theme-aware
-   =========================== */
-
 .btn {
   /* Layout tokens */
   --btn-radius: 12px;
@@ -108,7 +104,7 @@
 .btn-primary {
   color: #fff;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--primary-500) 92%, #fff 8%), var(--primary-650, var(--primary-600)));
+    linear-gradient(180deg, color-mix(in srgb, var(--primary-500) 92%, #fff 8%), var(--primary-600, var(--primary-600)));
   border-color: color-mix(in srgb, var(--primary-600) 85%, #000 15%);
   box-shadow:
     0 1px 0 color-mix(in srgb, #fff 35%, transparent),

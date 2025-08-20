@@ -1,5 +1,3 @@
-/* src/styles/shell.css */
-
 /* App grid */
 .app-shell {
   --sidebar-w: 260px;
@@ -325,3 +323,16 @@
     backdrop-filter: blur(1px);
   }
 }
+/* Map (or any page) that needs to touch the edges next to the sidebar */
+.content.content--full {
+  padding: 0 !important;
+  overflow: hidden;      /* no inner scrollbar */
+  min-height: 100vh;     /* fill viewport height */
+}
+.content.content--full > * {
+  height: 100%;          /* let the page root (map-wrap) stretch */
+}
+
+/* Remove the left active bar globally; keep active highlight/glow intact */
+.nav .active-pill { display: none !important; }
+

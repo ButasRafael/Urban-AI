@@ -1,5 +1,3 @@
-# app/api/chat_routes.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Tuple
@@ -21,17 +19,13 @@ client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ---------- Context builder with source tagging (no geo) ----------
 async def _build_context(db: Session, req: ChatRequest, k: int = 12) -> Tuple[str, bool]:
-    """
-    Returns (context_block, has_sources).
-    Each item is prefixed with [#<chunk_id>] to enable explicit bracket citations.
-    """
+
     emb = await rag_svc.embed(req.message)
     chunks = rag_svc.retrieve(db, emb, k=k)
 
     if not chunks:
         return "NO_SOURCES", False
 
-    # XML-like wrapping per GPT-4.1 guidance; include media_id only.
     docs = []
     for c in chunks:
         docs.append(
@@ -47,7 +41,6 @@ async def _build_context(db: Session, req: ChatRequest, k: int = 12) -> Tuple[st
         "<external_context>\n" + "\n\n---\n\n".join(docs) + "\n</external_context>"
     )
     return ctx, True
-
 
 # ---------- Chat endpoint ----------
 @router.post("", response_model=ChatResponse)
@@ -67,14 +60,12 @@ async def chat(
         db.commit()
         db.refresh(session)
 
-    # persist user message
     db.add(ChatMessage(session_id=session.id, role="user", content=req.message))
     db.commit()
 
     # 2) build strict context (geo-agnostic)
     context_block, has_sources = await _build_context(db, req, k=12)
 
-    # recent history to avoid bloat
     history_msgs = (
         db.query(ChatMessage)
         .filter(ChatMessage.session_id == session.id)
@@ -88,7 +79,7 @@ async def chat(
         if m.role in ("user", "assistant")
     ]
 
-    # 3) Optimized system rules for GPT-4.1 (no geo mentions)
+    # 3) Optimized system rules for GPT-4.1
     system_rules_top = (
         "### ROLE & OBJECTIVE\n"
         "You are an urban-maintenance assistant for city authorities.\n\n"
@@ -165,7 +156,7 @@ async def chat(
     return ChatResponse(session_id=session.id, answer=raw_answer)
 
 
-# ---------- Session utilities (unchanged) ----------
+# ---------- Session utilities ----------
 @router.get("/sessions", response_model=List[SessionSummary])
 async def list_sessions(
     db: Session = Depends(get_db),
@@ -237,4 +228,3 @@ async def delete_session(
         raise HTTPException(404, "Session not found")
     db.delete(session)
     db.commit()
-    # 204 No Content

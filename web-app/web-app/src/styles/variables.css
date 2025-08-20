@@ -19,6 +19,8 @@
 
   --surface-0:#FFFFFF;
   --surface-100:#ECF0F1;
+  --surface-200: #e5e7eb;
+  --surface-300: #d1d5db;
   --on-surface:#34495E;
 
   /* parity with mobile */
@@ -61,6 +63,8 @@
 
   --surface-0:#1E1E1E;
   --surface-100:#2A2A2A;
+  --surface-200: #1f2c38;
+  --surface-300: #2a3a4a;
   --on-surface:#ECF0F1;
 
   --overlay: rgba(0,0,0,.45);
@@ -69,6 +73,46 @@
   --surface: var(--surface-100);
   --muted: #64727a;
 }
+
+/* Mid-steps derived from your existing stops */
+:root {
+  /* primary scale */
+  --primary-200: color-mix(in srgb, var(--primary-100) 50%, var(--primary-300) 50%);
+  --primary-400: color-mix(in srgb, var(--primary-300) 50%, var(--primary-500) 50%);
+  --primary-600: color-mix(in srgb, var(--primary-500) 50%, var(--primary-700) 50%);
+  --primary-800: color-mix(in srgb, var(--primary-700) 50%, var(--primary-900) 50%);
+
+  /* secondary scale */
+  --secondary-200: color-mix(in srgb, var(--secondary-100) 50%, var(--secondary-300) 50%);
+  --secondary-400: color-mix(in srgb, var(--secondary-300) 50%, var(--secondary-500) 50%);
+  --secondary-600: color-mix(in srgb, var(--secondary-500) 50%, var(--secondary-700) 50%);
+  --secondary-800: color-mix(in srgb, var(--secondary-700) 50%, var(--secondary-900) 50%);
+}
+
+:root {
+
+  --danger-500: var(--error);
+  --info-500:   var(--info);
+
+  --cluster-size: 44px;
+  --cluster-hi: #ffffff;
+  --cluster-tone: #dbeafe;
+  --cluster-border: #d9e2ee;
+  --cluster-dpr: 1;
+  --cluster-font: 13px;
+  --cluster-text: #0b1220;
+  --cluster-glow: rgba(0,0,0,.18);
+}
+
+:root.dark {
+  /* darker cluster look on dark maps */
+  --cluster-tone: #2a3a4a;
+  --cluster-border: #1f2c38;
+  --cluster-text: #e6eef9;
+  --cluster-hi: rgba(255,255,255,.18);
+}
+
+
 
 /* base */
 *,

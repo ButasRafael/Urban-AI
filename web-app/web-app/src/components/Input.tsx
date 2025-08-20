@@ -1,4 +1,3 @@
-// src/components/Input.tsx
 import {
   forwardRef,
   useId,
@@ -6,6 +5,9 @@ import {
   useState,
   type InputHTMLAttributes,
   type ReactNode,
+  type Ref,
+  type RefCallback,
+  type MutableRefObject,
 } from 'react';
 import clsx from 'clsx';
 import '../styles/input.css';
@@ -26,6 +28,19 @@ interface Props extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   stopGlobalKeys?: boolean;
 }
 
+function mergeRefs<T>(...refs: Array<Ref<T> | undefined>): RefCallback<T> {
+  return (value) => {
+    for (const ref of refs) {
+      if (!ref) continue;
+      if (typeof ref === 'function') {
+        ref(value);
+      } else {
+        (ref as MutableRefObject<T | null>).current = value;
+      }
+    }
+  };
+}
+
 const Input = forwardRef<HTMLInputElement, Props>(function Input(
   {
     label,
@@ -41,7 +56,7 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
     className,
     id,
     type = 'text',
-    onChange,                 // ← you destructure it…
+    onChange,
     stopGlobalKeys = false,
     onKeyDown: userOnKeyDown,
     onKeyUp: userOnKeyUp,
@@ -56,7 +71,7 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
   const describedBy = [errId, hintId].filter(Boolean).join(' ') || undefined;
 
   const localRef = useRef<HTMLInputElement>(null);
-  const inputRef = (ref as any) || localRef;
+  const setInputRef = mergeRefs<HTMLInputElement>(ref, localRef);
 
   const [revealed, setRevealed] = useState(false);
   const isPassword = type === 'password';
@@ -67,11 +82,10 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
   const hasSuffix = !!suffixIcon || !!loading || !!clearable || !!showReveal;
 
   function handleClear() {
-    const el = (inputRef?.current ?? localRef.current) as HTMLInputElement | null;
+    const el = localRef.current;
     if (!el) return;
     el.value = '';
-    const ev = new Event('input', { bubbles: true });
-    el.dispatchEvent(ev);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
     el.focus();
   }
 
@@ -92,11 +106,11 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
       <input
         {...rest}
         id={inputId}
-        ref={ref}
+        ref={setInputRef}
         type={actualType}
         aria-invalid={!!error || undefined}
         aria-describedby={describedBy}
-        onChange={onChange}       
+        onChange={onChange}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         className={clsx('input', className)}
@@ -118,11 +132,11 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
         <input
           {...rest}
           id={inputId}
-          ref={inputRef}
+          ref={setInputRef}
           type={actualType}
           aria-invalid={!!error || undefined}
           aria-describedby={describedBy}
-          onChange={onChange} 
+          onChange={onChange}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
           className="input"
@@ -148,7 +162,6 @@ const Input = forwardRef<HTMLInputElement, Props>(function Input(
                 aria-label={revealed ? 'Hide password' : 'Show password'}
                 title={revealed ? 'Hide password' : 'Show password'}
               >
-                {/* eye icons */}
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
                   {revealed
                     ? (<><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.11 1 12c.62-1.45 1.52-2.79 2.63-3.96"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.89 11 8a11.66 11.66 0 0 1-2.1 3.2"/><path d="M3 3l18 18"/></>)

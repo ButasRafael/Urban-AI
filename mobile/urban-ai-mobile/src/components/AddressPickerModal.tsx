@@ -21,19 +21,6 @@ import StyledButton from './StyledButton';
 import { useTheme } from '@shopify/restyle'
 import type { Theme } from '../theme'
 
-/**
- * AddressPickerModal – allows the user to search for an address, fine-tune it
- * on a map, and confirm the lat/lng + formatted address back to the caller.
- *
- * Improvements over the initial version:
- * 1. **typed** ref (GooglePlacesAutocompleteRef) instead of any.
- * 2. Added **current location** shortcut via `currentLocation` props.
- * 3. Added **debounce** + **autoFillOnNotFound** to reduce API calls.
- * 4. Respect Google TOS by re-enabling the “Powered by Google” footer.
- * 5. Memoised callbacks with `useCallback`.
- * 6. Moved `returnKeyType` into `textInputProps` per typings.
- */
-
 type Props = {
   visible: boolean;
   onCancel: () => void;
@@ -62,10 +49,8 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
   const handlePoiClick = useCallback(
   async (placeId: string, coordinate: LatLng) => {
     try {
-      // 1) Center map & drop pin immediately
       setCoords(coordinate)
 
-      // 2) Fetch the place’s formatted address
       const res = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?` +
         `place_id=${placeId}&key=${GOOGLE_API_KEY}&fields=formatted_address`
@@ -79,11 +64,7 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
   []
 )
 
-
-
-  /* ────────────────────────────── handlers ───────────────────────────── */
   const handlePlaceSelect = useCallback((data: any, details: any | null) => {
-    // details is null when currentLocation is selected & nearbyPlacesAPI="none"
     const location = details?.geometry?.location || data?.geometry?.location;
     if (!location) return;
 
@@ -100,7 +81,6 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
     Alert.alert('No results', 'No places match that search.', [{ text: 'OK' }]);
   }, []);
 
-  /* ───────────────────────────────── UI ──────────────────────────────── */
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onCancel}>
       <View style={{ flex: 1 }}>

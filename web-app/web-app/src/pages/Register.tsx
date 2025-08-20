@@ -1,23 +1,22 @@
-// src/pages/Register.tsx
+import type React from 'react';
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { notify } from '../lib/notify'
 import { register as apiRegister } from '../api/auth'
-
+import { isAxiosError } from 'axios';
 type Role = 'authority' | 'admin'
 
-// same rule as backend: ≥8 chars, letters & digits allowed (and common specials)
 const PW_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/
 
 // helpers
 function scorePassword(pw: string) {
   let s = 0;
-  if (pw.length >= 8) s++;               // length (backend minimum)
-  if (/[A-Z]/.test(pw)) s++;             // upper
-  if (/[a-z]/.test(pw)) s++;             // lower
-  if (/\d/.test(pw)) s++;                // digit
-  if (/[^A-Za-z0-9]/.test(pw)) s++;      // symbol
-  return Math.min(s, 4);                  // 0..4 for our meter
+  if (pw.length >= 8) s++;
+  if (/[A-Z]/.test(pw)) s++;
+  if (/[a-z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  return Math.min(s, 4);
 }
 const STRENGTH_LABELS = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'];
 
@@ -41,7 +40,6 @@ export default function Register() {
   const score = scorePassword(password)
   const strengthClass = ['strength--weak','strength--weak','strength--fair','strength--good','strength--strong'][score]
   const strengthLabel = STRENGTH_LABELS[score]
-  // theme (same as login)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme')
     if (saved === 'light' || saved === 'dark') return saved
@@ -67,7 +65,6 @@ export default function Register() {
     return Object.keys(fe).length === 0
   }
 
-  // press-and-hold peek
   function handlePeekDown() {
     if (!showPwd) { setPeek(true); setShowPwd(true) }
   }
@@ -90,13 +87,14 @@ export default function Register() {
         setTimeout(() => nav('/login', { replace: true }), 200)
       })
 
-      await notify.promise(task, {
+      notify.promise(task, {
         loading: 'Creating your account…',
         success: 'Account created. You can sign in now.',
-        error: (err) =>
-          (err as any)?.response?.data?.detail
-            ?? (err as Error)?.message
-            ?? 'Registration failed',
+        error: (err: unknown) => isAxiosError(err)
+            ? err.response?.data?.detail
+            : err instanceof Error
+                ? err.message
+                : 'Registration failed',
       })
     } finally {
       setBusy(false)
@@ -205,7 +203,9 @@ export default function Register() {
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setFieldErrs(f => ({ ...f, password: '' })) }}
                   onBlur={() => setFieldErrs(f => ({ ...f, password: PW_REGEX.test(password) ? '' : 'Min 8 chars, include letters & digits' }))}
-                  onKeyUp={(e: any) => setCapsLock(e.getModifierState?.('CapsLock'))}
+                  onKeyUp={(e: React.KeyboardEvent<HTMLInputElement>) =>
+                      setCapsLock(e.getModifierState('CapsLock'))
+                }
                   autoComplete="new-password"
                   aria-invalid={!!fieldErrs.password}
                 />

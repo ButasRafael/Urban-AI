@@ -32,13 +32,11 @@ export default function Button({
 }: Props) {
   const isDisabled = disabled || loading;
 
-  // A11y: ensure icon-only buttons have a name
   const ariaLabel =
     iconOnly && !rest['aria-label']
       ? (rest.title as string) || 'Button'
       : rest['aria-label'];
 
-  // If iconOnly and you passed the SVG as children, render it as an icon.
   const hasChildIcon = !!children && typeof children !== 'string';
   const renderLeftIcon =
     leftIcon ?? (iconOnly && hasChildIcon ? children : undefined);

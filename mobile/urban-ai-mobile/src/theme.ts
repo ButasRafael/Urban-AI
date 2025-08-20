@@ -1,10 +1,7 @@
-
 import { createTheme } from '@shopify/restyle'
 
-// ----------  Colour palette  ----------
 export const palette = {
   light: {
-    // Brand – primary (sea‑green)
     transparent: 'transparent',
     primary100: '#E8F6F3',
     primary300: '#A8E0D6',
@@ -12,29 +9,25 @@ export const palette = {
     primary700: '#0E7C64',
     primary900: '#064D3D',
 
-    // Brand – secondary (slate)
     secondary100: '#F2F7FA',
     secondary300: '#C7DCEC',
     secondary500: '#2C3E50',
     secondary700: '#1F2C38',
     secondary900: '#0F161C',
 
-    // Semantic
     success: '#2ecc71',
     warning: '#f39c12',
     error:   '#c0392b',
     info:    '#3498db',
 
-    // Surfaces / text
-    surface0:   '#FFFFFF',   // cards
-    surface100: '#ECF0F1',   // app background
-    onSurface:  '#34495E',   // default text colour
+    surface0:   '#FFFFFF',
+    surface100: '#ECF0F1',
+    onSurface:  '#34495E',
 
     overlay: 'rgba(0,0,0,0.45)'
   },
 
   dark: {
-    // Tone ramp inverted for dark►light ordering
     transparent: 'transparent',
     primary100: '#064D3D',
     primary300: '#0E7C64',
@@ -61,7 +54,6 @@ export const palette = {
   },
 } as const
 
-// ----------  Spacing & radii  ----------
 export const spacing = {
   xs: 4,
   s:  8,
@@ -77,8 +69,6 @@ export const radii = {
   l: 16,
 } as const
 
-// ----------  Typography variants  ----------
-// Inter Variable font‑faces are loaded at runtime via expo‑google‑fonts
 export const textVariants = {
   defaults: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24 },
   display: { fontFamily: 'Inter_700Bold',   fontSize: 32, lineHeight: 40 },
@@ -87,7 +77,6 @@ export const textVariants = {
   label:   { fontFamily: 'Inter_500Medium',  fontSize: 14, lineHeight: 20 },
 } as const
 
-// ----------  Restyle themes  ----------
 export const lightTheme = createTheme({
   colors: {
     ...palette.light,

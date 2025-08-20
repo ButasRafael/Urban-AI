@@ -1,4 +1,4 @@
-// src/pages/Login.tsx
+import type React from 'react';
 import { useState, type FormEvent, useEffect } from 'react';
 import { login } from '../api/auth';
 import { useAuth } from '../auth/useAuth';
@@ -13,14 +13,13 @@ export default function Login() {
   const [password, setPassword]   = useState('');
   const [remember, setRemember]   = useState(true);
   const [showPwd, setShowPwd]     = useState(false);
-  const [peek, setPeek]           = useState(false); // press-and-hold peek
+  const [peek, setPeek]           = useState(false);
   const [capsLock, setCapsLock]   = useState(false);
   const [busy, setBusy]           = useState(false);
   const [fieldErrs, setFieldErrs] = useState<{ username?: string; password?: string }>({});
 
   const disabled = busy || !username.trim() || !password;
 
-  // theme
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'light' || saved === 'dark') return saved;
@@ -29,12 +28,10 @@ export default function Login() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
-    // make Toaster update immediately (App.tsx also observes class changes)
     window.dispatchEvent(new CustomEvent('themechange'));
   }, [theme]);
   const toggleTheme = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
 
-  // autofocus
   useEffect(() => {
     document.querySelector<HTMLInputElement>('#username')?.focus();
   }, []);
@@ -61,14 +58,13 @@ export default function Login() {
       const task = login(username.trim(), password).then(u => {
         setUser(u);
         if (!remember) localStorage.removeItem('refreshToken');
-        // toast first, then navigate
         setTimeout(() => {
           nav(u.role === 'admin' ? '/analytics' : '/map', { replace: true });
         }, 50);
         return u;
       });
 
-      await notify.promise(task, {
+      notify.promise(task, {
         loading: 'Signing in…',
         success: (u) => `Welcome back, ${u.username}!`,
         error: 'Invalid credentials. Please try again.',
@@ -78,7 +74,6 @@ export default function Login() {
     }
   }
 
-  // press-and-hold password peek (doesn’t toggle)
   function handlePeekDown() {
     if (!showPwd) { setPeek(true); setShowPwd(true); }
   }
@@ -203,7 +198,9 @@ export default function Login() {
                   onBlur={() =>
                     setFieldErrs(f => ({ ...f, password: password.length < 6 ? 'At least 6 characters' : '' }))
                   }
-                  onKeyUp={(e: any) => setCapsLock(e.getModifierState?.('CapsLock'))}
+                  onKeyUp={(e: React.KeyboardEvent<HTMLInputElement>) =>
+                      setCapsLock(e.getModifierState('CapsLock'))
+                }
                   autoComplete="current-password"
                   aria-invalid={!!fieldErrs.password}
                 />

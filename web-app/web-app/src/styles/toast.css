@@ -1,22 +1,121 @@
-/* src/styles/toast.css */
 :root { --sonner-z-index: 9999; }
 
+/* ===== Toast — glass card with gradient border + accent bar ===== */
 .app-toast {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--secondary-200);
-  background: var(--surface-0);
-  color: var(--secondary-900);
-  box-shadow: var(--shadow-lg);
-}
-.app-toast-title { font-weight: 700; }
-.app-toast-desc  { opacity: .9; }
+  --toast-radius: 14px;
+  --toast-pad-y: 10px;
+  --toast-pad-x: 12px;
+  --toast-accent: var(--primary-500);
+  --toast-shadow: 0 14px 36px rgba(0,0,0,.16);
+  --toast-shadow-strong: 0 18px 44px rgba(0,0,0,.22);
+  --toast-duration: 3.2s;               /* keep in sync with Toaster duration */
 
-:root.dark .app-toast {
-  background: #0f141a;
-  color: #f8fafc;
-  border-color: #1f2c38;
-  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  position: relative;
+  border-radius: var(--toast-radius);
+  border: 1px solid transparent;
+  padding: var(--toast-pad-y) var(--toast-pad-x);
+  background:
+    /* surface */
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    /* pretty border */
+    linear-gradient(135deg, var(--primary-300), var(--secondary-300)) border-box;
+  color: var(--on-surface, #0b1220);
+  box-shadow: var(--toast-shadow);
+  backdrop-filter: saturate(1.05) blur(6px);
+  transform: translateY(2px) scale(.995);
+  animation: toast-in .22s ease-out both;
+  transition:
+    transform .12s ease,
+    box-shadow .2s ease,
+    background .25s ease,
+    border-color .25s ease,
+    opacity .2s ease;
 }
 
-/* Optional: nudge spacing on action buttons to fit your buttons */
+/* subtle lift + glow on hover */
+.app-toast:hover {
+  transform: translateY(0) scale(1);
+  box-shadow:
+    var(--toast-shadow-strong),
+    0 0 0 1px color-mix(in srgb, var(--toast-accent) 18%, transparent);
+}
+
+/* left glow edge (accent) */
+.app-toast::before {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--toast-accent) 60%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--toast-accent) 16%, transparent);
+  pointer-events: none;
+  opacity: .6;
+}
+
+/* progress bar (pauses on hover) */
+.app-toast::after {
+  content: "";
+  position: absolute; left: 8px; right: 8px; bottom: 6px; height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--toast-accent) 82%, #fff 18%);
+  opacity: .85;
+  transform-origin: left center;
+  animation: toast-progress var(--toast-duration) linear both;
+}
+.app-toast:hover::after { animation-play-state: paused; }
+
+/* Title/description polish */
+.app-toast-title {
+  font-weight: 800;
+  letter-spacing: .2px;
+  margin-bottom: 2px;
+}
+.app-toast-desc {
+  opacity: .92;
+}
+
+/* Keep your buttons comfortable inside toasts */
 .app-toast .btn { padding: 6px 10px; border-radius: 10px; }
+
+/* ===== Types -> accent color only (background stays neutral & readable) ===== */
+.app-toast[data-type="success"] { --toast-accent: var(--success); }
+.app-toast[data-type="error"]   { --toast-accent: var(--error); }
+.app-toast[data-type="warning"] { --toast-accent: var(--warning, #f59e0b); }
+.app-toast[data-type="info"]    { --toast-accent: var(--info); }
+
+/* ===== Dark theme ===== */
+:root.dark .app-toast {
+  background:
+    linear-gradient(#0f141a, #0f141a) padding-box,
+    linear-gradient(135deg, #0E7C64, #2C3E50) border-box;
+  color: #e2e8f0;
+  box-shadow: 0 18px 48px rgba(0,0,0,.45);
+  backdrop-filter: saturate(1.05) blur(8px);
+}
+:root.dark .app-toast::before {
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--toast-accent) 45%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--toast-accent) 12%, transparent);
+  opacity: .7;
+}
+:root.dark .app-toast::after {
+  background: color-mix(in srgb, var(--toast-accent) 78%, white 22%);
+  opacity: .9;
+}
+
+/* ===== Animations ===== */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); filter: blur(.5px); }
+  to   { opacity: 1; transform: translateY(2px) scale(.995); filter: none; }
+}
+@keyframes toast-progress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .app-toast,
+  .app-toast::after { animation: none !important; }
+  .app-toast { transform: none; }
+}

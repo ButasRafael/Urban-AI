@@ -30,6 +30,8 @@ import logging
 from app.core.security import require_roles
 from app.api.chat import router as chat_router
 from app.api.rag import router as rag_router
+from app.api.issues import router as issues_router
+from app.api.users import router as users_router
 from app.core.database import init_db
 
 
@@ -118,6 +120,8 @@ app.include_router(problems.router)
 app.include_router(analytics.router) 
 app.include_router(chat_router, prefix="/chat", tags=["Chat"])
 app.include_router(rag_router, prefix="/rag", tags=["RAG"])
+app.include_router(issues_router)
+app.include_router(users_router)
 
 app.add_route(
     "/metrics/raw",
@@ -129,9 +133,6 @@ app.add_route(
 
 @app.get("/metrics", dependencies=[require_roles("admin")])
 async def metrics(request: Request):
-    """
-    Return the metrics in a format that can be scraped by Prometheus.
-    """
     return handle_metrics(request)
 
 app.add_middleware(

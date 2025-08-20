@@ -19,18 +19,15 @@ export default function Landing() {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(getInitialTheme());
 
-  // redirect when logged in
   useEffect(() => {
     if (!loading && user) {
       nav(user.role === "admin" ? "/analytics" : "/map", { replace: true });
     }
   }, [user, loading, nav]);
 
-  // keep <html class="dark"> and localStorage in sync
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem("theme", theme);
-    // notify any listeners (e.g., map)
     window.dispatchEvent(new Event("themechange"));
   }, [theme]);
 
@@ -220,7 +217,6 @@ export default function Landing() {
   );
 }
 
-/* ---------- tiny icons ---------- */
 function IconMap() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">

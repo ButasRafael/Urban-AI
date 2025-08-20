@@ -1,4 +1,3 @@
-// src/screens/TestRefreshScreen.tsx
 import React from 'react'
 import { View, Button, Text } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -13,7 +12,6 @@ export default function TestRefreshScreen() {
   const onTest = async () => {
     append('▶️ Forcing invalid access token')
     await AsyncStorage.setItem('accessToken', 'invalid')
-    // assume refreshToken in storage is valid
     append('▶️ Calling /infer/list')
     client.get('/infer/list')
       .then(r => append(`✅ Success, got ${r.data.length} items`))

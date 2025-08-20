@@ -1,4 +1,3 @@
-// src/navigation/Stack.tsx
 import React from 'react';
 import { createSharedElementStackNavigator } from 'react-navigation-shared-element';
 import { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -8,7 +7,6 @@ import type { RootStackParamList } from './types';
 export const Stack = createSharedElementStackNavigator<RootStackParamList>();
 
 export const screenOptions = {
-  // ⬇️ fade-through for every push/pop except shared-element screens
   presentation: 'card' as const,
   animation: 'fade' as const,
   cardStyleInterpolator: ({ current, closing }: StackCardInterpolationProps) => ({
