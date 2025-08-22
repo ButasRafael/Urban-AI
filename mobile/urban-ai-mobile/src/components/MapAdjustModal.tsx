@@ -4,6 +4,7 @@ import MapView, { Marker, PROVIDER_GOOGLE, LatLng } from 'react-native-maps';
 import StyledButton from './StyledButton';
 import { useTheme } from '@shopify/restyle'
 import type { Theme } from '../theme'
+import { darkMapStyle, lightMapStyle } from '../theme/mapStyles'
 import { GOOGLE_API_KEY } from '../config';
 import { Alert } from 'react-native';
 
@@ -23,7 +24,9 @@ export default function MapAdjustModal({
   const mapRef = useRef<MapView>(null);
   const [coords, setCoords] = useState<LatLng>(initial);
   const [address, setAddress] = useState('');
-  const { colors } = useTheme<Theme>()
+  const t = useTheme<Theme>() as any
+  const colors = t.colors as Theme['colors']
+  const isDark = (t.mode as 'light' | 'dark') === 'dark'
 
   useEffect(() => {
     if (mapRef.current) {
@@ -79,6 +82,7 @@ export default function MapAdjustModal({
           ref={mapRef}
           provider={PROVIDER_GOOGLE}
           style={styles.map}
+          customMapStyle={isDark ? darkMapStyle : lightMapStyle}
           initialRegion={{
             ...initial,
             latitudeDelta: 0.01,

@@ -1,0 +1,13 @@
+{
+  "opacity": {
+    "overlayWeak": 0.08,
+    "overlayStrong": 0.15
+  },
+  "motion": {
+    "dur": { "xs": 120, "sm": 200, "md": 320, "lg": 420 },
+    "curve": {
+      "standard": [0.2, 0, 0, 1],
+      "emphasized": [0.2, 0, 0, 1]
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { Box, Text } from '../components/restylePrimitives';
 import Screen from '../components/ui/Screen';
 import HeroHeader from '../components/ui/HeroHeader';
 import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
 import StyledButton from '../components/StyledButton';
 import InlineNotice from '../components/ui/InlineNotice';
 import FullScreenLoader from '../components/FullScreenLoader';
@@ -223,46 +224,41 @@ export default function HomeScreen({ navigation }: Props) {
 
   const SelectedPreview = () =>
     selected ? (
-      <Box
-        mt="m"
-        p="m"
-        bg="surface0"
-        borderRadius="m"
-        borderWidth={1}
-        borderColor="muted"
-        flexDirection="row"
-        alignItems="center"
-      >
-        <Box
-          width={56}
-          height={56}
-          borderRadius="s"
-          overflow="hidden"
-          mr="m"
-          alignItems="center"
-          justifyContent="center"
-          bg="card"
-        >
-          {selected.isVideo ? (
-            <Feather name="video" size={22} color={theme.colors.primary500} />
-          ) : (
-            <Image source={{ uri: selected.uri }} style={{ width: 56, height: 56 }} resizeMode="cover" />
-          )}
+      <Box marginTop="m">
+        <Card variant="outlined" padding="m">
+        <Box flexDirection="row" alignItems="center">
+          <Box
+            width={56}
+            height={56}
+            borderRadius="s"
+            overflow="hidden"
+            mr="m"
+            alignItems="center"
+            justifyContent="center"
+            bg="card"
+          >
+            {selected.isVideo ? (
+              <Feather name="video" size={22} color={theme.colors.primary500} />
+            ) : (
+              <Image source={{ uri: selected.uri }} style={{ width: 56, height: 56 }} resizeMode="cover" />
+            )}
+          </Box>
+          <Box flex={1}>
+            <Text variant="label" color="text" numberOfLines={1}>
+              {friendlyFileName(selected.name)}
+            </Text>
+            <Text variant="label" color="muted" numberOfLines={1}>
+              {selected.isVideo ? 'Video' : 'Imagine'}
+            </Text>
+          </Box>
+          <StyledButton
+            title={<Feather name="x" size={16} />}
+            variant="ghost"
+            onPress={clearSelected}
+            size="sm"
+          />
         </Box>
-        <Box flex={1}>
-          <Text variant="label" color="text" numberOfLines={1}>
-            {friendlyFileName(selected.name)}
-          </Text>
-        <Text variant="label" color="muted" numberOfLines={1}>
-            {selected.isVideo ? 'Video' : 'Imagine'}
-          </Text>
-        </Box>
-        <StyledButton
-          title={<Feather name="x" size={16} />}
-          variant="ghost"
-          onPress={clearSelected}
-          size="sm"
-        />
+        </Card>
       </Box>
     ) : null;
 
@@ -298,33 +294,30 @@ export default function HomeScreen({ navigation }: Props) {
         {/* Lighter than auth: smaller hero, no blobs */}
         <HeroHeader
           title="Trimite sesizare"
-          subtitle="Încarcă o imagine sau un video"
-          height={180}
-          blobs={false}
+          subtitle="Încarcă o imagine sau video pentru analizare AI"
+          height={200}
+          blobs={true}
           rightSlot={
             <Box
               width={56}
               height={56}
               borderRadius="l"
-              bg="primary100"
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.15)',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.25)',
+                ...theme.shadows.sm,
+              }}
               alignItems="center"
               justifyContent="center"
-              style={{
-                shadowColor: '#000',
-                shadowOpacity: 0.08,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 3 },
-                elevation: 2,
-              }}
             >
-              <Feather name="upload-cloud" size={22} color={theme.colors.primary500} />
+              <Feather name="upload-cloud" size={24} color="#fff" />
             </Box>
           }
         />
 
-        <Box paddingHorizontal="l" style={{ marginTop: -28 }}>
-          {/* Lighter card: outlined, no gradient border */}
-          <Card variant="outlined" /* gradientBorder={false} */>
+        <Box paddingHorizontal="l" style={{ marginTop: -32 }}>
+          <Card variant="elevated" padding="l">
             {error && (
               <InlineNotice
                 variant="error"
@@ -336,9 +329,19 @@ export default function HomeScreen({ navigation }: Props) {
             )}
 
             {/* Step 1: pick file */}
-            <Text variant="label" color="muted" mb="s">
-              1. Alege fișierul
-            </Text>
+            <Box flexDirection="row" alignItems="center" marginBottom="s">
+              <Box
+                width={24} height={24} borderRadius="m"
+                backgroundColor="primary500" marginRight="s"
+                alignItems="center" justifyContent="center"
+                style={theme.shadows.sm}
+              >
+                <Text variant="caption" style={{ color: 'white', fontWeight: '800' }}>1</Text>
+              </Box>
+              <Text variant="subtitle" color="text">
+                Alege fișierul
+              </Text>
+            </Box>
             <Box flexDirection="row" columnGap="s">
               <StyledButton
                 title={
@@ -364,44 +367,62 @@ export default function HomeScreen({ navigation }: Props) {
 
             <SelectedPreview />
 
-            {/* Step 2: segmentation (tonal surface) */}
+            {/* Step 2: segmentation */}
             <Box mt="l">
-              <Text variant="label" color="muted" mb="s">
-                2. Segmentare
-              </Text>
-              <Box
-                p="m"
-                borderRadius="m"
-                bg="surface0"
-                borderWidth={1}
-                borderColor="muted"
-                flexDirection="row"
-                alignItems="center"
-                justifyContent="space-between"
-              >
-                <Box flex={1} mr="m">
-                  <Text variant="label" color="text">
-                    Măști precise
-                  </Text>
-                  <Text variant="label" color="muted">
-                    Când este activ, creează măști detaliate ale obiectelor pentru o localizare mai exactă.
-                  </Text>
+              <Box flexDirection="row" alignItems="center" marginBottom="s">
+                <Box
+                  width={24} height={24} borderRadius="m"
+                  backgroundColor="primary500" marginRight="s"
+                  alignItems="center" justifyContent="center"
+                  style={theme.shadows.sm}
+                >
+                  <Text variant="caption" style={{ color: 'white', fontWeight: '800' }}>2</Text>
                 </Box>
-                <StyledButton
-                  title={useSam ? 'Activ' : 'Inactiv'}
-                  variant={useSam ? 'primary' : 'ghost'} // secondary prominence
-                  onPress={() => setUseSam((s) => !s)}
-                  size="sm"
-                  accessibilityLabel={useSam ? 'Măști precise activate' : 'Măști precise dezactivate'}
-                />
+                <Text variant="subtitle" color="text">
+                  Opțiuni AI
+                </Text>
               </Box>
+              <Card variant="outlined" padding="m">
+                <Box flexDirection="row" alignItems="center" justifyContent="space-between">
+                  <Box flex={1} marginRight="m">
+                    <Box flexDirection="row" alignItems="center" marginBottom="xs">
+                      <Text variant="label" color="text" style={{ fontWeight: '600' }}>
+                        Segmentare precisă SAM2
+                      </Text>
+                      <Badge variant="primary" size="sm" style={{ marginLeft: 8 }}>
+                        AI
+                      </Badge>
+                    </Box>
+                    <Text variant="caption" color="muted">
+                      Creează măști detaliate ale obiectelor pentru analiză precisă
+                    </Text>
+                  </Box>
+                  <StyledButton
+                    title={useSam ? 'Activ' : 'Inactiv'}
+                    variant={useSam ? 'primary' : 'ghost'}
+                    onPress={() => setUseSam((s) => !s)}
+                    size="sm"
+                    accessibilityLabel={useSam ? 'Măști precise activate' : 'Măști precise dezactivate'}
+                  />
+                </Box>
+              </Card>
             </Box>
 
-            {/* Step 3: location (tonal/ghost) */}
+            {/* Step 3: location */}
             <Box mt="l">
-              <Text variant="label" color="muted" mb="s">
-                3. Locație
-              </Text>
+              <Box flexDirection="row" alignItems="center" marginBottom="s">
+                <Box
+                  width={24} height={24} borderRadius="m"
+                  backgroundColor="primary500" marginRight="s"
+                  alignItems="center" justifyContent="center"
+                  style={theme.shadows.sm}
+                >
+                  <Text variant="caption" style={{ color: 'white', fontWeight: '800' }}>3</Text>
+                </Box>
+                <Text variant="subtitle" color="text">
+                  Locație
+                </Text>
+              </Box>
               <Box flexDirection="row" columnGap="s">
                 <StyledButton
                   title={
@@ -436,31 +457,41 @@ export default function HomeScreen({ navigation }: Props) {
               ) : null}
             </Box>
 
-            {/* Primary CTA — strong prominence */}
-            <Box mt="l">
+            {/* Primary CTA */}
+            <Box mt="xl">
               <StyledButton
                 title={
                   <>
-                    <Feather name="upload" size={18} /> Încarcă
+                    <Feather name="zap" size={18} /> Analizează cu AI
                   </>
                 }
                 onPress={performUpload}
                 disabled={!canUpload}
                 gradient
                 fullWidth
+                size="lg"
                 loading={uploading}
-                loadingText="Se încarcă…"
+                loadingText="Se procesează..."
                 showSpinnerOnly={false}
               />
+              
+              {canUpload && (
+                <Box alignItems="center" marginTop="s">
+                  <Badge variant="success" size="sm" dot>
+                    Gata pentru analiză
+                  </Badge>
+                </Box>
+              )}
             </Box>
           </Card>
-          {/* Actions under the card */}
-            <Box mt="m">
+          {/* Quick Actions */}
+          <Box mt="l">
+            <Card variant="outlined" padding="m">
               <Box flexDirection="row" columnGap="s" alignItems="center">
                 <StyledButton
                   title={
                     <>
-                      <Feather name="image" size={16} /> Încărcările mele
+                      <Feather name="image" size={16} /> Galeria mea
                     </>
                   }
                   onPress={() => navigation.navigate('Gallery')}
@@ -471,7 +502,7 @@ export default function HomeScreen({ navigation }: Props) {
                 <StyledButton
                   title={
                     <>
-                      <Feather name="refresh-ccw" size={16} /> Test Refresh
+                      <Feather name="activity" size={16} /> Test
                     </>
                   }
                   onPress={() => navigation.navigate('TestRefresh')}
@@ -480,7 +511,8 @@ export default function HomeScreen({ navigation }: Props) {
                   size="sm"
                 />
               </Box>
-            </Box>
+            </Card>
+          </Box>
 
         </Box>
 

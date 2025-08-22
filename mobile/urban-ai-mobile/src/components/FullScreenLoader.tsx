@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Modal } from 'react-native';
 import LottieView from 'lottie-react-native';
+import {alpha} from "../theme/utils";
 
 export default function FullScreenLoader({ visible }: { visible: boolean }) {
   return (
@@ -20,7 +21,7 @@ export default function FullScreenLoader({ visible }: { visible: boolean }) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: alpha('#000', 0.08),
     justifyContent: 'center',
     alignItems: 'center',
   },

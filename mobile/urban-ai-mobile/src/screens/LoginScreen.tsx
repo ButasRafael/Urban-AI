@@ -24,6 +24,9 @@ import StyledInput from '../components/StyledInput';
 import StyledButton from '../components/StyledButton';
 import HeroHeader from '../components/ui/HeroHeader';
 import InlineNotice from '../components/ui/InlineNotice';
+import Badge from '../components/ui/Badge';
+import StatCard from '../components/ui/StatCard';
+import FeatureCard from '../components/ui/FeatureCard';
 import { login } from '../api/auth';
 import { notify } from '../components/ui/Toast';
 
@@ -137,36 +140,55 @@ export default function LoginScreen({ navigation }: Props) {
       edges={['left','right']}
       dismissKeyboardOnTap
       center
-      maxWidth={560}
+      maxWidth={640}
       statusBarStyle="light-content"
       translucentStatusBar
 >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View>
-          {/* Hero header with curved bottom */}
+          {/* Enhanced Hero Section */}
           <HeroHeader
-            title="Bine ai revenit"
-            subtitle="Autentifică-te pentru a continua"
+            title="Urban AI"
+            subtitle="Platforma inteligentă pentru sesizări urbane"
+            height={260}
+            blobs
             rightSlot={
-              <Box
-                width={56}
-                height={56}
-                borderRadius="l"
-                bg="primary100"
-                alignItems="center"
-                justifyContent="center"
-                style={{
-                  shadowColor: '#000',
-                  shadowOpacity: 0.08,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 2,
-                }}
-              >
-                <Feather name="map-pin" size={22} color={theme.colors.primary500} />
+              <Box alignItems="center">
+                <Box
+                  width={64}
+                  height={64}
+                  borderRadius="l"
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.25)',
+                    ...theme.shadows.md,
+                  }}
+                  alignItems="center"
+                  justifyContent="center"
+                  marginBottom="s"
+                >
+                  <Feather name="zap" size={28} color="#fff" />
+                </Box>
+                <Badge variant="primary" size="sm" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>AI Powered</Text>
+                </Badge>
               </Box>
             }
           />
+
+          {/* Quick Stats Row (lift a bit less since header is shorter) */}
+          <Box
+            paddingHorizontal="l"
+            style={{ marginTop: -48, zIndex: 2 }} // ⬅️ was -60
+            marginBottom="l"
+          >
+            <Box flexDirection="row" style={{ gap: 8 }}>
+              <StatCard value="500+" label="Sesizări" style={{ flex: 1 }} />
+              <StatCard value="98%" label="Acuratețe AI" style={{ flex: 1 }} />
+              <StatCard value="24h" label="Răspuns" style={{ flex: 1 }} />
+            </Box>
+          </Box>
 
           {/* Floating auth card */}
           <Animated.View
@@ -183,141 +205,277 @@ export default function LoginScreen({ navigation }: Props) {
               opacity: cardOpacity,
             }}
           >
-            <Box paddingHorizontal="l" style={{ marginTop: -40, zIndex: 1 }}>
-              <Card variant="elevated" gradientBorder>
-                {/* card header */}
-                <Box mb="m" alignItems="center">
-                  <Text variant="title" color="text">
-                    Autentificare
+            <Box paddingHorizontal="l">
+              <Card variant="elevated" gradientBorder padding="xl">
+                {/* Enhanced Header */}
+                <Box alignItems="center" marginBottom="l">
+                  <Box
+                    width={48}
+                    height={48}
+                    borderRadius="l"
+                    backgroundColor="primary100"
+                    borderColor="primary300"
+                    borderWidth={1}
+                    alignItems="center"
+                    justifyContent="center"
+                    marginBottom="m"
+                    style={theme.shadows.sm}
+                  >
+                    <Feather name="user" size={24} color={theme.colors.primary700} />
+                  </Box>
+                  
+                  <Text variant="hero" color="text" textAlign="center" marginBottom="xs">
+                    Bun venit înapoi
                   </Text>
-                  <Text variant="label" color="muted">
-                    Introdu datele contului tău
+                  
+                  <Text variant="body" color="muted" textAlign="center">
+                    Conectează-te la contul tău Urban AI
                   </Text>
+                  
+                  <Box flexDirection="row" alignItems="center" marginTop="s" style={{ gap: 4 }}>
+                    <Badge variant="success" size="sm" dot>
+                      Securizat
+                    </Badge>
+                    <Badge variant="primary" size="sm">
+                      Rapid
+                    </Badge>
+                  </Box>
                 </Box>
 
                 {topError ? (
-                  <InlineNotice
-                    variant="error"
-                    title="Verifică datele"
-                    message={topError}
-                    compact
-                    style={{ marginBottom: 12 }}
-                  />
+                  <Box marginBottom="m">
+                    <InlineNotice
+                      variant="error"
+                      title="Verifică datele"
+                      message={topError}
+                      compact
+                    />
+                  </Box>
                 ) : null}
 
-                {/* username */}
-                <Controller
-                  name="username"
-                  control={control}
-                  render={({ field: { value, onChange, onBlur } }) => (
-                    <StyledInput
-                      leftIcon="user"
-                      value={value}
-                      onChangeText={onChange}
-                      placeholder="Utilizator"
-                      returnKeyType="next"
-                      onBlur={onBlur}
-                      onSubmitEditing={() => passwordRef.current?.focus()}
-                      autoComplete="username"
-                      textContentType="username"
-                      errorText={errors.username?.message}
-                      allowClear
-                      style={{ marginBottom: theme.spacing.m }}
-                    />
-                  )}
-                />
+                {/* Enhanced Username Input */}
+                <Box marginBottom="s">
+                  <Text variant="label" color="text" marginBottom="xs" style={{ fontWeight: '600' }}>
+                    Nume utilizator
+                  </Text>
+                  <Controller
+                    name="username"
+                    control={control}
+                    render={({ field: { value, onChange, onBlur } }) => (
+                      <StyledInput
+                        leftIcon="user"
+                        value={value}
+                        onChangeText={onChange}
+                        placeholder="Introdu numele de utilizator"
+                        returnKeyType="next"
+                        onBlur={onBlur}
+                        onSubmitEditing={() => passwordRef.current?.focus()}
+                        autoComplete="username"
+                        textContentType="username"
+                        allowClear
+                        errorText={errors.username?.message}
+                        helperText={!errors.username?.message ? "Minim 3 caractere" : undefined}
+                      />
+                    )}
+                  />
+                </Box>
 
-                {/* password */}
-                <Controller
-                  name="password"
-                  control={control}
-                  render={({ field: { value, onChange, onBlur } }) => (
-                    <StyledInput
-                      ref={passwordRef}
-                      leftIcon="lock"
-                      value={value}
-                      onChangeText={onChange}
-                      placeholder="Parolă"
-                      secureTextEntry
-                      passwordToggle
-                      returnKeyType="go"
-                      onBlur={onBlur}
-                      onSubmitEditing={handleSubmit(onSubmit, onInvalid)}
-                      autoComplete="password"
-                      textContentType="password"
-                      errorText={errors.password?.message}
-                      style={{ marginBottom: theme.spacing.s }}
-                    />
-                  )}
-                />
+                {/* Enhanced Password Input */}
+                <Box marginBottom="l">
+                  <Text variant="label" color="text" marginBottom="xs" style={{ fontWeight: '600' }}>
+                    Parolă
+                  </Text>
+                  <Controller
+                    name="password"
+                    control={control}
+                    render={({ field: { value, onChange, onBlur } }) => (
+                      <StyledInput
+                        ref={passwordRef}
+                        leftIcon="lock"
+                        value={value}
+                        onChangeText={onChange}
+                        placeholder="Introdu parola"
+                        secureTextEntry
+                        passwordToggle
+                        returnKeyType="go"
+                        onBlur={onBlur}
+                        onSubmitEditing={handleSubmit(onSubmit, onInvalid)}
+                        autoComplete="password"
+                        textContentType="password"
+                        errorText={errors.password?.message}
+                        helperText={!errors.password?.message ? "Minim 6 caractere" : undefined}
+                      />
+                    )}
+                  />
+                </Box>
 
-                {/* remember / forgot */}
-                <Box flexDirection="row" alignItems="center" justifyContent="space-between" mb="m">
+                {/* Enhanced Remember Toggle */}
+                <Box 
+                  flexDirection="row" 
+                  alignItems="center" 
+                  justifyContent="space-between" 
+                  marginBottom="m"
+                  padding="m"
+                  backgroundColor="surface50"
+                  borderRadius="m"
+                  borderWidth={1}
+                  borderColor="border"
+                >
+                  <Box flex={1}>
+                    <Text variant="label" color="text" style={{ fontWeight: '600' }} marginBottom="xs">
+                      Ține-mă minte
+                    </Text>
+                    <Text variant="caption" color="muted">
+                      Nu vei mai fi nevoit să te autentifici din nou
+                    </Text>
+                  </Box>
                   <Controller
                     name="remember"
                     control={control}
                     render={({ field: { value, onChange } }) => (
-                      <Box flexDirection="row" alignItems="center">
-                        <Switch
-                          value={value}
-                          onValueChange={onChange}
-                          thumbColor={value ? theme.colors.primary500 : '#fff'}
-                          trackColor={{ false: '#CDD6E1', true: theme.colors.primary300 }}
-                        />
-                        <Text variant="label" color="text" style={{ marginLeft: 8 }}>
-                          Ține-mă minte
-                        </Text>
-                      </Box>
+                      <Switch
+                        value={value}
+                        onValueChange={onChange}
+                        trackColor={{ false: theme.colors.muted, true: theme.colors.primary300 }}
+                        thumbColor={value ? theme.colors.primary500 : '#f4f3f4'}
+                        ios_backgroundColor={theme.colors.muted}
+                      />
                     )}
                   />
-
+                </Box>
+                
+                {/* Forgot Password Link */}
+                <Box alignItems="center" marginBottom="xl">
                   <Text
-                    variant="label"
+                    variant="caption"
                     color="primary500"
+                    style={{ textDecorationLine: 'underline' }}
                     onPress={() => notify.info('Contactează administratorul pentru resetare parolă.')}
                   >
                     Ai uitat parola?
                   </Text>
                 </Box>
 
-                {/* submit */}
+                {/* Enhanced Login Button */}
                 <StyledButton
-                  title="Autentificare"
+                  title="Conectează-te"
                   onPress={handleSubmit(onSubmit, onInvalid)}
                   disabled={!canSubmit}
                   loading={isSubmitting}
-                  size="lg"
                   gradient
-                  leftIconName="log-in"
+                  size="lg"
+                  leftIconName="zap"
                   fullWidth
-                  loadingText="Se autentifică…"
+                  radius="l" // softer, pill-like
+                  loadingText="Se conectează…"
                   showSpinnerOnly={false}
-                  style={{ marginTop: 4 }}
+                  style={{
+                    // lighter, softer shadow
+                    shadowColor: '#000',
+                    shadowOpacity: 0.04,
+                    shadowRadius: 3,
+                    shadowOffset: { width: 0, height: 2 },
+                    elevation: 0, // no harsh Android drop
+                    // subtle outline to define edge on both themes
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.18)',
+                  }}
                 />
 
-                {/* divider */}
-                <Box flexDirection="row" alignItems="center" justifyContent="center" mt="m" mb="s">
-                  <View style={{ height: 1, flex: 1, backgroundColor: '#E6E9EF' }} />
-                  <Text variant="label" color="muted" style={{ marginHorizontal: 8 }}>
-                    sau
-                  </Text>
-                  <View style={{ height: 1, flex: 1, backgroundColor: '#E6E9EF' }} />
+
+                {/* Enhanced Divider */}
+                <Box 
+                  flexDirection="row" 
+                  alignItems="center" 
+                  justifyContent="center" 
+                  marginBottom="l"
+                >
+                  <Box 
+                    height={1} 
+                    flex={1} 
+                    backgroundColor="border" 
+                  />
+                  <Box 
+                    backgroundColor="card"
+                    paddingHorizontal="m"
+                    paddingVertical="xs"
+                    borderRadius="l"
+                    borderWidth={1}
+                    borderColor="border"
+                  >
+                    <Text variant="caption" color="muted" style={{ fontWeight: '600' }}>
+                      sau
+                    </Text>
+                  </Box>
+                  <Box 
+                    height={1} 
+                    flex={1} 
+                    backgroundColor="border" 
+                  />
                 </Box>
 
-                {/* secondary CTA */}
-                <StyledButton
-                  title="Nu ai cont? Creează unul"
-                  variant="ghost"
-                  onPress={() => navigation.navigate('Register')}
-                  size="sm"
-                  style={{ alignSelf: 'center' }}
-                />
+                {/* Enhanced Register Link */}
+                <Box alignItems="center">
+                  <Text variant="caption" color="muted" marginBottom="s" textAlign="center">
+                    Nu ai încă un cont?
+                  </Text>
+                  <StyledButton
+                    title="Creează cont nou"
+                    variant="tonal"
+                    onPress={() => navigation.navigate('Register')}
+                    leftIconName="user-plus"
+                    size="sm"
+                  />
+                </Box>
               </Card>
             </Box>
           </Animated.View>
+          
+          {/* Feature Highlights */}
+          <Box paddingHorizontal="l" marginTop="l" marginBottom="xl">
+            <Text 
+              variant="subtitle" 
+              color="text" 
+              textAlign="center" 
+              marginBottom="l"
+              style={{ fontWeight: '700' }}
+            >
+              De ce Urban AI?
+            </Text>
+            
+            <Box flexDirection="row" style={{ gap: 8 }} marginBottom="m">
+              <FeatureCard 
+                icon="zap"
+                title="AI Avansat"
+                description="Detectează probleme urban cu acuratețe de 98%"
+                style={{ flex: 1 }}
+              />
+              <FeatureCard 
+                icon="shield"
+                title="Securitate"
+                description="Date protejate cu criptare end-to-end"
+                style={{ flex: 1 }}
+              />
+            </Box>
+            
+            <Box flexDirection="row" style={{ gap: 8 }}>
+              <FeatureCard 
+                icon="clock"
+                title="24/7 Disponibil"
+                description="Raportează probleme oricând"
+                style={{ flex: 1 }}
+              />
+              <FeatureCard 
+                icon="users"
+                title="Comunitate"
+                description="Îmbunătățim împreună orașul"
+                style={{ flex: 1 }}
+              />
+            </Box>
+          </Box>
 
           {/* bottom space */}
-          <Box height={theme.spacing.l} />
+          <Box height={theme.spacing.xl} />
         </View>
       </TouchableWithoutFeedback>
     </Screen>

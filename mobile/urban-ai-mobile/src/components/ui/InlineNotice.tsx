@@ -4,6 +4,8 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@shopify/restyle';
 import { Box, Text } from '../restylePrimitives';
 import type { Theme } from '../../theme';
+import { alpha, opacity } from '../../theme/utils';
+import {motion} from "../../theme/motion";
 
 type Variant = 'error' | 'success' | 'info' | 'warning';
 
@@ -14,15 +16,6 @@ type Props = {
   onClose?: () => void;
   style?: ViewStyle;
   compact?: boolean;
-};
-
-const hexToRgba = (hex: string, alpha = 1) => {
-  const clean = hex.replace('#', '');
-  const bigint = parseInt(clean, 16);
-  const r = (bigint >> 16) & 255;
-  const g = (bigint >> 8) & 255;
-  const b = bigint & 255;
-  return `rgba(${r},${g},${b},${alpha})`;
 };
 
 export default function InlineNotice({
@@ -39,7 +32,7 @@ export default function InlineNotice({
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fade, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 1, duration: motion.dur.xs, easing: motion.curve.standard, useNativeDriver: true }),
       Animated.spring(slide, { toValue: 0, useNativeDriver: true }),
     ]).start();
   }, [fade, slide]);
@@ -52,8 +45,8 @@ export default function InlineNotice({
   };
 
   const accent = colorMap[variant];
-  const bgTint = hexToRgba(accent, 0.08);
-  const borderTint = hexToRgba(accent, 0.35);
+  const bgTint = alpha(accent, opacity.overlayWeak);
+  const borderTint = alpha(accent, 0.35);
 
   const iconMap: Record<Variant, React.ComponentProps<typeof Feather>['name']> = {
     error: 'alert-circle',

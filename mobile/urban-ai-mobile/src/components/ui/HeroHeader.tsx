@@ -1,10 +1,12 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Animated, Easing, StyleSheet } from 'react-native';
+import { View, Animated, StyleSheet } from 'react-native';
 import { useTheme } from '@shopify/restyle';
 import type { Theme } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { Box, Text } from '../restylePrimitives';
+import { alpha, opacity } from '../../theme/utils';
+import { motion } from '../../theme/motion';
 
 type Props = {
   height?: number;
@@ -25,11 +27,11 @@ export default function HeroHeader({
   const logoScale = useRef(new Animated.Value(0.92)).current;
 
   useEffect(() => {
-    Animated.sequence([
+      Animated.sequence([
       Animated.timing(logoScale, {
         toValue: 1.04,
-        duration: 300,
-        easing: Easing.out(Easing.quad),
+        duration: motion.dur.sm,
+        easing: motion.curve.standard,
         useNativeDriver: true,
       }),
       Animated.spring(logoScale, { toValue: 1, useNativeDriver: true }),
@@ -40,39 +42,63 @@ export default function HeroHeader({
 
   return (
     <View style={{ height, position: 'relative' }}>
-      {/* gradient background */}
+      {/* gradient background - matching web design */}
       <LinearGradient
-        colors={[theme.colors.primary700, theme.colors.primary500]}
+        colors={[
+          theme.colors.primary300,
+          theme.colors.primary500,
+          theme.colors.secondary500,
+        ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* soft blobs */}
+      {/* Subtle overlay for better text contrast */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: alpha('#000', opacity.overlayWeak) },
+        ]}
+      />
+
+      {/* Web-inspired gradient blobs */}
       {blobs && (
         <>
           <View
             pointerEvents="none"
             style={{
               position: 'absolute',
-              top: -30,
-              right: -30,
-              width: 140,
-              height: 140,
+              top: -50,
+              right: -50,
+              width: 180,
+              height: 180,
               borderRadius: 999,
-              backgroundColor: 'rgba(255,255,255,0.12)',
+              backgroundColor: alpha(theme.colors.primary100, opacity.overlayStrong),
             }}
           />
           <View
             pointerEvents="none"
             style={{
               position: 'absolute',
-              top: 20,
-              left: -20,
-              width: 90,
-              height: 90,
+              top: 40,
+              left: -40,
+              width: 120,
+              height: 120,
               borderRadius: 999,
-              backgroundColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: alpha(theme.colors.secondary300, opacity.overlayWeak),
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              bottom: 20,
+              right: 30,
+              width: 80,
+              height: 80,
+              borderRadius: 999,
+              backgroundColor: alpha(theme.colors.surface0, opacity.overlayWeak),
             }}
           />
         </>
@@ -92,15 +118,36 @@ export default function HeroHeader({
           right: 0,
         }}
       >
-        <Box>
-          <Text variant="title" style={{ color: '#fff' }}>
+        <Box flex={1}>
+          <Text
+            variant="display"
+            style={{
+              color: '#fff',
+              fontSize: 28,
+              fontWeight: '800',
+              letterSpacing: 0.3,
+              textShadowColor: 'rgba(0,0,0,0.3)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 3,
+            }}
+          >
             {title}
           </Text>
         </Box>
 
         {subtitle ? (
-          <Box position="absolute" left={24} bottom={4}>
-            <Text variant="label" style={{ color: '#ffffffcc' }}>
+          <Box position="absolute" left={24} bottom={-6}>
+            <Text
+              variant="body"
+              style={{
+                color: '#ffffffdd',
+                fontSize: 14,
+                lineHeight: 18,
+                textShadowColor: 'rgba(0,0,0,0.2)',
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 2,
+              }}
+            >
               {subtitle}
             </Text>
           </Box>

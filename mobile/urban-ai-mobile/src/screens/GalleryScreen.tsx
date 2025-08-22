@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import {
   SafeAreaView,
   FlatList,
-  Animated,
+  Animated as RNAnimated,
   Image,
   ActivityIndicator,
   Pressable,
@@ -11,6 +11,7 @@ import {
   View,
   Platform,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '@shopify/restyle';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -22,6 +23,9 @@ import { spacing } from '../theme';
 import { RootStackParamList } from '../navigation/types';
 import client from '../api/client';
 import { API_BASE } from '../config';
+import { alpha } from '../theme/utils';
+import { Skeleton } from '../components/ui/Skeleton';
+import { usePressable } from '../hooks/usePressable';
 
 type MediaItem = {
   media_id: number;
@@ -58,29 +62,17 @@ const firstNonEmpty = (arr?: string[]) => (arr && arr.length ? arr[0] : '');
 const GalleryItem: React.FC<GalleryItemProps> = React.memo(
   ({ item, thumbUri, size, marginRight, navigation, isLastInRow }) => {
     const theme = useTheme<Theme>();
-    const pressScale = useRef(new Animated.Value(1)).current;
-    const fadeIn = useRef(new Animated.Value(0)).current;
+    const fadeIn = useRef(new RNAnimated.Value(0)).current;
+    const pressable = usePressable({ scaleTo: 0.97, pressedOpacity: 0.96, spring: true });
 
-    const onPressIn = () =>
-      Animated.spring(pressScale, {
-        toValue: 0.97,
-        useNativeDriver: true,
-        speed: 50,
-        bounciness: 6,
-      }).start();
-    const onPressOut = () =>
-      Animated.spring(pressScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        speed: 50,
-        bounciness: 6,
-      }).start();
+    const onPressIn = pressable.onPressIn;
+    const onPressOut = pressable.onPressOut;
 
     const base = item.media_type === 'image'
     ? item.annotated_image_url
     : (thumbUri || item.annotated_video_url);const resolved = base?.startsWith('/') ? API_BASE + base : base;
     const onLoad = () =>
-      Animated.timing(fadeIn, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+      RNAnimated.timing(fadeIn, { toValue: 1, duration: 250, useNativeDriver: true }).start();
 
     const goDetail = () =>
       navigation.navigate('Detail', {
@@ -117,7 +109,8 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
               borderRadius: theme.borderRadii.m,
               backgroundColor: theme.colors.surface0,
               borderColor: theme.colors.muted,
-              transform: [{ scale: pressScale }],
+              // scale + opacity from hook
+              ...(pressable.animatedStyle as any),
               ...(Platform.OS === 'ios'
                 ? {
                     shadowColor: '#000',
@@ -131,7 +124,7 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
         >
           {/* media */}
           {resolved ? (
-            <Animated.Image
+            <RNAnimated.Image
               source={{ uri: resolved }}
               style={[styles.media, { opacity: fadeIn }]}
               resizeMode="cover"
@@ -168,7 +161,7 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
 
           {/* bottom gradient + meta */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.55)']}
+            colors={['transparent', alpha('#000', 0.55)]}
             style={styles.gradient}
           />
           <View style={styles.metaRow}>
@@ -218,7 +211,6 @@ export default function GalleryScreen({ navigation }: Props) {
       const items = r.data ?? [];
       setData(items);
 
-      // Create thumbnails for videos
       items.forEach((item) => {
         if (item.media_type === 'video' && item.annotated_video_url) {
           const uri = item.annotated_video_url.startsWith('/')
@@ -256,13 +248,35 @@ export default function GalleryScreen({ navigation }: Props) {
   }, [data, filter]);
 
   if (loading) {
+    const placeholders = Array.from({ length: columns * 6 }, (_, i) => i);
     return (
       <SafeAreaView style={{ flex: 1 }}>
-        <Box flex={1} bg="background" p="m" alignItems="center" justifyContent="center">
-          <ActivityIndicator size="large" color={theme.colors.text} />
-          <Text variant="label" color="muted" mt="m">
-            Se încarcă galeria…
-          </Text>
+        <Box flex={1} bg="background" p="m">
+          <FlatList
+            data={placeholders}
+            keyExtractor={(i) => `ph-${i}`}
+            numColumns={columns}
+            contentContainerStyle={{
+              paddingBottom: spacing.l,
+              paddingLeft: horizontalPad,
+              paddingRight: horizontalPad,
+            }}
+            renderItem={({ index }) => {
+              const isLastInRow = (index + 1) % columns === 0;
+              return (
+                <Box
+                  style={{
+                    width: itemSize,
+                    height: itemSize,
+                    marginRight: isLastInRow ? 0 : gutter,
+                    marginBottom: gutter,
+                  }}
+                >
+                  <Skeleton width={itemSize} height={itemSize} radius="m" />
+                </Box>
+              );
+            }}
+          />
         </Box>
       </SafeAreaView>
     );
@@ -377,7 +391,7 @@ export default function GalleryScreen({ navigation }: Props) {
           windowSize={7}
           removeClippedSubviews
           getItemLayout={(_, index) => {
-            // Helps scroll perf a bit (square items, fixed size rows)
+
             const row = Math.floor(index / columns);
             const rowHeight = itemSize + gutter;
             return {

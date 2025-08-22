@@ -69,38 +69,89 @@ export const radii = {
   l: 16,
 } as const
 
+export const shadows = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+} as const
+
+export const gradients = {
+  primary: ['#A8E0D6', '#16A085'],
+  secondary: ['#C7DCEC', '#2C3E50'],
+  hero: ['rgba(232, 246, 243, 0.8)', 'rgba(168, 224, 214, 0.6)'],
+  heroDark: ['rgba(6, 77, 61, 0.8)', 'rgba(14, 124, 100, 0.6)'],
+} as const
+
 export const textVariants = {
   defaults: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24 },
-  display: { fontFamily: 'Inter_700Bold',   fontSize: 32, lineHeight: 40 },
-  title:   { fontFamily: 'Inter_600SemiBold',fontSize: 22, lineHeight: 28 },
-  body:    { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24 },
-  label:   { fontFamily: 'Inter_500Medium',  fontSize: 14, lineHeight: 20 },
+  display: { fontFamily: 'Inter_700Bold', fontSize: 32, lineHeight: 40, letterSpacing: 0.2 },
+  hero: { fontFamily: 'Inter_800ExtraBold', fontSize: 28, lineHeight: 36, letterSpacing: 0.2 },
+  title: { fontFamily: 'Inter_600SemiBold', fontSize: 22, lineHeight: 28 },
+  subtitle: { fontFamily: 'Inter_500Medium', fontSize: 18, lineHeight: 24 },
+  body: { fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24 },
+  label: { fontFamily: 'Inter_500Medium', fontSize: 14, lineHeight: 20 },
+  caption: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 16 },
 } as const
 
 export const lightTheme = createTheme({
+  mode: 'light' as const,
   colors: {
     ...palette.light,
     background: palette.light.surface100,
-    card:       palette.light.surface0,
-    text:       palette.light.onSurface,
-    muted:      palette.light.secondary300,
+    card: palette.light.surface0,
+    text: palette.light.onSurface,
+    muted: palette.light.secondary300,
+    surface50: '#F8FAFA',
+    surface200: '#E5E7EB',
+    surface300: '#D1D5DB',
+
+    border: palette.light.secondary100,
+    borderFocus: palette.light.primary500,
   },
   spacing,
   borderRadii: radii,
   textVariants,
+  shadows,
 })
 
 export const darkTheme = createTheme({
+  mode: 'dark' as const,
   colors: {
     ...palette.dark,
     background: palette.dark.surface0,
-    card:       palette.dark.surface100,
-    text:       palette.dark.onSurface,
-    muted:      palette.dark.secondary500,
+    card: palette.dark.surface100,
+    text: palette.dark.onSurface,
+    muted: palette.dark.secondary500,
+
+    surface50: '#0B1220',
+    surface200: '#1F2C38',
+    surface300: '#2A3A4A',
+
+    border: palette.dark.secondary300,
+    borderFocus: palette.dark.primary500,
   },
   spacing,
   borderRadii: radii,
   textVariants,
+  shadows,
 })
 
 export type Theme = typeof lightTheme

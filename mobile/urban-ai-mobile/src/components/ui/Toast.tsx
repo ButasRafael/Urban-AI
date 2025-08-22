@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
 import { getDefaultHeaderHeight } from '@react-navigation/elements';
 import { Dimensions } from 'react-native';
+import { alpha, opacity } from '../../theme/utils';
 
 type Kind = 'success' | 'error' | 'info';
 
@@ -35,6 +36,8 @@ const ToastView = ({ text1, text2, props }: BaseToastProps & { props: { kind: Ki
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 3 },
         elevation: 4,
+        borderWidth: 1,
+        borderColor: alpha(map.color, opacity.overlayWeak),
       }}
     >
       <Box flexDirection="row" alignItems="flex-start">

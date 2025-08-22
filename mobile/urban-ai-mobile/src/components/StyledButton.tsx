@@ -13,6 +13,8 @@ import { useTheme } from '@shopify/restyle';
 import { Feather } from '@expo/vector-icons';
 import { Box, Text } from './restylePrimitives';
 import type { Theme } from '../theme';
+import { alpha, opacity } from '../theme/utils';
+import { motion } from '../theme/motion';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'tonal' | 'danger';
 type BoxColor = keyof Theme['colors'] | 'transparent';
@@ -120,14 +122,9 @@ export default function StyledButton({
   }
 
   const tactileShadow: ViewStyle =
-    Platform.OS === 'ios'
-      ? {
-          shadowColor: '#000',
-          shadowOpacity: 0.12,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: 3 },
-        }
-      : { elevation: 2 };
+    variant === 'ghost' || variant === 'tonal'
+      ? {} // No shadow for ghost/tonal variants
+      : theme.shadows.sm; // Use consistent shadow system
 
   const computedRadius = theme.borderRadii[radius];
 
@@ -198,7 +195,7 @@ export default function StyledButton({
         theme.colors.secondary700 ?? theme.colors.primary700,
         theme.colors.secondary500 ?? theme.colors.primary500,
       ]
-    : [theme.colors.primary700, theme.colors.primary500];
+    : [theme.colors.primary300, theme.colors.primary500]; // Softer gradient matching web
 
   return (
     <Animated.View style={{ transform: [{ scale }], flex, width: fullWidth ? '100%' : undefined }}>

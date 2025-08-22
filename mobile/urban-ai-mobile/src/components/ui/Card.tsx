@@ -4,6 +4,7 @@ import { useTheme } from '@shopify/restyle';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Box } from '../restylePrimitives';
 import type { Theme } from '../../theme';
+import { alpha, opacity } from '../../theme/utils';
 
 type CardVariant = 'elevated' | 'outlined' | 'tonal' | 'flat';
 
@@ -18,16 +19,17 @@ type Props = PropsWithChildren<{
   radius?: keyof Theme['borderRadii'];
 }>;
 
-function platformShadow(intensity = 6): ViewStyle {
-  if (Platform.OS === 'ios') {
-    return {
-      shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: intensity,
-      shadowOffset: { width: 0, height: Math.round(intensity / 2) },
-    };
+function getCardShadow(variant: CardVariant, theme: Theme): ViewStyle {
+  switch (variant) {
+    case 'elevated':
+      return theme.shadows.md;
+    case 'outlined':
+      return theme.shadows.sm;
+    case 'tonal':
+      return theme.shadows.sm;
+    default:
+      return {};
   }
-  return { elevation: Math.max(2, Math.round(intensity / 2)) };
 }
 
 const Card = forwardRef<any, Props>(function Card(
@@ -57,12 +59,13 @@ const Card = forwardRef<any, Props>(function Card(
       p={padding}
       borderRadius={radius}
       borderWidth={variant === 'outlined' ? 1 : 0}
-      borderColor={variant === 'outlined' ? 'muted' : 'transparent'}
+      borderColor={variant === 'outlined' ? 'border' : 'transparent'}
       style={[
-        variant === 'elevated' ? platformShadow(6) : null,
+        getCardShadow(variant, theme),
         // Keep rounded corners respected for inner content
         { overflow: variant === 'flat' ? 'visible' : 'hidden' },
-        style,
+          variant === 'tonal' ? { backgroundColor: alpha(theme.colors.primary100, opacity.overlayWeak) } : null,
+          style,
       ]}
     >
       {header ? <Box mb="m">{header}</Box> : null}
@@ -100,7 +103,7 @@ const Card = forwardRef<any, Props>(function Card(
         onPress={onPress}
         onPressIn={pressIn}
         onPressOut={pressOut}
-        android_ripple={{ color: '#00000014' }}
+        android_ripple={{ color: alpha(theme.colors.text, opacity.overlayWeak) }}
         style={{ borderRadius: theme.borderRadii[radius] }}
       >
         {body}

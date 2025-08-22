@@ -68,7 +68,7 @@ const StyledInput = forwardRef<RNTextInput, Props>(function StyledInput(
   const hasError = Boolean(errorText);
   const hasValue = value?.length > 0;
 
-  const borderToken = hasError ? 'error' : focused ? 'primary500' : 'muted';
+  const borderToken = hasError ? 'error' : focused ? 'borderFocus' : 'border';
   const containerOpacity = disabled ? 0.5 : 1;
 
   const focusInput = () => {
@@ -84,9 +84,9 @@ const StyledInput = forwardRef<RNTextInput, Props>(function StyledInput(
           borderWidth={1}
           borderColor={borderToken}
           borderRadius="m"
-          backgroundColor="surface0"
+          backgroundColor="card"
           marginBottom="m"
-          style={[shadowStyle, style, { position: 'relative' }]}
+          style={[theme.shadows.sm, style, { position: 'relative' }]}
           accessibilityRole="text"
           accessibilityLabel={placeholder}
         >

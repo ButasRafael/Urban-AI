@@ -20,6 +20,7 @@ import { GOOGLE_API_KEY } from '../config';
 import StyledButton from './StyledButton';
 import { useTheme } from '@shopify/restyle'
 import type { Theme } from '../theme'
+import { darkMapStyle, lightMapStyle } from '../theme/mapStyles'
 
 type Props = {
   visible: boolean;
@@ -32,7 +33,9 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
   const [address, setAddress] = useState('');
   const placesRef = useRef<GooglePlacesAutocompleteRef>(null);
   const mapRef = useRef<MapView>(null);
-  const { colors } = useTheme<Theme>()
+  const t = useTheme<Theme>() as any
+  const colors = t.colors as Theme['colors']
+  const isDark = (t.mode as 'light' | 'dark') === 'dark'
   useEffect(() => {
     if (coords && mapRef.current) {
       mapRef.current.animateToRegion(
@@ -89,6 +92,7 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
             ref={mapRef}
             provider={PROVIDER_GOOGLE}
             style={StyleSheet.absoluteFillObject}
+            customMapStyle={isDark ? darkMapStyle : lightMapStyle}
             initialRegion={{
               ...coords,
               latitudeDelta: 0.01,
@@ -139,6 +143,8 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
               autoCapitalize: 'none',
               autoCorrect: false,
               returnKeyType: 'search',
+              placeholderTextColor: isDark ? '#A0AEC0' : '#6B7280',
+              style: { color: colors.text },
             }}
             styles={{
               container: {
@@ -150,7 +156,7 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
                 elevation: 100,
               },
               textInputContainer: {
-                backgroundColor: 'white',
+                backgroundColor: colors.card,
                 borderTopWidth: 0,
                 borderBottomWidth: 0,
                 paddingHorizontal: 0,
@@ -160,7 +166,7 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm }: Pro
                 fontSize: 16,
               },
               listView: {
-                backgroundColor: 'white',
+                backgroundColor: colors.card,
                 zIndex: 100,
                 elevation: 100,
                 marginTop: 4,
