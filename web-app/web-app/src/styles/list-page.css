@@ -201,6 +201,31 @@
   box-shadow: 0 1px 6px rgba(0,0,0,.18);
 }
 
+.videoThumb {
+  position: relative;
+  width: 100%;
+}
+
+.videoThumb video {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--surface-200);
+  background: #000;
+  box-shadow: 0 1px 6px rgba(0,0,0,.18);
+  object-fit: cover;
+}
+
+.videoOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .cardActions {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 10px 12px 12px;
@@ -313,6 +338,33 @@
   border: 1px solid var(--surface-200);
   background: var(--surface-0);
   box-shadow: 0 1px 6px rgba(0,0,0,.18);
+}
+
+.videoThumbTable {
+  position: relative;
+  width: 80px;
+  margin: 0 auto;
+}
+
+.videoThumbTable video {
+  border-radius: 8px;
+  width: 80px;
+  display: block;
+  border: 1px solid var(--surface-200);
+  background: #000;
+  box-shadow: 0 1px 6px rgba(0,0,0,.18);
+  object-fit: cover;
+}
+
+.videoOverlayTable {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* sticky header with subtle bottom shadow for separation */

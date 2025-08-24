@@ -3,7 +3,7 @@ from fastapi import (
     BackgroundTasks
 )
 from pathlib import Path
-import shutil, uuid, logging, time
+import shutil, uuid, logging, time, subprocess
 from app.models.schemas_inference import (
     ImageResponse, VideoResponse, FrameOut, MediaListItem
 )
@@ -36,6 +36,133 @@ def _geohash6(lat: float | None, lon: float | None) -> str | None:
         except Exception:
             pass
     return None
+
+_FFMPEG_PATH = None
+
+def _find_ffmpeg():
+    global _FFMPEG_PATH
+    if _FFMPEG_PATH is not None:
+        return _FFMPEG_PATH
+    
+    import shutil
+
+    try:
+        which_result = shutil.which("ffmpeg")
+        if which_result:
+            result = subprocess.run([which_result, "-version"], 
+                                  stdout=subprocess.PIPE, 
+                                  stderr=subprocess.PIPE, 
+                                  timeout=5)
+            if result.returncode == 0:
+                _FFMPEG_PATH = which_result
+                logger.info(f"Found ffmpeg at: {_FFMPEG_PATH}")
+                return _FFMPEG_PATH
+    except Exception as e:
+        logger.debug(f"'which' command failed: {e}")
+
+    fallback_paths = [
+        "ffmpeg",
+        "/usr/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        r"C:\ffmpeg\ffmpeg\ffmpeg\bin\ffmpeg.exe",
+        "ffmpeg.exe",
+    ]
+    
+    for path in fallback_paths:
+        try:
+            result = subprocess.run([path, "-version"], 
+                                  stdout=subprocess.PIPE, 
+                                  stderr=subprocess.PIPE, 
+                                  timeout=5)
+            if result.returncode == 0:
+                _FFMPEG_PATH = path
+                logger.info(f"Found ffmpeg at: {_FFMPEG_PATH}")
+                return _FFMPEG_PATH
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            continue
+    
+    raise RuntimeError(
+        "ffmpeg not found. Please ensure ffmpeg is installed in your container. "
+        "Add 'ffmpeg' to your Dockerfile's apt-get install command."
+    )
+
+def _generate_video_thumbnail(video_path: str, thumbnail_path: str):
+    import os
+    logger.info(f"Generating video thumbnail: {video_path} -> {thumbnail_path}")
+    
+    if not os.path.exists(video_path):
+        raise RuntimeError(f"Video file does not exist: {video_path}")
+
+    thumbnail_dir = Path(thumbnail_path).parent
+    thumbnail_dir.mkdir(parents=True, exist_ok=True)
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video file: {video_path}")
+    
+    try:
+        ret, frame = cap.read()
+        if not ret:
+            raise RuntimeError(f"Cannot read first frame from video: {video_path}")
+
+        success = cv2.imwrite(thumbnail_path, frame)
+        if not success:
+            raise RuntimeError(f"Failed to save thumbnail: {thumbnail_path}")
+            
+        logger.info(f"Successfully generated thumbnail: {thumbnail_path}")
+        
+    finally:
+        cap.release()
+
+def _to_h264(src: str, dst: str):
+    import os
+    logger.info(f"Transcoding {src} to {dst}")
+
+    src_abs = os.path.abspath(src)
+    dst_abs = os.path.abspath(dst)
+    
+    logger.info(f"Absolute paths: {src_abs} -> {dst_abs}")
+
+    if not os.path.exists(src_abs):
+        raise RuntimeError(f"Source file does not exist: {src_abs}")
+
+    dst_path = Path(dst_abs)
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+
+    ffmpeg_exec = _find_ffmpeg()
+    
+    cmd = [
+        ffmpeg_exec, "-y", "-i", src_abs,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        "-an",
+        dst_abs,
+    ]
+    
+    logger.info(f"Running ffmpeg command: {' '.join(cmd)}")
+    
+    try:
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        logger.info(f"ffmpeg return code: {p.returncode}")
+        
+        if p.returncode != 0:
+            logger.error(f"ffmpeg failed with return code {p.returncode}")
+            logger.error(f"ffmpeg stderr: {p.stderr}")
+            logger.error(f"ffmpeg stdout: {p.stdout}")
+            raise RuntimeError(f"ffmpeg failed: {p.stderr[-400:]}")
+
+        if not os.path.exists(dst_abs):
+            raise RuntimeError(f"ffmpeg completed but output file not created: {dst_abs}")
+            
+        logger.info(f"Successfully transcoded to {dst_abs}")
+        
+    except subprocess.SubprocessError as e:
+        logger.error(f"Subprocess error during ffmpeg: {e}")
+        raise RuntimeError(f"ffmpeg subprocess error: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error during ffmpeg: {e}")
+        raise
 
 IMAGE_EXTS = {
     ".bmp", ".dng", ".jpeg", ".jpg", ".mpo", ".png", ".tif", ".tiff",
@@ -292,6 +419,10 @@ async def detect_video(
     media.process_ms_total = int(dt_s * 1000)
     db.add(media); db.commit()
 
+    # Group detections by class to avoid creating separate issues for each frame
+    class_aggregates = {}
+    
+    # Process frames and aggregate detections by class
     for fr in frames_meta:
         fr_row = dbm.Frame(
             media_id=media.id,
@@ -299,27 +430,91 @@ async def detect_video(
             timestamp=fr["timestamp_ms"],
         )
         db.add(fr_row); db.commit(); db.refresh(fr_row)
+        
         for d in fr["objects"]:
-            mask = d.get("mask", {}) or {}
-            db.add(dbm.Detection(
-                frame_id=fr_row.id,
-                track_id=d.get("track_id"),
-                class_id=d.get("class_id", -1),
-                class_name=d.get("class_name", ""),
-                confidence=d.get("confidence"),
-                x1=d["bbox"][0], y1=d["bbox"][1],
-                x2=d["bbox"][2], y2=d["bbox"][3],
-                mask_rle     = mask.get("rle", {}),
-                mask_polygon = mask.get("polygon", []),
-                source       = _infer_source(d),
-                severity=_to_severity_enum(d.get("severity")),
-
-            ))
-        db.commit()
+            class_name = d.get("class_name", "")
+            if not class_name:
+                continue
+                
+            # Initialize or update class aggregate
+            if class_name not in class_aggregates:
+                mask = d.get("mask", {}) or {}
+                class_aggregates[class_name] = {
+                    "first_frame_id": fr_row.id,
+                    "class_id": d.get("class_id", -1),
+                    "class_name": class_name,
+                    "max_confidence": d.get("confidence", 0.0),
+                    "bbox": d["bbox"],  # bbox from highest confidence detection
+                    "mask_rle": mask.get("rle", {}),
+                    "mask_polygon": mask.get("polygon", []),
+                    "description": d.get("description"),
+                    "solution": d.get("solution"),
+                    "source": _infer_source(d),
+                    "severity": _to_severity_enum(d.get("severity")),
+                    "total_frames": 1,
+                    "track_ids": set([d.get("track_id")]) if d.get("track_id") else set(),
+                }
+            else:
+                # Update aggregate with higher confidence detection
+                current_conf = d.get("confidence", 0.0)
+                if current_conf > class_aggregates[class_name]["max_confidence"]:
+                    mask = d.get("mask", {}) or {}
+                    class_aggregates[class_name].update({
+                        "max_confidence": current_conf,
+                        "bbox": d["bbox"],
+                        "mask_rle": mask.get("rle", {}),
+                        "mask_polygon": mask.get("polygon", []),
+                        "description": d.get("description"),
+                        "solution": d.get("solution"),
+                    })
+                
+                class_aggregates[class_name]["total_frames"] += 1
+                if d.get("track_id"):
+                    class_aggregates[class_name]["track_ids"].add(d.get("track_id"))
+    
+    # Create one detection record per class
+    for class_name, agg in class_aggregates.items():
+        # Use the most common track_id if multiple exist
+        track_id = list(agg["track_ids"])[0] if agg["track_ids"] else None
+        
+        db.add(dbm.Detection(
+            frame_id=agg["first_frame_id"],  # Reference first frame where class was detected
+            track_id=track_id,
+            class_id=agg["class_id"],
+            class_name=agg["class_name"],
+            confidence=agg["max_confidence"],
+            x1=agg["bbox"][0], y1=agg["bbox"][1],
+            x2=agg["bbox"][2], y2=agg["bbox"][3],
+            mask_rle=agg["mask_rle"],
+            mask_polygon=agg["mask_polygon"],
+            description=agg["description"],
+            solution=agg["solution"],
+            source=agg["source"],
+            severity=agg["severity"],
+            frames_detected=agg["total_frames"],  # Track how many frames contained this class
+        ))
+    
+    db.commit()
 
     STATIC_DIR.mkdir(exist_ok=True)
     out_name = f"{media.id}.mp4"
-    await run_in_threadpool(shutil.move, str(annotated_tmp), str(STATIC_DIR / out_name))
+    out_path = STATIC_DIR / out_name
+
+    # Generate thumbnail from first frame with detections
+    thumbnail_path = STATIC_DIR / f"{media.id}.jpg"
+    await run_in_threadpool(_generate_video_thumbnail, str(annotated_tmp), str(thumbnail_path))
+
+    try:
+        await run_in_threadpool(_to_h264, str(annotated_tmp), str(out_path))
+    except Exception as e:
+        logger.warning(f"H.264 transcoding failed: {e}, falling back to original video")
+        sentry_sdk.capture_exception(e)
+        await run_in_threadpool(shutil.move, str(annotated_tmp), str(out_path))
+    else:
+        try:
+            annotated_tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     enqueue_embeddings(background_tasks, media.id)
 

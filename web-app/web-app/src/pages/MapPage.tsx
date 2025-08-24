@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GoogleMap,
   Marker,
@@ -121,7 +121,7 @@ function makePinSvg(opts: {
   state?: PinState;
   ringIdle: string;
   ringActive: string;
-  label?: string; // optional count
+  label?: string;
 }) {
   const { tone, theme, size = 32, state = 'default', ringIdle, ringActive, label } = opts;
   const w = size;
@@ -517,9 +517,18 @@ export default function MapPage() {
     m.fitBounds(b, fitPadding());
   }, [markers, myLoc]);
 
+  // Track URL changes for bbox/geohash
+  const [urlSearch, setUrlSearch] = useState(location.search);
+
+  useEffect(() => {
+    const handleUrlChange = () => setUrlSearch(location.search);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
+
   useEffect(() => {
     if (!isLoaded) return;
-    const sp = new URLSearchParams(location.search);
+    const sp = new URLSearchParams(urlSearch);
     const gh = sp.get('geohash');
     const bbox =
       parseBBoxParam(sp) || (gh ? boundsFromGeohash(gh) : null);
@@ -533,7 +542,7 @@ export default function MapPage() {
     const { w, h } = bboxSizeMeters(bbox);
     const dims = `${fmtMeters(w)} × ${fmtMeters(h)}`;
     setSelectionLabel(
-      gh ? `Selection • geohash “${gh}” • ${dims}` : `Selection • bbox • ${dims}`
+      gh ? `Selection • geohash "${gh}" • ${dims}` : `Selection • bbox • ${dims}`
     );
 
     const m = mapRef.current;
@@ -544,7 +553,7 @@ export default function MapPage() {
       );
       m.fitBounds(b, fitPadding());
     }
-  }, [isLoaded]);
+  }, [isLoaded, urlSearch]);
 
   const fitToMarkers = useCallback(() => {
     const m = mapRef.current;
@@ -575,14 +584,15 @@ export default function MapPage() {
   }, []);
 
   const clearSelection = useCallback(() => {
+    // Clear from URL
     const sp = new URLSearchParams(location.search);
     sp.delete('bbox');
     sp.delete('geohash');
-    history.replaceState(null, '', `${location.pathname}?${sp.toString()}`);
-    setHighlight(null);
-    setSelectionLabel(null);
-    fitToMarkers();
-  }, [fitToMarkers]);
+    const newUrl = `${location.pathname}?${sp.toString()}`;
+
+    // Force a complete page reload to ensure map refreshes
+    window.location.href = newUrl;
+  }, []);
 
   if (loadError) {
     return (
@@ -749,8 +759,8 @@ export default function MapPage() {
         }}
       >
         {/* Highlighted selection (bbox/geohash) */}
-        {highlight && (
-          <>
+        {highlight ? (
+          <React.Fragment key={`highlight-${JSON.stringify(highlight)}`}>
             <Rectangle
               bounds={highlight}
               options={{
@@ -790,8 +800,8 @@ export default function MapPage() {
               })()}
               opacity={1}
             />
-          </>
-        )}
+          </React.Fragment>
+        ) : null}
 
         <MarkerClustererF
           key={`clusters-${theme}`}
@@ -894,7 +904,23 @@ export default function MapPage() {
                           />
                       )}
 
-                      {p.annotated_video_url && <div className="infocard__video">🎞️ video</div>}
+                      {p.annotated_video_url && (
+                          <div className="infocard__video-thumb" onClick={() => setModalProblem(p)}>
+                              <video
+                                  className="infocard__img"
+                                  src={`${import.meta.env.VITE_API_BASE}${p.annotated_video_url}`}
+                                  muted
+                                  preload="metadata"
+                                  poster={`${import.meta.env.VITE_API_BASE}/static/${p.media_id}.jpg`}
+                              />
+                              <div className="infocard__video-overlay">
+                                  <svg width="48" height="48" viewBox="0 0 24 24" fill="white" opacity="0.9">
+                                      <circle cx="12" cy="12" r="10" fill="rgba(0,0,0,0.6)" />
+                                      <path d="M10 8l6 4-6 4V8z" />
+                                  </svg>
+                              </div>
+                          </div>
+                      )}
 
                       <div className="infocard__actions">
                         <Button variant="secondary" size="sm" onClick={() => setModalProblem(p)}>

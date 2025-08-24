@@ -96,6 +96,8 @@ class Detection(Base):
     description  = Column(Text)
     solution     = Column(Text)
 
+    frames_detected = Column(Integer, nullable=True, default=None)
+
     source     = Column(
         SQLEnum(DetectionSource, name="detection_source_enum"),
         nullable=False,

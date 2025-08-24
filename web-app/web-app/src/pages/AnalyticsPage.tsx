@@ -5,10 +5,14 @@ import {
   getSourceBreakdown, getStatusBreakdown, getTopClasses,
   getConfidenceSummary, getGeoHeatmap, getTimeToResolution,
   getGeoHotspots, getIssuesAgingBuckets,
+  getConfidenceByClass, getDailyHealthMetrics, getUserEngagementMetrics, getTemporalPatterns,
+  getResolutionPerformance, getDetectionQuality, getGeographicPatterns,
   type DayStat, type UserStat, type KPIResponse, type LatencyByDay,
   type SeverityByDay, type SourceBreakdown, type StatusBreakdown,
   type TopClass, type ConfidenceSummary, type HeatBucket, type TTRow,
-  type MediaTypeFilter, type Hotspot, type AgingResponse, type AgingByAssigneeRow, type AgingBucketKey
+  type MediaTypeFilter, type Hotspot, type AgingResponse, type AgingByAssigneeRow, type AgingBucketKey,
+  type ConfidenceByClass, type DailyHealthMetric, type UserEngagement, type TemporalPatterns,
+  type ResolutionPerformance, type DetectionQuality, type GeographicPatterns
 } from '../api/analytics';
 import {
   ResponsiveContainer,
@@ -118,13 +122,22 @@ export default function AnalyticsPage() {
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
 
   const [aging, setAging] = useState<AgingResponse | null>(null);
+
+  const [confidenceByClass, setConfidenceByClass] = useState<ConfidenceByClass[]>([]);
+  const [healthMetrics, setHealthMetrics] = useState<DailyHealthMetric[]>([]);
+  const [userEngagement, setUserEngagement] = useState<UserEngagement[]>([]);
+  const [timePatterns, setTimePatterns] = useState<TemporalPatterns | null>(null);
+
+  const [resolutionPerf, setResolutionPerf] = useState<ResolutionPerformance | null>(null);
+  const [detectionQuality, setDetectionQuality] = useState<DetectionQuality | null>(null);
+  const [geoPatterns, setGeoPatterns] = useState<GeographicPatterns | null>(null);
   
   async function load() {
     setState('loading');
     try {
       const params = { days: range, media_type: mediaParam };
       const [
-        d, u, kp, lat, sev, src, st, top, cnf, gh, tt, hs, ag
+        d, u, kp, lat, sev, src, st, top, cnf, gh, tt, hs, ag, cbcl, hm, ue, tp, rp, dq, gp
       ] = await Promise.all([
         uploadsByDay(params),
         uploadsByUser(params),
@@ -138,7 +151,14 @@ export default function AnalyticsPage() {
         getGeoHeatmap({ ...params, min_count: 1 }),
         getTimeToResolution(params),
         getGeoHotspots({ ...params, precision, min_count: 1, limit: 300 }),
-        getIssuesAgingBuckets({ ...params })
+        getIssuesAgingBuckets({ ...params }),
+        getConfidenceByClass({ ...params, min_detections: 5 }),
+        getDailyHealthMetrics(params),
+        getUserEngagementMetrics(params),
+        getTemporalPatterns(params),
+        getResolutionPerformance(params),
+        getDetectionQuality(params),
+        getGeographicPatterns({ ...params, precision: 5 })
       ]);
       setDaily(fillMissingDays(d, range));
       setByUser(u.slice().sort((a,b)=>b.count-a.count));
@@ -153,6 +173,13 @@ export default function AnalyticsPage() {
       setTTRows(tt);
       setHotspots(hs);
       setAging(ag);
+      setConfidenceByClass(cbcl);
+      setHealthMetrics(hm);
+      setUserEngagement(ue);
+      setTimePatterns(tp);
+      setResolutionPerf(rp);
+      setDetectionQuality(dq);
+      setGeoPatterns(gp);
       setState('ready');
     } catch (e: unknown) {
       notify.error('Failed to load analytics', getErrorMessage(e));
@@ -852,6 +879,350 @@ export default function AnalyticsPage() {
 
               {(!hotspots || hotspots.length === 0) && (
                 <div className="muted" style={{ padding: 6 }}>No hotspots for this filter.</div>
+              )}
+            </div>
+          </section>
+
+          {/* NEW: Model Performance & Insights */}
+          <section className="card card--glow">
+            <div className="section-head">
+              <h2>Model Performance by Class</h2>
+              <span className="muted">Detection confidence & reliability analysis</span>
+            </div>
+            <div className="chart-wrap">
+              {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={confidenceByClass.slice(0, 10)}>
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3"/>
+                    <XAxis
+                      dataKey="class_name"
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
+                    />
+                    <YAxis yAxisId="conf" orientation="left" domain={[0, 1]}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <YAxis yAxisId="count" orientation="right"
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <Tooltip
+                      wrapperStyle={{ outline: 'none' }}
+                      contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      formatter={(value, name) => {
+                        if (name === 'avg_confidence') return [Number(value).toFixed(3), 'Avg Confidence'];
+                        if (name === 'reliability_score') return [Number(value).toFixed(3), 'Reliability Score'];
+                        return [value, name];
+                      }}
+                    />
+                    <Bar yAxisId="count" dataKey="count" fill="var(--surface-300)" name="Count" opacity={0.3} />
+                    <Line yAxisId="conf" type="monotone" dataKey="avg_confidence" stroke="var(--primary-600)" strokeWidth={2} dot />
+                    <Line yAxisId="conf" type="monotone" dataKey="reliability_score" stroke="var(--success)" strokeWidth={2} dot />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="legend">
+              <span><i className="dot" style={{backgroundColor: 'var(--primary-600)'}} />Avg Confidence</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--success)'}} />Reliability</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--surface-300)'}} />Count</span>
+            </div>
+          </section>
+
+          {/* NEW: System Health Trends */}
+          <section className="card card--glow">
+            <div className="section-head">
+              <h2>Daily System Health</h2>
+              <span className="muted">Processing performance and detection quality over time</span>
+            </div>
+            <div className="chart-wrap">
+              {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={healthMetrics.slice(-14)}>
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3"/>
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={fmtDayLabel}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}
+                    />
+                    <YAxis yAxisId="uploads" orientation="left"
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <YAxis yAxisId="confidence" orientation="right" domain={[0, 1]}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <Tooltip
+                      wrapperStyle={{ outline: 'none' }}
+                      contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      formatter={(value, name) => {
+                        if (name === 'avg_confidence') return [Number(value).toFixed(3), 'Avg Confidence'];
+                        if (name === 'high_confidence_rate') return [Math.round(Number(value)) + '%', 'High Confidence Rate'];
+                        if (name === 'avg_processing_ms') return [Math.round(Number(value)) + 'ms', 'Avg Processing Time'];
+                        if (name === 'detections_per_upload') return [Number(value).toFixed(2), 'Detections/Upload'];
+                        return [value, name];
+                      }}
+                      labelFormatter={(l)=>`📅 ${fmtDayLabel(String(l))}`}
+                    />
+                    <Bar yAxisId="uploads" dataKey="uploads" fill="var(--primary-300)" name="Daily Uploads" opacity={0.4} />
+                    <Line yAxisId="confidence" type="monotone" dataKey="avg_confidence" stroke="var(--primary-600)" strokeWidth={2} dot />
+                    <Line yAxisId="confidence" type="monotone" dataKey="high_confidence_rate" stroke="var(--success)" strokeWidth={2} dot />
+                    <Line yAxisId="uploads" type="monotone" dataKey="avg_processing_ms" stroke="var(--warning)" strokeWidth={2} dot />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="legend">
+              <span><i className="dot" style={{backgroundColor: 'var(--primary-300)'}} />Daily Uploads</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--primary-600)'}} />Avg Confidence</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--success)'}} />High Confidence Rate</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--warning)'}} />Avg Processing Time</span>
+            </div>
+          </section>
+
+          {/* NEW: Activity Patterns */}
+          <section className="grid-2">
+            <div className="card card--glow">
+              <div className="section-head">
+                <h2>Daily Activity Pattern</h2>
+                <span className="muted">Upload trends by day of week</span>
+              </div>
+              <div className="chart-wrap">
+                {state !== 'ready' || !timePatterns ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={timePatterns.daily}>
+                      <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                      <XAxis dataKey="day_name"
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <YAxis tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      />
+                      <Bar dataKey="uploads" fill="var(--primary-500)" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="card card--glow">
+              <div className="section-head">
+                <h2>Hourly Activity Pattern</h2>
+                <span className="muted">Upload distribution by hour</span>
+              </div>
+              <div className="chart-wrap">
+                {state !== 'ready' || !timePatterns ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={timePatterns.hourly}>
+                      <defs>
+                        <linearGradient id="hourlyGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--secondary-500)" stopOpacity={0.6}/>
+                          <stop offset="100%" stopColor="var(--secondary-500)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                      <XAxis dataKey="hour"
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
+                        tickFormatter={(hour) => `${hour}:00`}/>
+                      <YAxis tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        labelFormatter={(hour) => `${hour}:00`}
+                      />
+                      <Area type="monotone" dataKey="uploads" stroke="var(--secondary-600)" strokeWidth={2} fill="url(#hourlyGrad)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* NEW: User Engagement */}
+          <section className="card card--glow">
+            <div className="section-head">
+              <h2>User Engagement Analysis</h2>
+              <span className="muted">Activity patterns and engagement scores</span>
+            </div>
+            <div className="chart-wrap">
+              {state !== 'ready' ? <div className="chart-skeleton" /> : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={userEngagement.slice(0, 15)}>
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3"/>
+                    <XAxis dataKey="user" angle={-45} textAnchor="end" height={60}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}/>
+                    <YAxis yAxisId="uploads" orientation="left"
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <YAxis yAxisId="score" orientation="right" domain={[0, 100]}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <Tooltip
+                      wrapperStyle={{ outline: 'none' }}
+                      contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      formatter={(value, name) => {
+                        if (name === 'engagement_score') return [Math.round(Number(value)), 'Engagement Score'];
+                        if (name === 'activity_rate_pct') return [Math.round(Number(value)) + '%', 'Activity Rate'];
+                        return [value, name];
+                      }}
+                    />
+                    <Bar yAxisId="uploads" dataKey="total_uploads" fill="var(--primary-500)" opacity={0.7} />
+                    <Line yAxisId="score" type="monotone" dataKey="engagement_score" stroke="var(--success)" strokeWidth={2} dot />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="legend">
+              <span><i className="dot" style={{backgroundColor: 'var(--primary-500)'}} />Total Uploads</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--success)'}} />Engagement Score</span>
+            </div>
+          </section>
+
+          {/* NEW: Resolution Performance Analytics */}
+          <section className="card card--glow">
+            <div className="section-head">
+              <h2>Team Resolution Performance</h2>
+              <span className="muted">Assignee efficiency and workload distribution</span>
+            </div>
+            <div className="chart-wrap">
+              {state !== 'ready' || !resolutionPerf ? <div className="chart-skeleton" /> : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={resolutionPerf.assignee_performance.slice(0, 10)}>
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3"/>
+                    <XAxis dataKey="assignee" angle={-45} textAnchor="end" height={60}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 11 }}/>
+                    <YAxis yAxisId="count" orientation="left"
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <YAxis yAxisId="rate" orientation="right" domain={[0, 100]}
+                      tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                    <Tooltip
+                      wrapperStyle={{ outline: 'none' }}
+                      contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                      formatter={(value, name) => {
+                        if (name === 'resolution_rate_pct') return [Math.round(Number(value)) + '%', 'Resolution Rate'];
+                        if (name === 'avg_resolution_hours') return [Math.round(Number(value)) + 'h', 'Avg Resolution Time'];
+                        return [value, name];
+                      }}
+                    />
+                    <Bar yAxisId="count" dataKey="total_assigned" fill="var(--surface-300)" name="Total Assigned" opacity={0.4} />
+                    <Line yAxisId="rate" type="monotone" dataKey="resolution_rate_pct" stroke="var(--success)" strokeWidth={2} dot />
+                    <Line yAxisId="count" type="monotone" dataKey="avg_resolution_hours" stroke="var(--warning)" strokeWidth={2} dot />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="legend">
+              <span><i className="dot" style={{backgroundColor: 'var(--surface-300)'}} />Total Assigned</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--success)'}} />Resolution Rate %</span>
+              <span><i className="dot" style={{backgroundColor: 'var(--warning)'}} />Avg Resolution Hours</span>
+            </div>
+          </section>
+
+          {/* NEW: Detection Quality Analysis */}
+          <section className="grid-2">
+            <div className="card card--glow">
+              <div className="section-head">
+                <h2>Detection Quality Overview</h2>
+                <span className="muted">False positive rates and verification metrics</span>
+              </div>
+              <div className="confidence-grid">
+                {!detectionQuality ? <div className="chart-skeleton" style={{ height: 120 }} /> : (
+                  <>
+                    <div className="conf-pill">
+                      <span>False Positive Rate</span>
+                      <strong>{detectionQuality.overview.false_positive_rate.toFixed(1)}%</strong>
+                    </div>
+                    <div className="conf-pill">
+                      <span>Verification Rate</span>
+                      <strong>{detectionQuality.overview.verification_rate.toFixed(1)}%</strong>
+                    </div>
+                    <div className="conf-pill">
+                      <span>Avg Confidence</span>
+                      <strong>{detectionQuality.overview.avg_confidence.toFixed(3)}</strong>
+                    </div>
+                    <div className="conf-pill">
+                      <span>Total Detections</span>
+                      <strong>{detectionQuality.overview.total_detections}</strong>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="card card--glow">
+              <div className="section-head">
+                <h2>Quality by Confidence Range</h2>
+                <span className="muted">False positive rates across confidence levels</span>
+              </div>
+              <div className="chart-wrap">
+                {state !== 'ready' || !detectionQuality ? <div className="chart-skeleton" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={detectionQuality.by_confidence_range}>
+                      <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3"/>
+                      <XAxis dataKey="confidence_range"
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <YAxis yAxisId="count" orientation="left"
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <YAxis yAxisId="rate" orientation="right" domain={[0, 100]}
+                        tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
+                      <Tooltip
+                        wrapperStyle={{ outline: 'none' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        formatter={(value, name) => {
+                          if (name === 'false_positive_rate') return [Number(value).toFixed(1) + '%', 'False Positive Rate'];
+                          return [value, name];
+                        }}
+                      />
+                      <Bar yAxisId="count" dataKey="total_count" fill="var(--primary-300)" name="Total Count" opacity={0.5} />
+                      <Line yAxisId="rate" type="monotone" dataKey="false_positive_rate" stroke="var(--danger)" strokeWidth={3} dot />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* NEW: Geographic Issue Patterns */}
+          <section className="card card--glow">
+            <div className="section-head">
+              <h2>Geographic Problem Areas</h2>
+              <span className="muted">Issue clustering and recurring patterns by location</span>
+            </div>
+            <div className="hotspot-table">
+              <div className="hotspot-row hotspot-head">
+                <span>Area (geohash)</span>
+                <span className="right">Total Issues</span>
+                <span className="right">Issue Density</span>
+                <span className="right">Resolution Rate</span>
+                <span className="grow">Severity Distribution</span>
+                <span className="right">Latest Issue</span>
+              </div>
+
+              {!geoPatterns ? <div className="chart-skeleton" style={{ height: 200 }} /> :
+                geoPatterns.geographic_clusters.slice(0, 10).map((cluster) => {
+                  const totalSev = Math.max(1, cluster.severity_distribution.low + cluster.severity_distribution.medium + cluster.severity_distribution.high);
+                  const lowPct = (100 * cluster.severity_distribution.low) / totalSev;
+                  const medPct = (100 * cluster.severity_distribution.medium) / totalSev;
+                  const highPct = (100 * cluster.severity_distribution.high) / totalSev;
+
+                  return (
+                    <div key={cluster.geohash} className="hotspot-row">
+                      <span className="mono">{cluster.geohash}</span>
+                      <span className="right"><strong>{cluster.total_issues}</strong></span>
+                      <span className="right">{cluster.issue_density}</span>
+                      <span className="right">{Math.round(cluster.resolution_rate)}%</span>
+
+                      <span className="grow sev-cell">
+                        <div className="sev-bar" title={`low ${cluster.severity_distribution.low} / medium ${cluster.severity_distribution.medium} / high ${cluster.severity_distribution.high}`}>
+                          <i style={{ width: `${lowPct}%` }} className="sev s-low" />
+                          <i style={{ width: `${medPct}%` }} className="sev s-med" />
+                          <i style={{ width: `${highPct}%` }} className="sev s-high" />
+                        </div>
+                      </span>
+
+                      <span className="right">{cluster.latest_issue ? timeAgo(cluster.latest_issue) : '—'}</span>
+                    </div>
+                  );
+                })
+              }
+
+              {(!geoPatterns || geoPatterns.geographic_clusters.length === 0) && (
+                <div className="muted" style={{ padding: 6 }}>No geographic patterns found for this period.</div>
               )}
             </div>
           </section>

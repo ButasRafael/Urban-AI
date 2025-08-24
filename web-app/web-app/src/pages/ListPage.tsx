@@ -437,6 +437,24 @@ export default function ListPage() {
                         loading="lazy"
                     />
                 )}
+                
+                {it.annotated_video_url && (
+                    <div className="videoThumb">
+                      <video
+                        className="thumb"
+                        src={`${import.meta.env.VITE_API_BASE}${it.annotated_video_url}`}
+                        poster={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                        muted
+                        preload="metadata"
+                      />
+                      <div className="videoOverlay">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white" opacity="0.9">
+                          <circle cx="12" cy="12" r="10" fill="rgba(0,0,0,0.6)" />
+                          <path d="M10 8l6 4-6 4V8z" />
+                        </svg>
+                      </div>
+                    </div>
+                )}
 
               </div>
 
@@ -531,7 +549,23 @@ export default function ListPage() {
                         loading="lazy"
                       />
                     )}
-                    {it.annotated_video_url && "🎞️"}
+                    {it.annotated_video_url && (
+                      <div className="videoThumbTable">
+                        <video
+                          className="thumbTable"
+                          src={`${import.meta.env.VITE_API_BASE}${it.annotated_video_url}`}
+                          poster={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                          muted
+                          preload="metadata"
+                        />
+                        <div className="videoOverlayTable">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="white" opacity="0.9">
+                            <circle cx="12" cy="12" r="10" fill="rgba(0,0,0,0.6)" />
+                            <path d="M10 8l6 4-6 4V8z" />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
                   </td>
                   <td className="td left">
                     <div className="chipsInline">

@@ -196,8 +196,31 @@
   box-shadow: 0 1px 6px rgba(0,0,0,.2);
 }
 
-.infocard__video { margin-top: 6px; font-size: 12px; color: var(--secondary-700, #4b5563); }
-:root.dark .infocard__video { color: #94a3b8; }
+.infocard__video-thumb {
+  position: relative;
+  width: 100%;
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.infocard__video-thumb video {
+  width: 100%;
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.2);
+  background: #000;
+  object-fit: cover;
+}
+
+.infocard__video-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .infocard__actions {
   display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;

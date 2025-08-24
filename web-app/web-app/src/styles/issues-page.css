@@ -102,6 +102,33 @@
 .mediaThumb{ width: 64px; height: 40px; border-radius: 6px; object-fit: cover; background: var(--surface-100); border: 1px solid var(--surface-300); }
 .videoThumb{ display: inline-block; background: repeating-linear-gradient(45deg, var(--surface-200), var(--surface-200) 6px, var(--surface-300) 6px, var(--surface-300) 12px); }
 
+.videoThumbWrapper {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 40px;
+}
+
+.videoThumbWrapper video {
+  width: 64px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #000;
+  border: 1px solid var(--surface-300);
+}
+
+.videoOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ---- Table layout ---- */
 .issuesTable {
   table-layout: fixed;

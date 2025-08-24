@@ -9,7 +9,6 @@ import {
 import type React from 'react';
 import type { ChatMessage, SessionSummary, RagChunk } from '../api/chat';
 import Button from '../components/Button';
-import Input from '../components/Input';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -27,7 +26,16 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
 
   const logRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 44), 200);
+    textarea.style.height = `${newHeight}px`;
+  }, [text]);
 
   const [preview, setPreview] = useState<{ msgIdx: number; id: number; data?: RagChunk } | null>(null);
   const chunkCache = useRef(new Map<number, RagChunk>());
@@ -268,7 +276,7 @@ export default function ChatPage() {
               <div key={i} className={`msg-row ${isUser ? 'is-user' : 'is-assistant'}`}>
                 <div className={`msg ${isUser ? 'msg--user' : 'msg--assistant'}`}>
                   {isUser ? (
-                    <div className="msg__text">{m.content}</div>
+                    <div className="msg__text" style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
                   ) : (
                     <>
                       <ReactMarkdown
@@ -350,22 +358,38 @@ export default function ChatPage() {
 
         {/* composer */}
         <form className="composer" onSubmit={handleSend}>
-          <Input
-            ref={inputRef}
-            placeholder="Ask about issues…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            stopGlobalKeys
-            fullWidth
-            prefixIcon={<IconPrompt />}
-             onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!busy && text.trim()) handleSend(e as unknown as FormEvent<HTMLFormElement>);
-              }
-              if (e.key === 'Escape') setPreview(null);
-            }}
-          />
+          <div className="composer-input-wrap">
+            <span className="composer-icon"><IconPrompt /></span>
+            <textarea
+              ref={inputRef}
+              className="composer-textarea"
+              placeholder="Ask about issues…"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                // Send on Enter (without Shift)
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!busy && text.trim()) {
+                    handleSend(e as unknown as FormEvent<HTMLFormElement>);
+                  }
+                }
+                // Allow Shift+Enter for new line (default behavior)
+                if (e.key === 'Escape') {
+                  setPreview(null);
+                }
+                // Stop propagation for all keys to prevent global shortcuts
+                e.stopPropagation();
+              }}
+              rows={1}
+              style={{
+                minHeight: '44px',
+                maxHeight: '200px',
+                resize: 'none',
+                overflow: 'auto'
+              }}
+            />
+          </div>
           <Button
             variant="primary"
             size="md"

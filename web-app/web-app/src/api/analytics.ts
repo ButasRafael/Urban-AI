@@ -59,6 +59,147 @@ export interface AgingResponse {
   open_counts: Partial<Record<"low" | "medium" | "high", number>>;
 }
 
+// New analytics types
+export interface ConfidenceByClass {
+  class_name: string;
+  avg_confidence: number;
+  std_confidence: number;
+  p25_confidence: number;
+  p75_confidence: number;
+  count: number;
+  reliability_score: number;
+}
+
+export interface DailyHealthMetric {
+  date: string;
+  uploads: number;
+  detections: number;
+  avg_processing_ms: number;
+  p95_processing_ms: number;
+  avg_confidence: number;
+  high_confidence_rate: number;
+  detections_per_upload: number;
+}
+
+export interface UserEngagement {
+  user: string;
+  total_uploads: number;
+  active_days: number;
+  activity_rate_pct: number;
+  uploads_per_active_day: number;
+  avg_hours_between_uploads: number;
+  engagement_score: number;
+  first_upload: string | null;
+  last_upload: string | null;
+}
+
+export interface TemporalPatterns {
+  hourly: {
+    hour: number;
+    uploads: number;
+    avg_processing_ms: number;
+  }[];
+  daily: {
+    day_of_week: number;
+    day_name: string;
+    uploads: number;
+    avg_processing_ms: number;
+  }[];
+}
+
+// New high-value analytics types
+export interface ResolutionPerformance {
+  assignee_performance: {
+    assignee: string;
+    total_assigned: number;
+    resolved_count: number;
+    resolution_rate_pct: number;
+    avg_resolution_hours: number;
+    p95_resolution_hours: number;
+  }[];
+  verification_performance: {
+    verifier: string;
+    verified_count: number;
+    avg_verification_lag_hours: number;
+  }[];
+  workload_distribution: {
+    assignee: string;
+    total_assigned: number;
+    open: number;
+    resolved: number;
+    ignored: number;
+    completion_rate: number;
+  }[];
+}
+
+export interface DetectionQuality {
+  overview: {
+    total_detections: number;
+    false_positive_rate: number;
+    verification_rate: number;
+    avg_confidence: number;
+    avg_ignored_confidence: number;
+    avg_resolved_confidence: number;
+  };
+  by_confidence_range: {
+    confidence_range: string;
+    total_count: number;
+    ignored_count: number;
+    resolved_count: number;
+    false_positive_rate: number;
+  }[];
+  by_class: {
+    class_name: string;
+    total_count: number;
+    verified_count: number;
+    ignored_count: number;
+    avg_confidence: number;
+    false_positive_rate: number;
+    verification_rate: number;
+  }[];
+  daily_trends: {
+    date: string;
+    total_detections: number;
+    ignored_count: number;
+    false_positive_rate: number;
+    avg_confidence: number;
+  }[];
+}
+
+export interface GeographicPatterns {
+  geographic_clusters: {
+    geohash: string;
+    total_issues: number;
+    unique_locations: number;
+    issue_density: number;
+    avg_resolution_hours: number;
+    resolution_rate: number;
+    severity_distribution: {
+      high: number;
+      medium: number;
+      low: number;
+    };
+    latest_issue: string | null;
+    lat: number | null;
+    lon: number | null;
+  }[];
+  recurring_patterns: {
+    geohash: string;
+    class_name: string;
+    issue_count: number;
+    unique_days: number;
+    recurrence_rate: number;
+    first_occurrence: string | null;
+    latest_occurrence: string | null;
+    avg_confidence: number;
+  }[];
+  summary: {
+    total_problem_areas: number;
+    total_recurring_patterns: number;
+    avg_issues_per_area: number;
+  };
+}
+
 export type MediaTypeFilter = "image" | "video" | undefined;
 export type RangeParams = { days?: number; media_type?: MediaTypeFilter };
 export type AgingBucketKey = "0-24h" | "1-3d" | "3-7d" | "7-30d" | ">30d";
@@ -131,5 +272,42 @@ export async function getIssuesAgingBuckets(params?: RangeParams & {
   sla_low_h?: number;
 }) {
   const { data } = await client.get<AgingResponse>("/analytics/issues/aging-buckets", { params });
+  return data;
+}
+
+// New API functions
+export async function getConfidenceByClass(params?: RangeParams & { min_detections?: number }) {
+  const { data } = await client.get<ConfidenceByClass[]>("/analytics/detections/confidence-by-class", { params });
+  return data;
+}
+
+export async function getDailyHealthMetrics(params?: RangeParams) {
+  const { data } = await client.get<DailyHealthMetric[]>("/analytics/system/daily-health", { params });
+  return data;
+}
+
+export async function getUserEngagementMetrics(params?: RangeParams) {
+  const { data } = await client.get<UserEngagement[]>("/analytics/activity/user-engagement", { params });
+  return data;
+}
+
+export async function getTemporalPatterns(params?: RangeParams) {
+  const { data } = await client.get<TemporalPatterns>("/analytics/activity/temporal-patterns", { params });
+  return data;
+}
+
+// High-value analytics API functions
+export async function getResolutionPerformance(params?: RangeParams) {
+  const { data } = await client.get<ResolutionPerformance>("/analytics/performance/resolution-efficiency", { params });
+  return data;
+}
+
+export async function getDetectionQuality(params?: RangeParams) {
+  const { data } = await client.get<DetectionQuality>("/analytics/quality/detection-quality", { params });
+  return data;
+}
+
+export async function getGeographicPatterns(params?: RangeParams & { precision?: number }) {
+  const { data } = await client.get<GeographicPatterns>("/analytics/geography/issue-patterns", { params });
   return data;
 }
