@@ -12,6 +12,7 @@ class ChatResponse(BaseModel):
 
 class SessionSummary(BaseModel):
     id: int
+    title: Optional[str] = None
     created_at: datetime
     last_message_at: datetime
 

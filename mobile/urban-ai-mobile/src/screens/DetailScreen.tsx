@@ -273,21 +273,49 @@ export default function DetailScreen({ route }: Props) {
                     </Box>
                   </Box>
 
-                  {/* Row: Descriptions */}
-                  <Box flexDirection="row" alignItems="flex-start" mb="s">
-                    <Feather name="align-left" size={16} color={theme.colors.text} style={{ marginTop: 2 }} />
-                    <Box ml="s" flex={1}>
-                      {descriptions.length > 0 ? (
-                        descriptions.map((d, i) => (
+                  {/* Summary Description */}
+                  {media.summary_description && (
+                    <Box mb="m">
+                      <Box flexDirection="row" alignItems="flex-start" mb="s">
+                        <Feather name="file-text" size={16} color={theme.colors.primary500} style={{ marginTop: 2 }} />
+                        <Text ml="s" variant="subtitle" color="primary500">Descriere generală</Text>
+                      </Box>
+                      <Box ml="l" p="m" bg="card" borderRadius="s" borderWidth={1} borderColor="border">
+                        <Text color="text" lineHeight={22}>
+                          {media.summary_description}
+                        </Text>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* Summary Solution */}
+                  {media.summary_solution && (
+                    <Box mb="m">
+                      <Box flexDirection="row" alignItems="flex-start" mb="s">
+                        <Feather name="tool" size={16} color={theme.colors.success} style={{ marginTop: 2 }} />
+                        <Text ml="s" variant="subtitle" color="success">Plan de acțiune</Text>
+                      </Box>
+                      <Box ml="l" p="m" bg="card" borderRadius="s" borderWidth={1} borderColor="border">
+                        <Text color="text" lineHeight={22}>
+                          Authorities will {media.summary_solution}
+                        </Text>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* Individual Descriptions (fallback if no summary) */}
+                  {!media.summary_description && descriptions.length > 0 && (
+                    <Box flexDirection="row" alignItems="flex-start" mb="s">
+                      <Feather name="align-left" size={16} color={theme.colors.text} style={{ marginTop: 2 }} />
+                      <Box ml="s" flex={1}>
+                        {descriptions.map((d, i) => (
                           <Text key={i} color="text" mb="xs">
                             • {d}
                           </Text>
-                        ))
-                      ) : (
-                        <Text color="text">-</Text>
-                      )}
+                        ))}
+                      </Box>
                     </Box>
-                  </Box>
+                  )}
                 </ScrollView>
               </Box>
             </Box>

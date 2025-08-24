@@ -105,6 +105,36 @@
 .conv-item__main small  { display: block; font-size: 13px; color: var(--secondary-700); }
 :root.dark .conv-item__main small { color: #94a3b8; }
 
+/* title editing */
+.conv-title {
+  cursor: text;
+  user-select: none;
+}
+
+.title-edit-input {
+  display: block;
+  width: 100%;
+  padding: 2px 4px;
+  font-size: 16px;
+  font-weight: bold;
+  font-family: inherit;
+  background: var(--surface-0);
+  border: 1px solid var(--primary-400);
+  border-radius: 4px;
+  outline: none;
+  color: inherit;
+}
+
+.title-edit-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-500) 25%, transparent);
+}
+
+:root.dark .title-edit-input {
+  background: #0b1220;
+  border-color: #2a3a4a;
+  color: #e2e8f0;
+}
+
 /* delete button */
 .conv-item__del { justify-self: end; flex: none; }
 

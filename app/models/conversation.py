@@ -9,6 +9,7 @@ class ChatSession(Base):
 
     id = Column(Integer, primary_key=True)
     authority_username = Column(String, ForeignKey("users.username", ondelete="CASCADE"), nullable=False)
+    title = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     messages = relationship("ChatMessage", back_populates="session", cascade="all,delete")

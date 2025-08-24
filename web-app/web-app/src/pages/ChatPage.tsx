@@ -5,6 +5,7 @@ import {
   getSessionHistory,
   deleteSession,
   getRagChunk,
+  updateSessionTitle,
 } from '../api/chat';
 import type React from 'react';
 import type { ChatMessage, SessionSummary, RagChunk } from '../api/chat';
@@ -42,6 +43,8 @@ export default function ChatPage() {
 
   const [confirmDel, setConfirmDel] = useState<SessionSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editingTitle, setEditingTitle] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState('');
 
   useEffect(() => { listSessions().then(setSessions); }, []);
   useEffect(() => {
@@ -206,7 +209,49 @@ export default function ChatPage() {
                 title={`Open #${s.id}`}
               >
                 <div className="conv-item__main">
-                  <strong>#{s.id}</strong>
+                  {editingTitle === s.id ? (
+                    <input
+                      type="text"
+                      className="title-edit-input"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onBlur={async () => {
+                        if (editTitle.trim() && editTitle !== s.title) {
+                          await updateSessionTitle(s.id, editTitle);
+                          const updated = await listSessions();
+                          setSessions(updated);
+                        }
+                        setEditingTitle(null);
+                      }}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                          if (editTitle.trim() && editTitle !== s.title) {
+                            await updateSessionTitle(s.id, editTitle);
+                            const updated = await listSessions();
+                            setSessions(updated);
+                          }
+                          setEditingTitle(null);
+                        } else if (e.key === 'Escape') {
+                          setEditingTitle(null);
+                        }
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                    />
+                  ) : (
+                    <strong 
+                      className="conv-title"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTitle(s.id);
+                        setEditTitle(s.title || `Conversation #${s.id}`);
+                      }}
+                      title="Double-click to edit"
+                    >
+                      {s.title || `Conversation #${s.id}`}
+                    </strong>
+                  )}
                   <small className="muted">
                     {last.toLocaleString(undefined, { hour12: false })}
                   </small>

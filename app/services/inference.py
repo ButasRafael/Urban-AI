@@ -266,6 +266,134 @@ def _run_yolo(img: np.ndarray, run_id: str | None = None,) -> List[Dict[str, Any
     return output
 
 
+async def generate_comprehensive_summary(
+    detections: List[Dict[str, Any]],
+) -> Dict[str, str]:
+
+    if not detections:
+        return {
+            "description": "No infrastructure issues were detected in this image.",
+            "solution": "No remediation actions are required."
+        }
+
+    issues_by_type: Dict[str, List[Dict[str, Any]]] = {}
+    for det in detections:
+        class_name = det.get("class_name") or "unknown"
+        issues_by_type.setdefault(class_name, []).append({
+            "description": (det.get("description") or "").strip(),
+            "solution": (det.get("solution") or "").strip(),
+            "severity": (det.get("severity") or "medium").lower()
+        })
+
+    def sev_bucket(items: List[Dict[str, Any]]) -> Dict[str, int]:
+        out = {"high": 0, "medium": 0, "low": 0, "unknown": 0}
+        for it in items:
+            sev = it.get("severity") or "unknown"
+            if sev not in out:
+                sev = "unknown"
+            out[sev] += 1
+        return out
+
+    lines = []
+    for issue_type, items in sorted(issues_by_type.items(), key=lambda kv: kv[0]):
+        sev = sev_bucket(items)
+        total = len(items)
+        examples = [i["description"] for i in items if i.get("description")]
+        examples = [e for e in examples if e][:2]
+        ex_text = ""
+        if examples:
+            ex_text = "\n    examples: " + " | ".join(f"\"{e}\"" for e in examples)
+        lines.append(
+            f"- {issue_type}: {total} detections | severity -> "
+            f"high:{sev['high']}, medium:{sev['medium']}, low:{sev['low']}, unknown:{sev['unknown']}{ex_text}"
+        )
+
+    issues_text = "\n".join(lines)
+
+    prompt = f"""# Role & Objective
+You are an urban infrastructure expert. Summarize the issues in a single image and propose an integrated remediation plan.
+
+# Response Rules (follow strictly)
+- Output **only** a single JSON object, no prose, no markdown, no code fences.
+- The JSON must contain **exactly** these keys: "description" and "solution".
+- "description": 2–3 concise sentences covering **all** issues found as a cohesive overview.
+- "solution": 3–4 concise sentences with an integrated, **prioritized** action plan that:
+  • sequences work by severity and logical dependencies,
+  • mentions coordination/safety or access constraints if relevant,
+  • avoids redundant steps, and
+  • is directly actionable for city operations teams.
+- Do **not** invent assets, measurements, or locations not implied by the data.
+- Group similar problems; avoid repetitive listing of identical issues.
+- Think through prioritization and dependencies **privately**; do **not** reveal your reasoning steps. Only return the final JSON.
+
+# Output Format (must match exactly)
+{{ "description": "<2-3 sentences>", "solution": "<3-4 sentences>" }}
+
+# Data: Issue Summary
+{issues_text}
+"""
+
+    async with _GPT_SEMAPHORE:
+        try:
+            payload = [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": (
+                        "You are an urban infrastructure expert who writes concise, "
+                        "operationally useful summaries and action plans. Follow the user's rules exactly. "
+                        "Do not include reasoning or meta-commentary; output only the final JSON object."
+                    )}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": prompt}],
+                },
+            ]
+
+            resp = await client.responses.create(
+                model="gpt-4.1",
+                input=payload,
+                temperature=0.2,
+                timeout=30,
+            )
+
+            content = getattr(resp, "output_text", "") or ""
+
+            try:
+                result = json.loads(content)
+            except Exception:
+                m = re.search(r"\{.*\}", content, flags=re.DOTALL)
+                if not m:
+                    raise
+                result = json.loads(m.group(0))
+
+            return {
+                "description": result.get(
+                    "description",
+                    "Multiple infrastructure issues were identified in the image."
+                ),
+                "solution": result.get(
+                    "solution",
+                    "Coordinate a prioritized remediation plan addressing the most severe hazards first, sequencing dependent repairs efficiently."
+                ),
+            }
+
+        except Exception as e:
+            logger.error(f"Summary generation failed: {e}")
+
+            types_sorted = sorted(issues_by_type.keys())
+            top_types = ", ".join(types_sorted[:3]) if types_sorted else "infrastructure issues"
+            return {
+                "description": f"Issues detected include {top_types}. The image contains multiple occurrences with varying severities.",
+                "solution": (
+                    "Address high-severity hazards first for public safety, then medium and low. "
+                    "Batch similar repairs together (e.g., same crew/equipment) to reduce rework. "
+                    "Sequence tasks to respect dependencies (e.g., subsurface or structural fixes before surface restoration). "
+                    "Coordinate traffic management and site access to minimize disruption."
+                ),
+            }
+
+
 async def _gpt_refine_and_find(
     initial: List[Dict[str, Any]],
     run_id: str,

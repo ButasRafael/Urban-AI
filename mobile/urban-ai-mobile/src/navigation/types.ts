@@ -14,7 +14,9 @@ export type RootStackParamList = {
       latitude?: number
       longitude?: number
       predicted_classes: string[]
-      descriptions?: string[] 
+      descriptions?: string[]
+      summary_description?: string
+      summary_solution?: string 
     }
     showInfo: boolean
   }

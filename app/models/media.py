@@ -55,6 +55,10 @@ class Media(Base):
     )
 
     process_ms_total = Column(Integer, nullable=True)
+    
+    # Summary fields for all detections
+    summary_description = Column(Text, nullable=True)
+    summary_solution = Column(Text, nullable=True)
 
     rag_chunks = relationship("RAGChunk", back_populates="media", cascade="all,delete")
     frames     = relationship("Frame", back_populates="media", cascade="all,delete")

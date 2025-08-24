@@ -301,6 +301,8 @@ async def detect_image(
     t0 = time.perf_counter()
     try:
         annotated, dets = await svc.process_image_combined(img, use_sam, str(media.id))
+        # Generate comprehensive summary
+        summary = await svc.generate_comprehensive_summary(dets)
     except InternalServerError:
         raise HTTPException(502, "Upstream LLM error; please retry shortly.")
     except Exception as e:
@@ -311,10 +313,12 @@ async def detect_image(
     dt_s = time.perf_counter() - t0
     INFERENCE_IMAGE_LATENCY.observe(dt_s)
 
-    # 3) update media metadata (dims + total ms)
+    # 3) update media metadata (dims + total ms + summary)
     media.width = annotated.shape[1]
     media.height = annotated.shape[0]
     media.process_ms_total = int(dt_s * 1000)
+    media.summary_description = summary.get("description")
+    media.summary_solution = summary.get("solution")
     db.add(media); db.commit()
 
     # 4) persist Frame + Detection rows
@@ -597,6 +601,8 @@ def list_my_uploads(
             predicted_classes=classes,
             descriptions=descriptions,
             solutions=solutions,
+            summary_description=m.summary_description,
+            summary_solution=m.summary_solution,
         ))
     return out
 

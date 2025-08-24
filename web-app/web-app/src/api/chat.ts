@@ -18,6 +18,7 @@ export interface ChatMessage {
 
 export interface SessionSummary {
   id: number;
+  title?: string;
   created_at: string;
   last_message_at: string;
 }
@@ -55,4 +56,10 @@ export async function deleteSession(sessionId: number): Promise<void> {
 export async function getRagChunk(id: number): Promise<RagChunk> {
   const { data } = await client.get<RagChunk>(`/rag/chunk/${id}`);
   return data;
+}
+
+export async function updateSessionTitle(sessionId: number, title: string): Promise<void> {
+  await client.patch(`/chat/sessions/${sessionId}/title`, null, {
+    params: { title }
+  });
 }

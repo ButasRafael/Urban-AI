@@ -17,7 +17,61 @@ router = APIRouter(tags=["Chat"], dependencies=[require_roles("authority")])
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-# ---------- Context builder with source tagging (no geo) ----------
+async def generate_conversation_title(first_message: str) -> str:
+    try:
+        completion = await client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """# Role and Objective
+You are a title generator that creates concise, descriptive conversation titles for an urban maintenance assistant chat system.
+
+# Instructions
+- Generate a title that captures the main topic or issue from the user's first message
+- Keep titles between 20-45 characters for optimal display
+- Use title case (capitalize first letter of each major word)
+- Focus on the specific problem, location, or request mentioned
+- Avoid generic words like "conversation", "chat", "question", or "help"
+- Do not include punctuation marks, quotes, or special characters
+- Return ONLY the title text, nothing else
+
+# Title Style Guidelines
+- For maintenance issues: focus on the problem type and location
+- For reports: emphasize what is being reported
+- For requests: highlight the specific service needed
+- Use clear, actionable language that a city worker would understand
+
+# Examples
+## Input: "How do I fix a pothole on Main Street?"
+## Output: Pothole Repair Main Street
+
+## Input: "Report water leak at 123 Oak Avenue"
+## Output: Water Leak 123 Oak Avenue
+
+## Input: "Street light not working near Central Park"
+## Output: Broken Street Light Central Park
+
+## Input: "Graffiti removal request for downtown area"
+## Output: Graffiti Removal Downtown
+
+## Input: "Tree branch blocking sidewalk on Elm Street"
+## Output: Tree Branch Blocking Elm Street
+
+Generate a title following these guidelines:"""
+                },
+                {"role": "user", "content": first_message}
+            ],
+            temperature=0.2,
+            max_tokens=25,
+        )
+        title = completion.choices[0].message.content or "New Conversation"
+        return title.strip()[:50]  # Ensure max length and remove whitespace
+    except Exception:
+        return "New Conversation"
+
+
+# ---------- Context builder with source tagging ----------
 async def _build_context(db: Session, req: ChatRequest, k: int = 12) -> Tuple[str, bool]:
 
     emb = await rag_svc.embed(req.message)
@@ -50,6 +104,7 @@ async def chat(
     current_user=Depends(get_current_user),
 ):
     # 1) ensure a session
+    is_new_session = False
     if req.session_id:
         session = db.query(ChatSession).filter(ChatSession.id == req.session_id).first()
         if not session:
@@ -59,9 +114,16 @@ async def chat(
         db.add(session)
         db.commit()
         db.refresh(session)
+        is_new_session = True
 
     db.add(ChatMessage(session_id=session.id, role="user", content=req.message))
     db.commit()
+    
+    # Generate title for new sessions from the first message
+    if is_new_session:
+        title = await generate_conversation_title(req.message)
+        session.title = title
+        db.commit()
 
     # 2) build strict context (geo-agnostic)
     context_block, has_sources = await _build_context(db, req, k=12)
@@ -81,9 +143,9 @@ async def chat(
 
     # 3) Optimized system rules for GPT-4.1
     system_rules_top = (
-        "### ROLE & OBJECTIVE\n"
+        "# Role & Objective\n"
         "You are an urban-maintenance assistant for city authorities.\n\n"
-        "### RESPONSE RULES\n"
+        "# Instructions\n"
         "- Use ONLY the External Context for factual claims; if unsupported, say: "
         "\"Not enough evidence in the sources.\" Do not invent details.\n"
         "- Attach bracket citations [#ID] immediately after each non-trivial claim; "
@@ -91,13 +153,13 @@ async def chat(
         "- Stay concise. Professional tone.\n"
         "- Think step-by-step **silently** before answering; DO NOT reveal your internal analysis.\n"
         "- No web browsing, no tools. No policy/legal/medical advice.\n\n"
-        "### OUTPUT FORMAT (Markdown)\n"
+        "# Output Format (Markdown)\n"
         "#### Answer\n"
         "- Bullet points that directly answer the question, each with [#ID].\n\n"
         "#### Actions\n"
         "- 2–5 concrete next steps for city staff, each with [#ID] if applicable.\n\n"
         "#### Timeline\n"
-        "- Bullets like “within 24h”, “this week”, “this quarter”.\n\n"
+        "- Bullets like \"within 24h\", \"this week\", \"this quarter\".\n\n"
         "#### Assumptions / Gaps\n"
         "- Any missing info or uncertainties.\n\n"
         "#### Citations\n"
@@ -105,7 +167,7 @@ async def chat(
     )
 
     rules_after_context = (
-        "### FINAL INSTRUCTIONS\n"
+        "# Final Instructions\n"
         "- Answer ONLY from External Context.\n"
         "- Every substantive statement must include [#ID].\n"
         "- Use the exact Output Format.\n"
@@ -172,7 +234,12 @@ async def list_sessions(
     for s in sessions:
         last = s.messages[-1].created_at if s.messages else s.created_at
         out.append(
-            SessionSummary(id=s.id, created_at=s.created_at, last_message_at=last)
+            SessionSummary(
+                id=s.id, 
+                title=s.title,
+                created_at=s.created_at, 
+                last_message_at=last
+            )
         )
     return out
 
@@ -228,3 +295,26 @@ async def delete_session(
         raise HTTPException(404, "Session not found")
     db.delete(session)
     db.commit()
+
+
+@router.patch("/sessions/{session_id}/title")
+async def update_session_title(
+    session_id: int,
+    title: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    session = (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.id == session_id,
+            ChatSession.authority_username == current_user.username,
+        )
+        .first()
+    )
+    if not session:
+        raise HTTPException(404, "Session not found")
+    
+    session.title = title[:50]  # Ensure max length
+    db.commit()
+    return {"message": "Title updated successfully"}

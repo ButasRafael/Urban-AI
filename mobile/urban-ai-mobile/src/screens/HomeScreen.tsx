@@ -181,7 +181,7 @@ export default function HomeScreen({ navigation }: Props) {
     setPin(coords);
     const final = await reverseGeocode(coords);
     if (final && final !== formatted) notify.info(final);
-    setMapAdjustVisible(true);
+    notify.success('Locație setată', final || formatted);
   }, []);
 
   const onMapConfirm = useCallback(async (coords: LatLng) => {
@@ -270,6 +270,7 @@ export default function HomeScreen({ navigation }: Props) {
         visible={addrPickerVisible}
         onCancel={() => setAddrPickerVisible(false)}
         onConfirm={onAddressPicked}
+        disableUserLocation={true}
       />
 
       {pin && (

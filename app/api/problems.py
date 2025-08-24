@@ -1,4 +1,3 @@
-# app/api/problems.py
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
@@ -9,7 +8,7 @@ from typing import List, Optional, Literal
 from app.core.database import get_db
 from app.core.security import require_roles
 from app.models import media as dbm
-from app.models.schemas_portal import ProblemOut  # existing list-by-media DTO
+from app.models.schemas_portal import ProblemOut
 
 router = APIRouter(
     prefix="/problems",
@@ -17,7 +16,6 @@ router = APIRouter(
     dependencies=[require_roles("admin", "authority")],
 )
 
-# ---------- Existing endpoint (unchanged) ----------
 @router.get("", response_model=List[ProblemOut])
 def all_problems(
     media_type: str | None = Query(None, pattern="^(image|video)$"),
@@ -38,7 +36,7 @@ def all_problems(
         if klass:
             classes_q = classes_q.filter(dbm.Detection.class_name == klass)
         classes = [c[0] for c in classes_q]
-        if klass and not classes:           # filter out if class not found
+        if klass and not classes:
             continue
 
         detects = (
@@ -62,11 +60,12 @@ def all_problems(
             predicted_classes=classes,
             descriptions=descriptions,
             solutions=solutions,
+            summary_description=m.summary_description,
+            summary_solution=m.summary_solution,
         ))
     return out
 
 
-# ---------- New: issue list (detections) with lifecycle filters ----------
 from pydantic import BaseModel
 
 class IssueOut(BaseModel):
@@ -123,7 +122,7 @@ def list_issues(
         q = q.filter(dbm.Detection.status == dbm.IssueStatus(status))
     if source:
         q = q.filter(dbm.Detection.source == dbm.DetectionSource(source))
-    if assigned_to:                                                     # <-- NEW
+    if assigned_to:
         q = q.filter(dbm.Detection.assigned_to == assigned_to)
 
     rows = (
@@ -161,7 +160,6 @@ def list_issues(
     return out
 
 
-# ---------- New: tiny summary for portal filters ----------
 @router.get("/issues/summary")
 def issues_summary(
     db: Session = Depends(get_db),
@@ -197,7 +195,6 @@ def issues_summary_by_media(
     db: Session = Depends(get_db),
     media_ids: List[int] = Query(..., description="Repeat: media_ids=1&media_ids=2"),
 ):
-    # media_id, severity, status, count
     rows = (
         db.query(
             dbm.Media.id.label("media_id"),

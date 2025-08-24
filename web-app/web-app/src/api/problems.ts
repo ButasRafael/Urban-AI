@@ -13,6 +13,8 @@ export interface Problem {
   predicted_classes: string[];
   descriptions?: string[];
   solutions?: string[];
+  summary_description?: string;
+  summary_solution?: string;
 }
 
 interface ProblemDTO {
@@ -28,6 +30,8 @@ interface ProblemDTO {
   predicted_classes: string[] | null;
   descriptions?: (string | null)[] | null;
   solutions?: (string | null)[] | null;
+  summary_description?: string | null;
+  summary_solution?: string | null;
 }
 
 function normalize(p: ProblemDTO): Problem {
@@ -44,6 +48,8 @@ function normalize(p: ProblemDTO): Problem {
     predicted_classes: p.predicted_classes ?? [],
     descriptions: p.descriptions?.filter(Boolean) as string[] | undefined,
     solutions: p.solutions?.filter(Boolean) as string[] | undefined,
+    summary_description: p.summary_description ?? undefined,
+    summary_solution: p.summary_solution ?? undefined,
   };
 }
 

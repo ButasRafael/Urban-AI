@@ -213,8 +213,8 @@ export default function ListPage() {
         p.media_type ?? "",
         (p.predicted_classes ?? []).join("|"),
         p.address ?? "",
-        (p.descriptions ?? [])[0] ?? "",
-        (p.solutions ?? [])[0] ?? "",
+        p.summary_description || (p.descriptions ?? [])[0] || "",
+        p.summary_solution || (p.solutions ?? [])[0] || "",
       ]),
     ];
 
@@ -410,14 +410,14 @@ export default function ListPage() {
                 <div className="cardRow">
                   <span className="metaLabel">Description</span>
                   <span className="metaValue wrap">
-                    {it.descriptions?.[0] ?? "—"}
+                    {it.summary_description || it.descriptions?.[0] || "—"}
                   </span>
                 </div>
 
                 <div className="cardRow">
                   <span className="metaLabel">Solution</span>
                   <span className="metaValue wrap">
-                    {it.solutions?.[0] ?? "—"}
+                    {it.summary_solution || it.solutions?.[0] || "—"}
                   </span>
                 </div>
 
@@ -538,8 +538,8 @@ export default function ListPage() {
                       )}
                     </div>
                   </td>
-                  <td className="td left">{it.descriptions?.[0] ?? "—"}</td>
-                  <td className="td left">{it.solutions?.[0] ?? "—"}</td>
+                  <td className="td left">{it.summary_description || it.descriptions?.[0] || "—"}</td>
+                  <td className="td left">{it.summary_solution || it.solutions?.[0] || "—"}</td>
                   <td className="td">
                     {it.annotated_image_url && (
                       <img

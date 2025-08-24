@@ -36,6 +36,8 @@ type MediaItem = {
   address: string;
   predicted_classes: string[];
   descriptions?: string[];
+  summary_description?: string;
+  summary_solution?: string;
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Gallery'>;
@@ -80,6 +82,8 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
           ...item,
           predicted_classes: item.predicted_classes,
           descriptions: item.descriptions,
+          summary_description: item.summary_description,
+          summary_solution: item.summary_solution,
         },
         showInfo: true,
       });
@@ -166,7 +170,9 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
           />
           <View style={styles.metaRow}>
             <Text numberOfLines={1} style={styles.metaText}>
-              {firstNonEmpty(item.predicted_classes) || item.address || '—'}
+              {item.summary_description ? 
+                item.summary_description.slice(0, 50) + (item.summary_description.length > 50 ? '...' : '') :
+                (firstNonEmpty(item.predicted_classes) || item.address || '—')}
             </Text>
             <Text style={styles.metaDot}>•</Text>
             <Text style={styles.metaText}>{formatWhen(item.created_at) || ''}</Text>

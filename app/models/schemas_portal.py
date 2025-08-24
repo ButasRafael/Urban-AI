@@ -15,3 +15,5 @@ class ProblemOut(BaseModel):
     predicted_classes: List[str] = Field(default_factory=list)
     descriptions: List[str] = Field(default_factory=list)
     solutions: List[str] = Field(default_factory=list)
+    summary_description: Optional[str] = None
+    summary_solution: Optional[str] = None
