@@ -144,6 +144,9 @@
   animation: shimmer 1.4s infinite;
   pointer-events: none;
 }
+:root.dark .kpi--skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+}
 @keyframes shimmer { to { transform: translateX(100%); } }
 
 /* ---------- Cards / sections ---------- */
@@ -195,9 +198,19 @@
     var(--surface-200) 10px,
     var(--surface-200) 20px
   );
-  animation: bg-pan 1.6s linear infinite;
+  position: relative;
+  overflow: hidden;
 }
-@keyframes bg-pan { from { background-position: 0 0; } to { background-position: 100% 0; } }
+
+.chart-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.28), rgba(255,255,255,0));
+  animation: skeleton-sweep 1.6s linear infinite;
+  pointer-events: none;
+}
 
 .empty {
   display: grid; place-items: center; gap: 10px;
@@ -246,8 +259,26 @@
 :root.dark .card,
 :root.dark .kpi { background: #0f141a; border-color: #1f2c38; }
 :root.dark .kpi--skeleton .sk-line,
-:root.dark .kpi--skeleton .sk-num,
-:root.dark .chart-skeleton { background: #101820; }
+:root.dark .kpi--skeleton .sk-num { background: #101820; }
+
+:root.dark .chart-skeleton {
+  background: repeating-linear-gradient(
+    90deg,
+    #0b1220,
+    #0b1220 10px,
+    #1a2332 10px,
+    #1a2332 20px
+  );
+}
+
+:root.dark .chart-skeleton::after {
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.15), rgba(255,255,255,0));
+}
+
+/* Skeleton sweep animation (shared with list/issues pages) */
+@keyframes skeleton-sweep {
+  to { transform: translateX(100%); }
+}
 
 /* Legends */
 .legend { display: flex; gap: 12px; align-items: center; margin-top: 8px; }

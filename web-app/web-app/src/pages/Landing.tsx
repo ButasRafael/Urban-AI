@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/useAuth";
 import { useNavigate, Link } from "react-router-dom";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import { LIGHT_STYLE, DARK_STYLE } from "../styles/map-styles";
 import "../styles/landing-page.css";
 
 export const GOOGLE_MAPS_KEY =
@@ -18,6 +20,11 @@ export default function Landing() {
   const nav = useNavigate();
   const [mapLoaded, setMapLoaded] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(getInitialTheme());
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_KEY || "",
+  });
 
   useEffect(() => {
     if (!loading && user) {
@@ -31,6 +38,14 @@ export default function Landing() {
     window.dispatchEvent(new Event("themechange"));
   }, [theme]);
 
+  useEffect(() => {
+    if (map) {
+      map.setOptions({
+        styles: theme === "dark" ? DARK_STYLE : LIGHT_STYLE,
+      });
+    }
+  }, [map, theme]);
+
   if (loading) {
     return (
       <div className="fullCenter">
@@ -40,9 +55,13 @@ export default function Landing() {
     );
   }
 
-  const mapSrc = GOOGLE_MAPS_KEY
-    ? `https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_KEY}&center=46.7712,23.6236&zoom=11`
-    : `https://www.google.com/maps?q=Cluj-Napoca&output=embed`;
+  const mapOptions = {
+    center: { lat: 46.7712, lng: 23.6236 },
+    zoom: 11,
+    styles: theme === "dark" ? DARK_STYLE : LIGHT_STYLE,
+    disableDefaultUI: true,
+    gestureHandling: "none" as const,
+  };
 
   return (
     <div className="page">
@@ -109,14 +128,19 @@ export default function Landing() {
             </div>
 
             <div className="mapCard">
-              {!mapLoaded && <div className="mapSkeleton" />}
-              <iframe
-                title="Cluj-Napoca overview"
-                className="mapFrame"
-                loading="lazy"
-                src={mapSrc}
-                onLoad={() => setMapLoaded(true)}
-              />
+              {(!isLoaded || !mapLoaded) && <div className="mapSkeleton" />}
+              {isLoaded && (
+                <GoogleMap
+                  mapContainerClassName="mapFrame"
+                  center={mapOptions.center}
+                  zoom={mapOptions.zoom}
+                  options={mapOptions}
+                  onLoad={(mapInstance) => {
+                    setMap(mapInstance);
+                    setMapLoaded(true);
+                  }}
+                />
+              )}
               <div className="mapCaption">City overview • Google Maps</div>
             </div>
           </div>

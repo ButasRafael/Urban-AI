@@ -8,6 +8,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Problem } from '../api/problems';
 import IssueModal from './IssueModal';
+import { LIGHT_STYLE, DARK_STYLE } from '../styles/map-styles';
 import '../styles/map.css';
 
 type LatLng = { lat: number; lng: number };
@@ -95,22 +96,6 @@ function clusterStyles(theme: 'light' | 'dark') {
   }));
 }
 
-const lightStyle: google.maps.MapTypeStyle[] = [
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ lightness: 30 }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-];
-
-const darkStyle: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#0b1220' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1220' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2c38' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', stylers: [{ color: '#0e1628' }] },
-];
 
 export default function IssueMap({ problems }: { problems: Problem[] }) {
   const geocoded = useExactCoords(problems);
@@ -125,8 +110,11 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
   );
 
   const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  
   useEffect(() => {
     const onClassChange = () => setTheme(getTheme());
+    
     const obs = new MutationObserver(onClassChange);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
@@ -141,6 +129,14 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
       window.removeEventListener('themechange', onClassChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (map) {
+      map.setOptions({
+        styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE,
+      });
+    }
+  }, [map, theme]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'urban-ai-map',
@@ -237,12 +233,18 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
       </div>
 
       <GoogleMap
-        onLoad={(map) => {
-          mapRef.current = map;
-          map.setOptions({ styles: theme === 'dark' ? darkStyle : lightStyle });
+        onLoad={(mapInstance) => {
+          mapRef.current = mapInstance;
+          setMap(mapInstance);
+          mapInstance.setOptions({ 
+            styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE,
+          });
           requestAnimationFrame(fitToMarkers);
         }}
-        onUnmount={() => { mapRef.current = null; }}
+        onUnmount={() => { 
+          mapRef.current = null;
+          setMap(null);
+        }}
         mapContainerClassName="map-el"
         center={center}
         zoom={13}
@@ -255,11 +257,7 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
           disableDefaultUI: true,
         }}
       >
-        {/* keep map style in sync with theme */}
-        <StyleSync theme={theme} getMap={() => mapRef.current} />
-
         <MarkerClustererF
-          key={theme}
           options={{ styles: clusterStyles(theme), minimumClusterSize: 2, gridSize: 56 }}
         >
           {(clusterer) => (
@@ -349,16 +347,3 @@ export default function IssueMap({ problems }: { problems: Problem[] }) {
   );
 }
 
-function StyleSync({
-  theme,
-  getMap,
-}: {
-  theme: 'light' | 'dark';
-  getMap: () => google.maps.Map | null | undefined;
-}) {
-  useEffect(() => {
-    const m = getMap();
-    if (m) m.setOptions({ styles: theme === 'dark' ? darkStyle : lightStyle });
-  }, [theme, getMap]);
-  return null;
-}

@@ -117,11 +117,6 @@
   width: fit-content;
 }
 :root.dark .badge { background: #0e1628; color: #dbeafe; border-color: #2a3a4a; }
-.badgeDot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--primary-500);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-200) 70%, transparent);
-}
 
 .title { margin: 0; font-weight: 900; letter-spacing: .2px; font-size: clamp(28px, 4.6vw, 44px); }
 .city { color: var(--primary-700); }

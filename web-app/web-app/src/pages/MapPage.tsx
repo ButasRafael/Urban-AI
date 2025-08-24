@@ -15,28 +15,13 @@ import Input from '../components/Input';
 import Button from '../components/Button';
 import IssueModal from '../components/IssueModal';
 import { issuesSummaryByMedia, type IssuesSummary } from "../api/issues";
+import { LIGHT_STYLE, DARK_STYLE } from '../styles/map-styles';
 import '../styles/map-page.css';
 
 /* ---------- Map constants ---------- */
 const MAP_CONTAINER_CLASS = 'map-el';
 const CENTER_CLUJ = { lat: 46.7712, lng: 23.6236 } as const;
 
-const LIGHT_STYLE: google.maps.MapTypeStyle[] = [
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ lightness: 30 }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-];
-
-const DARK_STYLE: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#0b1220' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1220' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2c38' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', stylers: [{ color: '#0e1628' }] },
-];
 
 /* ---------- Helpers ---------- */
 type MarkerGroup = {
@@ -482,11 +467,7 @@ export default function MapPage() {
       mapRef.current = m;
       setZoom(m.getZoom() ?? null);
       m.addListener('zoom_changed', () => setZoom(m.getZoom() ?? null));
-      m.setOptions({
-        styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE,
-      });
 
-      // initial fit
       const bounds = new google.maps.LatLngBounds();
       markers.forEach((g) => bounds.extend(g.position));
       if (!bounds.isEmpty()) {
@@ -496,7 +477,7 @@ export default function MapPage() {
         m.setZoom(12);
       }
     },
-    [theme, markers]
+    [markers]
   );
 
   const onUnmount = useCallback(() => {
@@ -505,7 +486,15 @@ export default function MapPage() {
 
   useEffect(() => {
     const m = mapRef.current;
-    if (m) m.setOptions({ styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE });
+    if (m) {
+      m.setOptions({
+        styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE,
+        backgroundColor:
+            theme === 'dark'
+                ? cssVar('--secondary-100', '#0F161C')
+                : '#F3F7F6',
+      });
+    }
   }, [theme]);
 
   useEffect(() => {
@@ -513,11 +502,9 @@ export default function MapPage() {
     if (!m || markers.length === 0) return;
     const b = new google.maps.LatLngBounds();
     for (const g of markers) b.extend(g.position);
-    if (myLoc) b.extend(myLoc);
     m.fitBounds(b, fitPadding());
-  }, [markers, myLoc]);
+  }, [markers]);
 
-  // Track URL changes for bbox/geohash
   const [urlSearch, setUrlSearch] = useState(location.search);
 
   useEffect(() => {
@@ -525,6 +512,7 @@ export default function MapPage() {
     window.addEventListener('popstate', handleUrlChange);
     return () => window.removeEventListener('popstate', handleUrlChange);
   }, []);
+
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -555,14 +543,33 @@ export default function MapPage() {
     }
   }, [isLoaded, urlSearch]);
 
+  const fitToLocation = useCallback((pt: google.maps.LatLngLiteral, radiusMeters = 60) => {
+    const m = mapRef.current;
+    if (!m) return;
+
+    const dLat = radiusMeters / 110_574;
+    const dLng = radiusMeters / (111_320 * Math.cos((pt.lat * Math.PI) / 180));
+
+    const bounds = new google.maps.LatLngBounds(
+      { lat: pt.lat - dLat, lng: pt.lng - dLng },
+      { lat: pt.lat + dLat, lng: pt.lng + dLng }
+    );
+    m.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 48 });
+  }, []);
+
   const fitToMarkers = useCallback(() => {
     const m = mapRef.current;
     if (!m) return;
     const b = new google.maps.LatLngBounds();
     markers.forEach((g) => b.extend(g.position));
-    if (myLoc) b.extend(myLoc);
+
     if (!b.isEmpty()) {
       m.fitBounds(b, fitPadding());
+      return;
+    }
+    if (myLoc) {
+      m.panTo(myLoc);
+      m.setZoom(15);
     } else {
       m.panTo(CENTER_CLUJ);
       m.setZoom(12);
@@ -575,16 +582,51 @@ export default function MapPage() {
       (pos) => {
         const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMyLoc(pt);
-        mapRef.current?.panTo(pt);
-        mapRef.current?.setZoom(Math.max(mapRef.current?.getZoom() ?? 14, 15));
+        fitToLocation(pt);
       },
       () => {},
-      { enableHighAccuracy: true, timeout: 8000 }
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 60000
+      }
     );
-  }, []);
+  }, [fitToLocation]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case '/':
+          e.preventDefault();
+          searchRef.current?.focus();
+          break;
+        case 'f':
+          e.preventDefault();
+          if (e.shiftKey && myLoc && mapRef.current) {
+            const b = new google.maps.LatLngBounds();
+            markers.forEach((g) => b.extend(g.position));
+            b.extend(myLoc);
+            mapRef.current.fitBounds(b, fitPadding());
+          } else {
+            fitToMarkers();
+          }
+          break;
+        case 'l':
+          e.preventDefault();
+          locateMe();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fitToMarkers, locateMe]);
 
   const clearSelection = useCallback(() => {
-    // Clear from URL
     const sp = new URLSearchParams(location.search);
     sp.delete('bbox');
     sp.delete('geohash');
@@ -756,6 +798,12 @@ export default function MapPage() {
           gestureHandling: 'greedy',
           disableDefaultUI: true,
           keyboardShortcuts: false,
+          styles: theme === 'dark' ? DARK_STYLE : LIGHT_STYLE,
+          backgroundColor:
+              theme === 'dark'
+                  ? cssVar('--secondary-100', '#0F161C')
+                  : '#F3F7F6',
+
         }}
       >
         {/* Highlighted selection (bbox/geohash) */}

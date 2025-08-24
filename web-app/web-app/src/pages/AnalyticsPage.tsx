@@ -152,7 +152,7 @@ export default function AnalyticsPage() {
         getTimeToResolution(params),
         getGeoHotspots({ ...params, precision, min_count: 1, limit: 300 }),
         getIssuesAgingBuckets({ ...params }),
-        getConfidenceByClass({ ...params, min_detections: 5 }),
+        getConfidenceByClass({ ...params, min_detections: 2 }),
         getDailyHealthMetrics(params),
         getUserEngagementMetrics(params),
         getTemporalPatterns(params),
@@ -596,7 +596,7 @@ export default function AnalyticsPage() {
               <div className="chart-wrap">
                 {state !== 'ready' ? <div className="chart-skeleton" /> : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={sevByDay} stackOffset="expand">
+                    <AreaChart data={sevByDay}>
                       <defs>
                         <linearGradient id="gradLow" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="var(--sev-low)" stopOpacity={0.55}/>
@@ -615,7 +615,7 @@ export default function AnalyticsPage() {
                       <XAxis dataKey="date" tickFormatter={fmtDayLabel}
                         tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
                         axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }} height={36}/>
-                      <YAxis tickFormatter={(v)=>`${Math.round(v*100)}%`} width={44}
+                      <YAxis width={44}
                         tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}
                         axisLine={{ stroke: 'var(--chart-axis)' }} tickLine={{ stroke: 'var(--chart-axis)' }}/>
                       <Tooltip
@@ -658,7 +658,9 @@ export default function AnalyticsPage() {
                       <Legend />
                       <Tooltip
                         wrapperStyle={{ outline: 'none' }}
-                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)', color: 'var(--on-surface)' }}
+                        labelStyle={{ color: 'var(--on-surface)' }}
+                        itemStyle={{ color: 'var(--on-surface)' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -684,7 +686,9 @@ export default function AnalyticsPage() {
                       <Legend />
                       <Tooltip
                         wrapperStyle={{ outline: 'none' }}
-                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)', color: 'var(--on-surface)' }}
+                        labelStyle={{ color: 'var(--on-surface)' }}
+                        itemStyle={{ color: 'var(--on-surface)' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -703,7 +707,9 @@ export default function AnalyticsPage() {
                       <YAxis type="category" dataKey="class_name" width={80} tick={{ fill: 'var(--chart-axis)', fontSize: 12 }} />
                       <Tooltip
                         wrapperStyle={{ outline: 'none' }}
-                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)', color: 'var(--on-surface)' }}
+                        labelStyle={{ color: 'var(--on-surface)' }}
+                        itemStyle={{ color: 'var(--on-surface)' }}
                       />
                       <Bar dataKey="count" radius={[8,8,8,8]} fill="url(#barGradPrimary)">
                         {topClasses.map((_, i) => <Cell key={i} fill="url(#barGradPrimary)" />)}
@@ -748,7 +754,9 @@ export default function AnalyticsPage() {
                       <YAxis width={42} tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
                       <Tooltip
                         wrapperStyle={{ outline: 'none' }}
-                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)', color: 'var(--on-surface)' }}
+                        labelStyle={{ color: 'var(--on-surface)' }}
+                        itemStyle={{ color: 'var(--on-surface)' }}
                       />
                       <Bar dataKey="avg_hours" name="avg" radius={[8,8,0,0]} fill="var(--secondary-500)"/>
                       <Line dataKey="p95_hours" name="p95" type="monotone" stroke="var(--primary-600)" strokeWidth={2} dot />
@@ -993,7 +1001,9 @@ export default function AnalyticsPage() {
                       <YAxis tick={{ fill: 'var(--chart-axis)', fontSize: 12 }}/>
                       <Tooltip
                         wrapperStyle={{ outline: 'none' }}
-                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)' }}
+                        contentStyle={{ borderRadius: 12, border: '1px solid var(--surface-200)', background: 'var(--surface-0)', color: 'var(--on-surface)' }}
+                        labelStyle={{ color: 'var(--on-surface)' }}
+                        itemStyle={{ color: 'var(--on-surface)' }}
                       />
                       <Bar dataKey="uploads" fill="var(--primary-500)" radius={[4,4,0,0]} />
                     </BarChart>
@@ -1169,7 +1179,7 @@ export default function AnalyticsPage() {
                         }}
                       />
                       <Bar yAxisId="count" dataKey="total_count" fill="var(--primary-300)" name="Total Count" opacity={0.5} />
-                      <Line yAxisId="rate" type="monotone" dataKey="false_positive_rate" stroke="var(--danger)" strokeWidth={3} dot />
+                      <Line yAxisId="rate" type="monotone" dataKey="false_positive_rate" stroke="var(--error)" strokeWidth={3} dot connectNulls={true} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}

@@ -141,13 +141,22 @@
 .cards { display: grid; gap: 12px; margin-top: 12px; }
 .cardsSkeleton {
   height: 180px; border-radius: 12px;
-  background:
-    linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.05) 50%, rgba(0,0,0,0) 100%),
-    repeating-linear-gradient(0deg, var(--surface-100), var(--surface-100) 12px, var(--surface-0) 12px, var(--surface-0) 24px);
+  background: repeating-linear-gradient(0deg, var(--surface-100), var(--surface-100) 12px, var(--surface-0) 12px, var(--surface-0) 24px);
   border: 1px solid var(--surface-200);
-  animation: shimmer 1.6s linear infinite;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
 }
-@keyframes shimmer { to { transform: translateX(100%); } }
+
+.cardsSkeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.28), rgba(255,255,255,0));
+  animation: skeleton-sweep 1.6s linear infinite;
+  pointer-events: none;
+}
 
 .card {
   border-radius: 14px;
@@ -386,10 +395,31 @@
   height: 260px;
   border-radius: 12px;
   border: 1px solid var(--surface-200);
-  background:
-    linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.05) 50%, rgba(0,0,0,0) 100%),
-    repeating-linear-gradient(0deg, var(--surface-100), var(--surface-100) 16px, var(--surface-0) 16px, var(--surface-0) 32px);
-  animation: shimmer 1.6s linear infinite;
+  background: repeating-linear-gradient(0deg, var(--surface-100), var(--surface-100) 16px, var(--surface-0) 16px, var(--surface-0) 32px);
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.tableSkeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.28), rgba(255,255,255,0));
+  animation: skeleton-sweep 1.6s linear infinite;
+  pointer-events: none;
+}
+
+/* Dark theme support for skeleton shine */
+:root.dark .cardsSkeleton::after,
+:root.dark .tableSkeleton::after {
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.15), rgba(255,255,255,0));
+}
+
+/* Skeleton animation keyframes */
+@keyframes skeleton-sweep {
+  to { transform: translateX(100%); }
 }
 
 /* ---------- Pager ---------- */
