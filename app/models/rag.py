@@ -9,6 +9,7 @@ class RAGChunk(Base):
 
     id        = Column(Integer, primary_key=True)
     media_id  = Column(Integer, ForeignKey("media.id", ondelete="CASCADE"), nullable=False)
+    track_id  = Column(Integer, nullable=True)  # Track ID for video detections, null for images
     chunk     = Column(Text, nullable=False)
     embedding = Column(Vector(1536), nullable=False)
 

@@ -12,61 +12,74 @@ from app.models.schemas_chat import (
 )
 
 from openai import AsyncOpenAI, InternalServerError
+import re
 
 router = APIRouter(tags=["Chat"], dependencies=[require_roles("authority")])
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 async def generate_conversation_title(first_message: str) -> str:
+    """
+    Generate a concise, punctuation-free, Title Case conversation title.
+    Target: 20-45 characters (hard cap 50) using the Responses API.
+    """
     try:
-        completion = await client.chat.completions.create(
+        resp = await client.responses.create(
             model="gpt-4.1",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """# Role and Objective
-You are a title generator that creates concise, descriptive conversation titles for an urban maintenance assistant chat system.
+            # System-level guidance lives in `instructions`
+            instructions="""
+# Role & Objective
+You generate concise, descriptive conversation titles for an urban maintenance assistant.
 
 # Instructions
-- Generate a title that captures the main topic or issue from the user's first message
-- Keep titles between 20-45 characters for optimal display
-- Use title case (capitalize first letter of each major word)
-- Focus on the specific problem, location, or request mentioned
-- Avoid generic words like "conversation", "chat", "question", or "help"
-- Do not include punctuation marks, quotes, or special characters
-- Return ONLY the title text, nothing else
+- Capture the main topic/issue from the user's first message
+- Target 20-45 characters (hard cap 50 applied by caller)
+- Use Title Case
+- No punctuation or special characters
+- Avoid generic words: conversation, chat, question, help
+- Return ONLY the title text, no quotes or extra text
 
-# Title Style Guidelines
-- For maintenance issues: focus on the problem type and location
-- For reports: emphasize what is being reported
-- For requests: highlight the specific service needed
-- Use clear, actionable language that a city worker would understand
+# Style Guidelines
+- Maintenance issues: focus on problem type + location
+- Reports: emphasize what is being reported
+- Requests: highlight the specific service needed
+- Use clear, actionable language for city workers
 
 # Examples
-## Input: "How do I fix a pothole on Main Street?"
-## Output: Pothole Repair Main Street
+- Input: "How do I fix a pothole on Main Street?"
+  Output: Pothole Repair Main Street
+- Input: "Report water leak at 123 Oak Avenue"
+  Output: Water Leak 123 Oak Avenue
+- Input: "Street light not working near Central Park"
+  Output: Broken Street Light Central Park
+- Input: "Graffiti removal request for downtown area"
+  Output: Graffiti Removal Downtown
+- Input: "Tree branch blocking sidewalk on Elm Street"
+  Output: Tree Branch Blocking Elm Street
 
-## Input: "Report water leak at 123 Oak Avenue"
-## Output: Water Leak 123 Oak Avenue
-
-## Input: "Street light not working near Central Park"
-## Output: Broken Street Light Central Park
-
-## Input: "Graffiti removal request for downtown area"
-## Output: Graffiti Removal Downtown
-
-## Input: "Tree branch blocking sidewalk on Elm Street"
-## Output: Tree Branch Blocking Elm Street
-
-Generate a title following these guidelines:"""
-                },
-                {"role": "user", "content": first_message}
-            ],
+# Final Instruction
+Return a single line with only the title. No punctuation. No quotes.
+""".strip(),
+            # For this simple case, pass the user input as a plain string
+            input=first_message,
             temperature=0.2,
-            max_tokens=25,
+            max_output_tokens=30,   # Slightly higher to accommodate 45-char target
+            # store=True is default - enables OpenAI dashboard logging
         )
-        title = completion.choices[0].message.content or "New Conversation"
-        return title.strip()[:50]  # Ensure max length and remove whitespace
+
+        raw = (resp.output_text or "").strip()
+        if not raw:
+            return "New Conversation"
+
+        title = raw.splitlines()[0].strip().strip('"\'')
+        title = re.sub(r'[^\w\s\u00C0-\u024F]', ' ', title)
+        title = re.sub(r'_', ' ', title)
+        title = re.sub(r'\s+', ' ', title).strip()
+        title = title.title()
+        title = title[:50].strip()
+
+        return title or "New Conversation"
+
     except Exception:
         return "New Conversation"
 
@@ -118,7 +131,7 @@ async def chat(
 
     db.add(ChatMessage(session_id=session.id, role="user", content=req.message))
     db.commit()
-    
+
     # Generate title for new sessions from the first message
     if is_new_session:
         title = await generate_conversation_title(req.message)
@@ -141,59 +154,69 @@ async def chat(
         if m.role in ("user", "assistant")
     ]
 
-    # 3) Optimized system rules for GPT-4.1
+    # 3) Optimized system rules for GPT-4.1 (top-level behavioral contract)
     system_rules_top = (
         "# Role & Objective\n"
         "You are an urban-maintenance assistant for city authorities.\n\n"
         "# Instructions\n"
-        "- Use ONLY the External Context for factual claims; if unsupported, say: "
+        "- Use ONLY the External Context for factual claims; if unsupported, say "
         "\"Not enough evidence in the sources.\" Do not invent details.\n"
         "- Attach bracket citations [#ID] immediately after each non-trivial claim; "
         "use multiple [#ID] if a point relies on multiple sources.\n"
         "- Stay concise. Professional tone.\n"
-        "- Think step-by-step **silently** before answering; DO NOT reveal your internal analysis.\n"
+        "- Think step-by-step internally before answering; do NOT expose this reasoning.\n"
         "- No web browsing, no tools. No policy/legal/medical advice.\n\n"
-        "# Output Format (Markdown)\n"
+        "# Internal Reasoning Strategy (do privately)\n"
+        "1. Identify what information the question needs\n"
+        "2. Scan context documents for relevant evidence\n"
+        "3. Synthesize findings with proper citations\n"
+        "4. Formulate actionable next steps\n"
+        "5. Note any information gaps\n\n"
+        "# Output Format (strict Markdown)\n"
         "#### Answer\n"
-        "- Bullet points that directly answer the question, each with [#ID].\n\n"
+        "- Bullet points that directly answer the question, each with [#ID]\n\n"
         "#### Actions\n"
-        "- 2–5 concrete next steps for city staff, each with [#ID] if applicable.\n\n"
+        "- 2-5 concrete next steps for city staff, each with [#ID] if applicable\n\n"
         "#### Timeline\n"
-        "- Bullets like \"within 24h\", \"this week\", \"this quarter\".\n\n"
+        "- Bullets like \"within 24h\", \"this week\", \"this quarter\"\n\n"
         "#### Assumptions / Gaps\n"
-        "- Any missing info or uncertainties.\n\n"
+        "- Any missing info or uncertainties\n\n"
         "#### Citations\n"
-        "- List unique [#ID] used, ascending.\n"
+        "- List unique [#ID] used, ascending\n"
     )
 
+    # repeat key reminders after the long context (guide: instructions at both top & bottom)
     rules_after_context = (
         "# Final Instructions\n"
-        "- Answer ONLY from External Context.\n"
-        "- Every substantive statement must include [#ID].\n"
-        "- Use the exact Output Format.\n"
-        "- If sources are insufficient, say so and still provide Actions/Timeline noting gaps.\n"
+        "- Answer ONLY from External Context\n"
+        "- Every substantive statement must include [#ID]\n"
+        "- Use the exact Output Format shown above\n"
+        "- If sources are insufficient, acknowledge gaps but still provide Actions/Timeline\n"
+        "- Output only the requested sections—no reasoning or prefaces\n"
     )
 
-    messages = [
-        {"role": "system", "content": system_rules_top},
-        {"role": "system", "name": "SOURCES", "content": context_block},
-        {"role": "system", "content": rules_after_context},
-    ] + chat_roll + [
-        {"role": "user", "content": f"QUESTION:\n{req.message}"}
-    ]
-
-    # 4) Call GPT-4.1
+    # 4) Call GPT-4.1 via Responses API (stateless)
     try:
-        completion = await client.chat.completions.create(
+        resp = await client.responses.create(
             model="gpt-4.1",
-            messages=messages,
+            instructions=system_rules_top,   # top-level behavior
+            input=[
+                # long context first…
+                {"role": "system", "content": context_block},
+                # …then repeat the key reminders after the context
+                {"role": "system", "content": rules_after_context},
+                # recent conversation turns
+                *chat_roll,
+                # the current user question
+                {"role": "user", "content": f"QUESTION:\n{req.message}"},
+            ],
             temperature=0.2,
-            top_p=0.9,
+            # store=True is default - enables OpenAI dashboard logging
         )
     except InternalServerError as e:
         raise HTTPException(502, "Upstream LLM error") from e
 
-    raw_answer = completion.choices[0].message.content or ""
+    raw_answer = (getattr(resp, "output_text", None) or "").strip()
 
     # 5) Fallback if no sources
     if not has_sources:

@@ -5,6 +5,8 @@ import Input from "../components/Input";
 import Button from "../components/Button";
 import IssueModal from "../components/IssueModal";
 import { issuesSummaryByMedia, type IssuesSummary } from "../api/issues";
+import { bulkUpdateStatus } from "../api/issues";
+import { notify } from "../lib/notify";
 import "../styles/list-page.css";
 
 type MediaType = "all" | "image" | "video";
@@ -43,6 +45,7 @@ export default function ListPage() {
   const [modalProblem, setModalProblem] = useState<Problem | null>(null);
 
   const [summByMedia, setSummByMedia] = useState<Record<number, IssuesSummary>>({});
+  const [bulkResolving, setBulkResolving] = useState<Set<number>>(new Set());
 
   useEffect(() => {
   let cancelled = false;
@@ -189,6 +192,45 @@ export default function ListPage() {
     setKlass("");
     setType("all");
     setMediaFilter(null);
+  };
+
+  const handleBulkResolve = async (mediaId: number) => {
+    if (bulkResolving.has(mediaId)) return;
+    
+    setBulkResolving(prev => new Set(prev.add(mediaId)));
+    
+    try {
+      const result = await bulkUpdateStatus(mediaId, "resolved");
+      notify.success(`${result.updated_count} detection(s) marked as resolved`);
+      
+      // Update the summary to reflect the changes
+      setSummByMedia(prev => {
+        const updated = { ...prev };
+        if (updated[mediaId]) {
+          // Move all open issues to resolved
+          const summary = updated[mediaId];
+          
+          // Reset open counts and add to resolved
+          ['high', 'medium', 'low'].forEach(sev => {
+            if (summary[sev as keyof IssuesSummary]?.open) {
+              const openCount = summary[sev as keyof IssuesSummary]!.open!;
+              summary[sev as keyof IssuesSummary]!.open = 0;
+              summary[sev as keyof IssuesSummary]!.resolved = (summary[sev as keyof IssuesSummary]?.resolved || 0) + openCount;
+            }
+          });
+        }
+        return updated;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update detections';
+      notify.error('Bulk update failed', message);
+    } finally {
+      setBulkResolving(prev => {
+        const updated = new Set(prev);
+        updated.delete(mediaId);
+        return updated;
+      });
+    }
   };
 
   const exportCsv = () => {
@@ -432,7 +474,7 @@ export default function ListPage() {
                 {it.annotated_image_url && (
                     <img
                         className="thumb"
-                        src={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                        src={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url}`}
                         alt=""
                         loading="lazy"
                     />
@@ -443,7 +485,7 @@ export default function ListPage() {
                       <video
                         className="thumb"
                         src={`${import.meta.env.VITE_API_BASE}${it.annotated_video_url}`}
-                        poster={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                        poster={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url || `/static/${it.media_id}.jpg`}`}
                         muted
                         preload="metadata"
                       />
@@ -467,6 +509,22 @@ export default function ListPage() {
                 >
                   View details
                 </Button>
+                {(() => {
+                  const summary = summByMedia[it.media_id];
+                  const hasOpenIssues = summary && Object.values(summary).some(sev => sev?.open && sev.open > 0);
+                  return hasOpenIssues ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="view-btn"
+                      onClick={() => handleBulkResolve(it.media_id)}
+                      disabled={bulkResolving.has(it.media_id)}
+                      title="Mark all open detections as resolved"
+                    >
+                      {bulkResolving.has(it.media_id) ? "Resolving..." : "Resolve All"}
+                    </Button>
+                  ) : null;
+                })()}
               </footer>
             </article>
           ))}
@@ -543,7 +601,7 @@ export default function ListPage() {
                   <td className="td">
                     {it.annotated_image_url && (
                       <img
-                        src={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                        src={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url}`}
                         className="thumbTable"
                         alt=""
                         loading="lazy"
@@ -554,7 +612,7 @@ export default function ListPage() {
                         <video
                           className="thumbTable"
                           src={`${import.meta.env.VITE_API_BASE}${it.annotated_video_url}`}
-                          poster={`${import.meta.env.VITE_API_BASE}/static/${it.media_id}.jpg`}
+                          poster={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url || `/static/${it.media_id}.jpg`}`}
                           muted
                           preload="metadata"
                         />
@@ -574,14 +632,32 @@ export default function ListPage() {
                     </div>
                   </td>
                   <td className="td">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="view-btn"
-                      onClick={() => setModalProblem(it)}
-                    >
-                      View
-                    </Button>
+                    <div className="row-actions">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="view-btn"
+                        onClick={() => setModalProblem(it)}
+                      >
+                        View
+                      </Button>
+                      {(() => {
+                        const summary = summByMedia[it.media_id];
+                        const hasOpenIssues = summary && Object.values(summary).some(sev => sev?.open && sev.open > 0);
+                        return hasOpenIssues ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="view-btn"
+                            onClick={() => handleBulkResolve(it.media_id)}
+                            disabled={bulkResolving.has(it.media_id)}
+                            title="Mark all open detections as resolved"
+                          >
+                            {bulkResolving.has(it.media_id) ? "Resolving..." : "Resolve All"}
+                          </Button>
+                        ) : null;
+                      })()}
+                    </div>
                   </td>
                 </tr>
               ))}

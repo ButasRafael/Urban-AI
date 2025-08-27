@@ -47,6 +47,19 @@ def all_problems(
         )
         descriptions = [d.description or "n/a" for d in detects]
         solutions    = [d.solution    or "n/a" for d in detects]
+        # Use stored UUID filenames if available, fallback to ID-based names for backward compatibility
+        if m.static_filename:
+            if m.media_type == "image":
+                img_url = f"/static/{m.static_filename}"
+                video_url = None
+            else:
+                video_url = f"/static/{m.static_filename}"
+                img_url = f"/static/{m.thumbnail_filename}" if m.thumbnail_filename else f"/static/{m.id}.jpg"
+        else:
+            # Fallback for old records without UUID filenames
+            img_url = f"/static/{m.id}.jpg" if m.media_type == "image" else None
+            video_url = f"/static/{m.id}.mp4" if m.media_type == "video" else None
+
         out.append(ProblemOut(
             media_id=m.id,
             address=m.address,
@@ -54,8 +67,8 @@ def all_problems(
             longitude=m.longitude,
             user_username=m.user_username,
             media_type=m.media_type,
-            annotated_image_url = f"/static/{m.id}.jpg" if m.media_type=="image" else None,
-            annotated_video_url = f"/static/{m.id}.mp4" if m.media_type=="video" else None,
+            annotated_image_url=img_url,
+            annotated_video_url=video_url,
             created_at=m.created_at,
             predicted_classes=classes,
             descriptions=descriptions,
@@ -90,6 +103,7 @@ class IssueOut(BaseModel):
     assigned_to: Optional[str] = None
     verified_by: Optional[str] = None
     verified_at: Optional[str] = None
+    track_thumbnail_url: Optional[str] = None
 
 @router.get("/issues", response_model=List[IssueOut])
 def list_issues(
@@ -133,8 +147,18 @@ def list_issues(
     )
     out: list[IssueOut] = []
     for det, fr, med in rows:
-        img_url   = f"/static/{med.id}.jpg" if med.media_type == "image" else None
-        video_url = f"/static/{med.id}.mp4" if med.media_type == "video" else None
+        # Use stored UUID filenames if available, fallback to ID-based names for backward compatibility
+        if med.static_filename:
+            if med.media_type == "image":
+                img_url = f"/static/{med.static_filename}"
+                video_url = None
+            else:
+                video_url = f"/static/{med.static_filename}"
+                img_url = f"/static/{med.thumbnail_filename}" if med.thumbnail_filename else f"/static/{med.id}.jpg"
+        else:
+            # Fallback for old records without UUID filenames
+            img_url = f"/static/{med.id}.jpg" if med.media_type == "image" else None
+            video_url = f"/static/{med.id}.mp4" if med.media_type == "video" else None
         out.append(IssueOut(
             id=det.id,
             media_id=med.id,
@@ -156,6 +180,7 @@ def list_issues(
             assigned_to=det.assigned_to,
             verified_by=det.verified_by,
             verified_at=det.verified_at.isoformat() if det.verified_at else None,
+            track_thumbnail_url=det.track_thumbnail_url,
         ))
     return out
 
@@ -189,6 +214,51 @@ def issues_summary(
     return summary
 
 from typing import Dict
+
+class BulkUpdateRequest(BaseModel):
+    media_id: int
+    status: Literal["resolved", "ignored"]  # Only allow resolved or ignored for bulk updates
+
+@router.patch("/issues/bulk_status")
+def bulk_update_status(
+    request: BulkUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    """Update status of all open detections for a specific media item"""
+    # Get all open detections for the media
+    detections = (
+        db.query(dbm.Detection)
+        .join(dbm.Frame, dbm.Frame.id == dbm.Detection.frame_id)
+        .join(dbm.Media, dbm.Media.id == dbm.Frame.media_id)
+        .filter(
+            dbm.Media.id == request.media_id,
+            dbm.Detection.status == dbm.IssueStatus.open
+        )
+        .all()
+    )
+    
+    if not detections:
+        return {"updated_count": 0, "message": "No open detections found for this media"}
+    
+    # Update all detections
+    updated_count = 0
+    new_status = dbm.IssueStatus(request.status)
+    
+    for detection in detections:
+        detection.status = new_status
+        if new_status == dbm.IssueStatus.resolved:
+            from datetime import datetime, timezone
+            detection.resolved_at = datetime.now(timezone.utc)
+        updated_count += 1
+    
+    db.commit()
+    
+    return {
+        "updated_count": updated_count,
+        "media_id": request.media_id,
+        "new_status": request.status,
+        "message": f"Updated {updated_count} detection(s) to {request.status}"
+    }
 
 @router.get("/issues/summary_by_media")
 def issues_summary_by_media(

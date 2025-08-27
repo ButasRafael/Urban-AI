@@ -12,13 +12,12 @@ from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple, DefaultDict
 from pycocotools import mask as mask_util
 import yaml
 import random
 import logging
-from typing import Tuple, List
-import os, json, base64
+import os, json, base64, re
 from openai import AsyncOpenAI, InternalServerError, RateLimitError, APIConnectionError
 from dotenv import load_dotenv
 from fastapi import HTTPException
@@ -26,6 +25,8 @@ from groundingdino.util.inference import Model as _GDINO
 import time
 import asyncio
 import httpx
+import math
+from collections import defaultdict
 
 load_dotenv()
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -298,61 +299,79 @@ async def generate_comprehensive_summary(
     for issue_type, items in sorted(issues_by_type.items(), key=lambda kv: kv[0]):
         sev = sev_bucket(items)
         total = len(items)
-        examples = [i["description"] for i in items if i.get("description")]
-        examples = [e for e in examples if e][:2]
-        ex_text = ""
-        if examples:
-            ex_text = "\n    examples: " + " | ".join(f"\"{e}\"" for e in examples)
+        # Get ALL unique descriptions and solutions, not just 2
+        all_descriptions = [i["description"] for i in items if i.get("description")]
+        all_solutions = [i["solution"] for i in items if i.get("solution")]
+        
+        # Remove duplicates while preserving order
+        seen_desc = set()
+        unique_descriptions = []
+        for desc in all_descriptions:
+            if desc and desc not in seen_desc:
+                seen_desc.add(desc)
+                unique_descriptions.append(desc)
+        
+        seen_sol = set()
+        unique_solutions = []
+        for sol in all_solutions:
+            if sol and sol not in seen_sol:
+                seen_sol.add(sol)
+                unique_solutions.append(sol)
+        
+        # Format descriptions and solutions
+        desc_text = ""
+        if unique_descriptions:
+            if len(unique_descriptions) <= 3:
+                desc_text = "\n    descriptions: " + " | ".join(f"\"{d}\"" for d in unique_descriptions)
+            else:
+                # For many descriptions, format them on separate lines for clarity
+                desc_text = "\n    descriptions:\n      - " + "\n      - ".join(f"\"{d}\"" for d in unique_descriptions)
+        
+        sol_text = ""
+        if unique_solutions:
+            if len(unique_solutions) <= 3:
+                sol_text = "\n    solutions: " + " | ".join(f"\"{s}\"" for s in unique_solutions)
+            else:
+                # For many solutions, format them on separate lines for clarity
+                sol_text = "\n    solutions:\n      - " + "\n      - ".join(f"\"{s}\"" for s in unique_solutions)
+        
         lines.append(
             f"- {issue_type}: {total} detections | severity -> "
-            f"high:{sev['high']}, medium:{sev['medium']}, low:{sev['low']}, unknown:{sev['unknown']}{ex_text}"
+            f"high:{sev['high']}, medium:{sev['medium']}, low:{sev['low']}, unknown:{sev['unknown']}{desc_text}{sol_text}"
         )
 
     issues_text = "\n".join(lines)
 
-    prompt = f"""# Role & Objective
-You are an urban infrastructure expert. Summarize the issues in a single image and propose an integrated remediation plan.
+    # Instructions go in the instructions parameter for GPT-4.1
+    instructions = """# Role & Objective
+You are an urban infrastructure expert. Summarize detected issues and propose an integrated remediation plan.
 
 # Response Rules (follow strictly)
-- Output **only** a single JSON object, no prose, no markdown, no code fences.
-- The JSON must contain **exactly** these keys: "description" and "solution".
-- "description": 2–3 concise sentences covering **all** issues found as a cohesive overview.
-- "solution": 3–4 concise sentences with an integrated, **prioritized** action plan that:
-  • sequences work by severity and logical dependencies,
-  • mentions coordination/safety or access constraints if relevant,
-  • avoids redundant steps, and
-  • is directly actionable for city operations teams.
-- Do **not** invent assets, measurements, or locations not implied by the data.
-- Group similar problems; avoid repetitive listing of identical issues.
-- Think through prioritization and dependencies **privately**; do **not** reveal your reasoning steps. Only return the final JSON.
+- Output ONLY a single JSON object, no prose, no markdown, no code fences
+- The JSON must contain exactly these keys: "description" and "solution"
+- "description": 2-3 concise sentences covering all issues found as a cohesive overview
+- "solution": 3-4 concise sentences with an integrated, prioritized action plan that:
+  • sequences work by severity and logical dependencies
+  • mentions coordination/safety or access constraints if relevant
+  • avoids redundant steps
+  • is directly actionable for city operations teams
+- Do not invent assets, measurements, or locations not implied by the data
+- Group similar problems; avoid repetitive listing of identical issues
+- Think through prioritization and dependencies privately; do not reveal your reasoning
 
-# Output Format (must match exactly)
-{{ "description": "<2-3 sentences>", "solution": "<3-4 sentences>" }}
+# Output Format
+Return exactly: {{"description": "<2-3 sentences>", "solution": "<3-4 sentences>"}}
 
-# Data: Issue Summary
-{issues_text}
+# Final Instruction
+If you cannot comply for any reason, return the smallest valid JSON that satisfies the schema.
 """
 
     async with _GPT_SEMAPHORE:
         try:
-            payload = [
-                {
-                    "role": "system",
-                    "content": [{"type": "input_text", "text": (
-                        "You are an urban infrastructure expert who writes concise, "
-                        "operationally useful summaries and action plans. Follow the user's rules exactly. "
-                        "Do not include reasoning or meta-commentary; output only the final JSON object."
-                    )}],
-                },
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": prompt}],
-                },
-            ]
-
             resp = await client.responses.create(
                 model="gpt-4.1",
-                input=payload,
+                instructions=instructions,
+                input=f"Issue Summary:\n{issues_text}",
                 temperature=0.2,
                 timeout=30,
             )
@@ -406,54 +425,73 @@ async def _gpt_refine_and_find(
         resp = await http.get(image_url, timeout=5.0)
         resp.raise_for_status()
 
-    prompt_text = (
-        "You are analyzing an urban-planning scenario based on an input image and its corresponding YOLO detections (bounding boxes)."
-        " Perform the following tasks:\n"
-        "\n"
-        "1. For each YOLO detection **present in the array** (if the YOLO array is empty, skip this section entirely and output **no fields named \"track_id\" or \"keep\"):**\n"
-        "   - \"track_id\": integer (the YOLO track-ID provided)\n"
-        "   - \"keep\": boolean (true if YOLO correctly identified the object; false if it is a mis-identification)\n"
-        "   - \"description\": string (a clear one-sentence description of the detected object or issue)\n"
-        "   - \"solution\": string — if the object is an issue, give a concise, practical, one-sentence remediation proposal; "
-        "     if the object is NOT an issue, write \"No solution needed\".\n"
-        "   - \"severity\": \"low\" | \"medium\" | \"high\" (lowercase only). Use this rubric: high = acute safety/operational hazard or large impact; medium = material degradation or likely to become hazardous soon; low = minor/cosmetic. If uncertain, choose the lower severity.\n"
-        "\n"
-        "   Do NOT include bounding-box coordinates in your response; YOLO’s geometry will be used directly.\n"
-        "\n"
-        "2. Only add **new** JSON objects for additional urban issues **when they are BOTH important and realistically solvable**:\n"
-        "   - \"new\": true\n"
-        "   - \"class_name\": string (the specific type or category of urban issue identified)\n"
-        "   - \"confidence\": float between 0 and 1 (your confidence in this additional issue)\n"
-        "   - \"description\": string (a clear one-sentence description of the newly identified issue)\n"
-        "   - \"solution\": string (a concise, practical, one-sentence remediation proposal)\n"
-        "   - \"severity\": \"low\" | \"medium\" | \"high\" (lowercase only; same rubric as above).\n"
-        "   - \"dino_prompt\": string\n"
-        "       • 1 – 3 **lower-case tokens**, each ≤ 2 words.\n"
-        "       • Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. \"traffic light\", \"trash bin\").\n"
-        "       • NO commas, punctuation, verbs, prepositions, or numerals.\n"
-        "       • Color/material adjectives when they are the *sole* reliable cue (e.g. \"red cone\").\n"
-        "       • Put the **most visually distinctive token first**; order the rest by distinctiveness.\n"
-        "       • Prefer the canonical dataset label (\"fire hydrant\" not \"hydrant\").\n"
-        "       • Use singular form unless plurality is visually obvious.\n"
-        "       • Hard cap of three tokens — if unsure, pick ONE high-precision noun.\n"
-        "       • Separate tokens with ONE space exactly.\n"
-        "\n"
-        "   Skip minor, cosmetic, or trivial issues entirely — return ZERO new detections if the photo appears clean.\n"
-        "   Do NOT specify exact bounding-box coordinates; these additional detections will be logged as coarse issues.\n"
-        "\n"
-        "3. Return **ONLY** a JSON-formatted array containing all of the above-described objects, and NOTHING ELSE."
-    )
+    # Instructions moved to instructions parameter per GPT-4.1 best practices
+    instructions = """# Role & Objective
+You are analyzing an urban-planning scenario based on an input image and its corresponding YOLO detections (bounding boxes).
+
+# Instructions
+Perform the following tasks to validate existing detections and identify critical missing issues.
+
+## 1. For Each YOLO Detection Present in the Array
+(If the YOLO array is empty, skip this section entirely and output **no fields named "track_id" or "keep"):
+- "track_id": integer (the YOLO track-ID provided)
+- "keep": boolean (true if YOLO correctly identified the object; false if it is a mis-identification)
+- "description": string (a clear one-sentence description of the detected object or issue)
+- "solution": string — if the object is an issue, give a concise, practical, one-sentence remediation proposal; if the object is NOT an issue, write "No solution needed".
+- "severity": "low" | "medium" | "high" (lowercase only)
+
+### Severity Rubric
+Use this rubric: high = acute safety/operational hazard or large impact; medium = material degradation or likely to become hazardous soon; low = minor/cosmetic. If uncertain, choose the lower severity.
+
+Do NOT include bounding-box coordinates in your response; YOLO's geometry will be used directly.
+
+## 2. Only Add New JSON Objects for Additional Urban Issues
+When they are BOTH important and realistically solvable:
+- "new": true
+- "class_name": string (the specific type or category of urban issue identified)
+- "confidence": float between 0 and 1 (your confidence in this additional issue)
+- "description": string (a clear one-sentence description of the newly identified issue)
+- "solution": string (a concise, practical, one-sentence remediation proposal)
+- "severity": "low" | "medium" | "high" (lowercase only; same rubric as above)
+- "dino_prompt": string
+
+### Dino Prompt Rules
+       • 1 – 3 **lower-case tokens**, each ≤ 2 words.
+       • Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. "traffic light", "trash bin").
+       • NO commas, punctuation, verbs, prepositions, or numerals.
+       • Color/material adjectives when they are the *sole* reliable cue (e.g. "red cone").
+       • Put the **most visually distinctive token first**; order the rest by distinctiveness.
+       • Prefer the canonical dataset label ("fire hydrant" not "hydrant").
+       • Use singular form unless plurality is visually obvious.
+       • Hard cap of three tokens — if unsure, pick ONE high-precision noun.
+       • Separate tokens with ONE space exactly.
+
+Skip minor, cosmetic, or trivial issues entirely — return ZERO new detections if the photo appears clean.
+Do NOT specify exact bounding-box coordinates; these additional detections will be logged as coarse issues.
+
+# Internal Reasoning Strategy (apply privately, do not output)
+1. First pass: Validate each YOLO detection against visual evidence
+2. Second pass: Scan for critical infrastructure issues YOLO may have missed  
+3. For each potential new detection: Is it both important AND fixable?
+4. For dino_prompt generation: What would a computer vision model need to locate this?
+5. Final check: Have I avoided duplicating any YOLO detections?
+
+# Output Format
+Return **ONLY** a JSON-formatted array containing all of the above-described objects, and NOTHING ELSE.
+
+# Final Instructions
+- Return ONLY a JSON-formatted array, nothing else
+- Valid JSON syntax required - no markdown, no backticks, no extra text
+- If YOLO array is empty, output empty array []
+- Every field must have correct type as specified above
+- If you cannot comply for any reason, return the smallest valid JSON array that satisfies the schema"""
 
     initial = sorted(initial, key=lambda d: -d["confidence"])[:50]
 
-    payload = [{
-        "role": "user",
-        "content": [
-            {"type": "input_text",  "text": prompt_text},
-            {"type": "input_image", "image_url": image_url, "detail": "high"},
-            {"type": "input_text",  "text": json.dumps(initial)},
-        ],
-    }]
+    # Build clean input with data only (no rules)
+    content = []
+    content.append({"type": "input_text", "text": f"YOLO detections:\n{json.dumps(initial, indent=2)}"})
+    content.append({"type": "input_image", "image_url": image_url, "detail": "high"})
 
     async with _GPT_SEMAPHORE:
         max_retries = 5
@@ -463,7 +501,8 @@ async def _gpt_refine_and_find(
             try:
                 resp = await client.responses.create(
                     model="gpt-4.1",
-                    input=payload,
+                    instructions=instructions,
+                    input=[{"role": "user", "content": content}],
                     temperature=0.2,
                     timeout=35,
                 )
@@ -924,6 +963,231 @@ def _tracker_yaml() -> str:
 
 _TRACKER_YAML = _tracker_yaml()
 
+def _crop_with_margin(img: np.ndarray, box: List[float], margin: float = 0.08) -> np.ndarray:
+    """
+    Crop image with margin around bounding box.
+    Returns a cropped region with additional margin for better context.
+    """
+    h, w = img.shape[:2]
+    x1, y1, x2, y2 = map(float, box)
+    
+    # Ensure box coordinates are valid
+    x1, x2 = min(x1, x2), max(x1, x2)
+    y1, y2 = min(y1, y2), max(y1, y2)
+    
+    # Calculate margin based on box dimensions
+    bw, bh = x2 - x1, y2 - y1
+    mx, my = bw * margin, bh * margin
+    
+    # Calculate crop coordinates with margin
+    ix1 = int(max(0, math.floor(x1 - mx)))
+    iy1 = int(max(0, math.floor(y1 - my)))
+    ix2 = int(min(w, math.ceil(x2 + mx)))
+    iy2 = int(min(h, math.ceil(y2 + my)))
+    
+    # Handle edge cases where margin calculation fails
+    if ix2 <= ix1 or iy2 <= iy1:
+        # Fallback to original box without margin, ensuring valid bounds
+        ix1 = int(max(0, min(x1, w-1)))
+        iy1 = int(max(0, min(y1, h-1)))
+        ix2 = int(max(ix1+1, min(x2, w)))  # Ensure at least 1 pixel width
+        iy2 = int(max(iy1+1, min(y2, h)))  # Ensure at least 1 pixel height
+    
+    return img[iy1:iy2, ix1:ix2]
+
+def _select_track_samples(
+    dets_by_frame: Dict[int, Dict],
+    max_per_track: int = 1,  # Only keeping 1 sample per track
+    diff_threshold: float = 0.975,  # Not used anymore but kept for compatibility
+    min_conf_threshold: float = 0.3,  # ignore very low confidence detections
+    temporal_spread_factor: float = 0.3,  # Not used anymore but kept for compatibility
+) -> Dict[int, Dict]:
+    """
+    Select the highest confidence sample for each track.
+    Returns: { track_id: { 'class_name': str, 'samples': [(frame_idx, crop_bgr), ...], 'best_conf': float } }
+    
+    Strategy:
+    - Keep only the highest confidence detection per track (best quality sample)
+    """
+    if not dets_by_frame:
+        return {}
+    
+    # Load models once for efficiency
+    yolo, _, _ = _load_models()
+    
+    # Collect all detections per track first
+    track_detections: Dict[int, List[Tuple[int, np.ndarray, float, int]]] = defaultdict(list)
+    frame_indices = sorted(dets_by_frame.keys())
+    total_frames = len(frame_indices)
+    
+    for frame_idx in frame_indices:
+        data = dets_by_frame[frame_idx]
+        frame, boxes, ids, clss, confs = data["frame"], data["boxes"], data["ids"], data["clss"], data["confs"]
+
+        for box, tid, cid, conf in zip(boxes, ids, clss, confs):
+            tid = int(tid)
+            conf = float(conf)
+            
+            # Skip very low confidence detections
+            if conf < min_conf_threshold:
+                continue
+                
+            try:
+                crop = _crop_with_margin(frame, box, margin=0.08)
+                if crop.size > 0:  # Ensure valid crop
+                    track_detections[tid].append((frame_idx, crop, conf, int(cid)))
+            except Exception:
+                continue  # Skip problematic crops
+    
+    # Now intelligently select samples for each track
+    per_track: Dict[int, Dict] = {}
+    
+    for tid, detections in track_detections.items():
+        if not detections:
+            continue
+            
+        # Sort by frame index for temporal processing
+        detections.sort(key=lambda x: x[0])
+        
+        class_name = yolo.names[detections[0][3]]  # Use class from first detection
+        best_conf = max(det[2] for det in detections)
+        
+        # Keep only the highest confidence detection per track
+        best_det = max(detections, key=lambda x: x[2])
+        selected_samples = [(best_det[0], best_det[1])]
+        
+        # Store results
+        if selected_samples:
+            per_track[tid] = {
+                "class_name": class_name,
+                "samples": selected_samples,
+                "best_conf": best_conf,
+                "total_detections": len(detections),
+                "frame_span": detections[-1][0] - detections[0][0] if len(detections) > 1 else 0,
+            }
+    
+    return per_track
+
+async def _gpt_describe_tracks(
+    tracks: Dict[int, Dict],
+    batch_size: int = 3,  # Reduced from 10 to 3 tracks per GPT call
+    max_images_per_track: int = 3,
+) -> Dict[int, Dict[str, str]]:
+    """
+    Returns: { track_id: { 'keep': bool, 'description': str, 'solution': str, 'severity': 'low|medium|high' } }
+    """
+    out: Dict[int, Dict[str, str]] = {}
+
+    # Instructions moved to instructions parameter for GPT-4.1
+    instructions = """# Role and Objective
+You are an urban infrastructure expert analyzing video footage of urban environments. Evaluate tracked objects across multiple video frames and determine whether each represents a legitimate infrastructure issue requiring remediation.
+
+# Instructions
+
+## Analysis Task
+- You receive multiple image crops for each track_id showing the same object tracked across different video frames
+- Each track represents one detected object that appears consistently throughout the video
+- Analyze ALL provided crops for each track to make an informed decision
+
+## Decision Criteria
+- Keep (true): Object represents a legitimate urban infrastructure issue that requires attention
+- Reject (false): Object is normal urban elements (vehicles, pedestrians, buildings, trees, etc.) or false detections
+
+## Response Requirements
+- Provide exactly ONE JSON object per track_id
+- Never skip a track_id that appears in the metadata
+- Base your analysis on visual evidence from ALL provided crops for each track
+- If uncertain about severity level, always choose the lower severity option
+
+## Severity Classification
+- high: Acute safety hazard or operational emergency requiring immediate attention
+- medium: Infrastructure degradation likely to become hazardous soon, or moderate impact on operations  
+- low: Minor cosmetic issues or maintenance needs with minimal operational impact
+
+# Internal Reasoning (do privately)
+1. Identify what the tracked object is
+2. Assess if it's an infrastructure issue or normal urban element
+3. Evaluate severity if it's an issue
+4. Formulate description and solution
+
+# Output Format
+Output ONLY a JSON array like: [{"track_id": 1, "keep": true, "description": "...", "solution": "...", "severity": "low"}]
+
+## Strict Requirements
+- Valid JSON array format, no markdown, no backticks, no extra text
+- Each description must be exactly one clear, factual sentence
+- Each solution must be exactly one actionable sentence, or exactly "No solution needed" for non-issues
+- If an image is too ambiguous, set keep=false and use the description to state the uncertainty briefly
+
+# Final Instruction
+Return ONLY a JSON array. No markdown, no backticks, no extra text. If you cannot comply for any reason, return the smallest valid JSON that satisfies the schema."""
+
+    # Chunk tracks to keep image count sane
+    tids = list(tracks.keys())
+    for i in range(0, len(tids), batch_size):
+        chunk_tids = tids[i:i+batch_size]
+
+        # Build input content (data only, no rules)
+        content = []
+
+        # Meta for this batch (class hints)
+        meta = []
+        for tid in chunk_tids:
+            meta.append({
+                "track_id": int(tid),
+                "class_name": tracks[tid]["class_name"],
+            })
+        content.append({"type": "input_text", "text": f"Track metadata:\n{json.dumps({'meta': meta})}"})
+
+        # Images (≤3 per track)
+        for tid in chunk_tids:
+            samples = tracks[tid]["samples"][:max_images_per_track]
+            for _, crop in samples:
+                _, buf = cv2.imencode(".jpg", crop, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                b64 = base64.b64encode(buf).decode()
+                content.append({
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{b64}",
+                    "detail": "high",
+                })
+                # Hint tying the image to track id
+                content.append({"type": "input_text", "text": f"track_id={tid}"})
+
+        async with _GPT_SEMAPHORE:
+            try:
+                resp = await client.responses.create(
+                    model="gpt-4.1",
+                    instructions=instructions,
+                    input=[{"role": "user", "content": content}],
+                    temperature=0.2,
+                    timeout=40,
+                )
+            except Exception as e:
+                logger.error(f"GPT track description failed: {e}")
+                continue
+                
+        raw = resp.output_text or ""
+        start, end = raw.find("["), raw.rfind("]")
+        if start == -1 or end == -1:
+            continue
+        try:
+            arr = json.loads(raw[start:end+1])
+        except Exception:
+            continue
+
+        for obj in arr:
+            try:
+                tid = int(obj.get("track_id"))
+            except Exception:
+                continue
+            out[tid] = {
+                "keep": bool(obj.get("keep", True)),
+                "description": (obj.get("description") or "").strip(),
+                "solution": (obj.get("solution") or "").strip(),
+                "severity": (obj.get("severity") or "medium").lower(),
+            }
+    return out
+
 def process_video(video_path: Path, use_sam: bool = True):
     logger.info("process_video() start", extra={"video_path": str(video_path), "use_sam": use_sam})
     yolo, predictor, mask_gen = _load_models()
@@ -960,6 +1224,30 @@ def process_video(video_path: Path, use_sam: bool = True):
     cap.release()
     logger.info("YOLO tracking complete", extra={"frames": len(dets_by_frame)})
 
+    # NEW: Select representative crops per track and get GPT annotations
+    track_samples = _select_track_samples(dets_by_frame, max_per_track=3, diff_threshold=0.92)
+    
+    # Call async GPT function from sync context
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    track_notes = loop.run_until_complete(_gpt_describe_tracks(track_samples))
+    
+    # Optional filtering: drop non-issues (keep=false)
+    drop_track_ids = {tid for tid, note in track_notes.items() if note.get("keep") is False}
+    
+    # Save track thumbnails for frontend display (best crop per track)
+    track_thumbnails = {}
+    for tid, track_data in track_samples.items():
+        if tid not in drop_track_ids and track_data.get("samples"):
+            # Use the best confidence sample (usually the clearest image)
+            best_sample = track_data["samples"][0]  # First sample is often best quality
+            _, best_crop = best_sample
+            track_thumbnails[tid] = best_crop
+
     if use_sam:
         sam = SAM("sam2.1_b.pt")
 
@@ -992,6 +1280,8 @@ def process_video(video_path: Path, use_sam: bool = True):
 
         objects = []
         for box, raw_mask, tid, cid, conf in zip(boxes, raw_masks, track_ids, clss, confs):
+            tid = int(tid)
+            
             if use_sam and raw_mask is not None:
                 mask = cv2.resize(
                     raw_mask.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAREST,
@@ -1017,15 +1307,28 @@ def process_video(video_path: Path, use_sam: bool = True):
                             font, scale, (255,255,255), thickness,
                             lineType=cv2.LINE_AA)
 
+            # Pull GPT fields if present
+            note = track_notes.get(tid, {})
+            if tid in drop_track_ids:
+                desc = ""
+                sol = "No solution needed"
+                sev = "low"
+            else:
+                desc = (note.get("description") or "").strip()
+                sol = (note.get("solution") or "").strip()
+                sev = (note.get("severity") or "medium").lower()
 
             objects.append({
-                "track_id": int(tid),
+                "track_id": tid,
                 "class_id": int(cid),
                 "class_name": yolo.names[int(cid)],
                 "confidence": float(conf),
                 "bbox": box.tolist(),
                 "mask": {"rle": {}, "polygon": []},
                 "source": "yolo",
+                "description": desc if desc else None,
+                "solution": sol if sol else None,
+                "severity": sev,
             })
 
         vw.write(frame)
@@ -1036,7 +1339,7 @@ def process_video(video_path: Path, use_sam: bool = True):
         })
 
     vw.release()
-    return out_path, frames_meta
+    return out_path, frames_meta, track_thumbnails
 
 
 

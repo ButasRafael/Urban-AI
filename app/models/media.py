@@ -56,6 +56,10 @@ class Media(Base):
 
     process_ms_total = Column(Integer, nullable=True)
     
+    # UUID-based filenames for cache-busting
+    static_filename = Column(String, nullable=True)     # UUID filename for the processed image/video
+    thumbnail_filename = Column(String, nullable=True)  # UUID filename for video thumbnails
+    
     # Summary fields for all detections
     summary_description = Column(Text, nullable=True)
     summary_solution = Column(Text, nullable=True)
@@ -99,6 +103,7 @@ class Detection(Base):
 
     description  = Column(Text)
     solution     = Column(Text)
+    track_thumbnail_url = Column(String, nullable=True)  # URL to track-specific thumbnail
 
     frames_detected = Column(Integer, nullable=True, default=None)
 

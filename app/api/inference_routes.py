@@ -346,9 +346,16 @@ async def detect_image(
 
     # 5) write annotated image file
     STATIC_DIR.mkdir(exist_ok=True)
-    out_name = f"{media.id}.jpg"
+    # Use UUID for file name to avoid cache issues
+    file_uuid = str(uuid.uuid4())
+    out_name = f"{file_uuid}.jpg"
     out_path = STATIC_DIR / out_name
     await run_in_threadpool(cv2.imwrite, str(out_path), annotated)
+    
+    # Store the UUID filename in the media record
+    media.static_filename = out_name
+    db.add(media)
+    db.commit()
 
     enqueue_embeddings(background_tasks, media.id)
 
@@ -409,7 +416,7 @@ async def detect_video(
 
     t0 = time.perf_counter()
     try:
-        annotated_tmp, frames_meta = await run_in_threadpool(
+        annotated_tmp, frames_meta, track_thumbnails = await run_in_threadpool(
             svc.process_video, tmp_path, use_sam
         )
     except Exception as e:
@@ -423,10 +430,30 @@ async def detect_video(
     media.process_ms_total = int(dt_s * 1000)
     db.add(media); db.commit()
 
-    # Group detections by class to avoid creating separate issues for each frame
-    class_aggregates = {}
+    # Save track thumbnails to organized folder structure
+    STATIC_DIR.mkdir(exist_ok=True)
+    track_thumbnail_paths = {}
+    if track_thumbnails:
+        from PIL import Image
+        # Create tracks folder for this video with UUID naming
+        tracks_folder_uuid = str(uuid.uuid4())
+        tracks_folder_name = f"{tracks_folder_uuid}_tracks"
+        tracks_folder_path = STATIC_DIR / tracks_folder_name
+        tracks_folder_path.mkdir(exist_ok=True)
+        
+        for track_id, thumbnail_img in track_thumbnails.items():
+            thumb_filename = f"track_{track_id}.jpg"
+            thumb_path = tracks_folder_path / thumb_filename
+            # Convert OpenCV image (BGR) to PIL Image (RGB)
+            thumbnail_rgb = cv2.cvtColor(thumbnail_img, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(thumbnail_rgb)
+            await run_in_threadpool(pil_image.save, str(thumb_path))
+            track_thumbnail_paths[track_id] = f"/static/{tracks_folder_name}/{thumb_filename}"
+
+    # Group detections by track (for LLM-analyzed videos) or class (for legacy videos)
+    track_aggregates = {}
     
-    # Process frames and aggregate detections by class
+    # Process frames and aggregate detections by track_id (preserving individual LLM annotations)
     for fr in frames_meta:
         fr_row = dbm.Frame(
             media_id=media.id,
@@ -436,15 +463,23 @@ async def detect_video(
         db.add(fr_row); db.commit(); db.refresh(fr_row)
         
         for d in fr["objects"]:
+            track_id = d.get("track_id")
             class_name = d.get("class_name", "")
+            
             if not class_name:
                 continue
+            
+            # Use track_id as key if available (for LLM-analyzed videos), otherwise use class_name (legacy)
+            aggregate_key = f"track_{track_id}" if track_id is not None else f"class_{class_name}"
                 
-            # Initialize or update class aggregate
-            if class_name not in class_aggregates:
+            # Initialize or update track/class aggregate
+            if aggregate_key not in track_aggregates:
                 mask = d.get("mask", {}) or {}
-                class_aggregates[class_name] = {
+                # Get track thumbnail URL if available
+                thumbnail_url = track_thumbnail_paths.get(track_id) if track_id is not None else None
+                track_aggregates[aggregate_key] = {
                     "first_frame_id": fr_row.id,
+                    "track_id": track_id,
                     "class_id": d.get("class_id", -1),
                     "class_name": class_name,
                     "max_confidence": d.get("confidence", 0.0),
@@ -456,30 +491,61 @@ async def detect_video(
                     "source": _infer_source(d),
                     "severity": _to_severity_enum(d.get("severity")),
                     "total_frames": 1,
-                    "track_ids": set([d.get("track_id")]) if d.get("track_id") else set(),
+                    "track_ids": set([track_id]) if track_id else set(),
+                    "track_thumbnail_url": thumbnail_url,
                 }
             else:
                 # Update aggregate with higher confidence detection
                 current_conf = d.get("confidence", 0.0)
-                if current_conf > class_aggregates[class_name]["max_confidence"]:
+                if current_conf > track_aggregates[aggregate_key]["max_confidence"]:
                     mask = d.get("mask", {}) or {}
-                    class_aggregates[class_name].update({
-                        "max_confidence": current_conf,
-                        "bbox": d["bbox"],
-                        "mask_rle": mask.get("rle", {}),
-                        "mask_polygon": mask.get("polygon", []),
-                        "description": d.get("description"),
-                        "solution": d.get("solution"),
-                    })
+                    agg = track_aggregates[aggregate_key]
+                    agg["max_confidence"] = current_conf
+                    agg["bbox"] = d["bbox"]
+                    agg["mask_rle"] = mask.get("rle", {})
+                    agg["mask_polygon"] = mask.get("polygon", [])
+                    
+                    # Only overwrite text fields if new value is non-empty
+                    if d.get("description"):
+                        agg["description"] = d["description"]
+                    if d.get("solution"):
+                        agg["solution"] = d["solution"]
+                    if d.get("severity"):
+                        agg["severity"] = _to_severity_enum(d.get("severity"))
                 
-                class_aggregates[class_name]["total_frames"] += 1
-                if d.get("track_id"):
-                    class_aggregates[class_name]["track_ids"].add(d.get("track_id"))
+                track_aggregates[aggregate_key]["total_frames"] += 1
+                if track_id:
+                    track_aggregates[aggregate_key]["track_ids"].add(track_id)
     
-    # Create one detection record per class
-    for class_name, agg in class_aggregates.items():
-        # Use the most common track_id if multiple exist
-        track_id = list(agg["track_ids"])[0] if agg["track_ids"] else None
+    # Generate comprehensive summary for video
+    summary_input = []
+    for aggregate_key, agg in track_aggregates.items():
+        # Include ALL tracks, not just ones with descriptions
+        summary_input.append({
+            "class_name": agg.get("class_name") or "unknown",
+            "description": (agg.get("description") or "").strip(),
+            "solution": (agg.get("solution") or "").strip(),
+            "severity": (
+                agg["severity"].value if hasattr(agg.get("severity"), "value")
+                else (str(agg.get("severity") or "medium")).lower()
+            ),
+        })
+    
+    # Generate summary if we have detections with descriptions
+    if summary_input:
+        try:
+            summary = await svc.generate_comprehensive_summary(summary_input)
+            media.summary_description = summary.get("description")
+            media.summary_solution = summary.get("solution")
+            db.add(media)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Video summary generation failed: {e}")
+    
+    # Create one detection record per track (or class for legacy videos)
+    for aggregate_key, agg in track_aggregates.items():
+        # Use the track_id if available, otherwise None
+        track_id = agg.get("track_id")
         
         db.add(dbm.Detection(
             frame_id=agg["first_frame_id"],  # Reference first frame where class was detected
@@ -496,17 +562,26 @@ async def detect_video(
             source=agg["source"],
             severity=agg["severity"],
             frames_detected=agg["total_frames"],  # Track how many frames contained this class
+            track_thumbnail_url=agg.get("track_thumbnail_url"),
         ))
     
     db.commit()
 
     STATIC_DIR.mkdir(exist_ok=True)
-    out_name = f"{media.id}.mp4"
+    # Use UUID for file names to avoid cache issues
+    file_uuid = str(uuid.uuid4())
+    out_name = f"{file_uuid}.mp4"
     out_path = STATIC_DIR / out_name
 
     # Generate thumbnail from first frame with detections
-    thumbnail_path = STATIC_DIR / f"{media.id}.jpg"
+    thumbnail_uuid = str(uuid.uuid4())
+    thumbnail_name = f"{thumbnail_uuid}.jpg"
+    thumbnail_path = STATIC_DIR / thumbnail_name
     await run_in_threadpool(_generate_video_thumbnail, str(annotated_tmp), str(thumbnail_path))
+    
+    # Store the UUID filenames in the media record
+    media.static_filename = out_name
+    media.thumbnail_filename = thumbnail_name
 
     try:
         await run_in_threadpool(_to_h264, str(annotated_tmp), str(out_path))
@@ -519,6 +594,10 @@ async def detect_video(
             annotated_tmp.unlink(missing_ok=True)
         except Exception:
             pass
+    
+    # Save the media with updated filenames
+    db.add(media)
+    db.commit()
 
     enqueue_embeddings(background_tasks, media.id)
 
@@ -550,8 +629,18 @@ def list_my_uploads(
 
     out: List[MediaListItem] = []
     for m in rows:
-        img_url   = f"/static/{m.id}.jpg" if m.media_type == "image" else None
-        video_url = f"/static/{m.id}.mp4" if m.media_type == "video" else None
+        # Use stored UUID filenames if available, fallback to ID-based names for backward compatibility
+        if m.static_filename:
+            if m.media_type == "image":
+                img_url = f"/static/{m.static_filename}"
+                video_url = None
+            else:
+                video_url = f"/static/{m.static_filename}"
+                img_url = f"/static/{m.thumbnail_filename}" if m.thumbnail_filename else f"/static/{m.id}.jpg"
+        else:
+            # Fallback for old records without UUID filenames
+            img_url   = f"/static/{m.id}.jpg" if m.media_type == "image" else None
+            video_url = f"/static/{m.id}.mp4" if m.media_type == "video" else None
 
         first_frame = (
             db.query(dbm.Frame)
@@ -690,9 +779,16 @@ async def detect_images(
             ))
         db.commit()
 
-        out_name = f"{media.id}.jpg"
+        # Use UUID for file name to avoid cache issues
+        file_uuid = str(uuid.uuid4())
+        out_name = f"{file_uuid}.jpg"
         out_path = STATIC_DIR / out_name
         await run_in_threadpool(cv2.imwrite, str(out_path), annotated)
+        
+        # Store the UUID filename in the media record
+        media.static_filename = out_name
+        db.add(media)
+        db.commit()
 
         enqueue_embeddings(background_tasks, media.id)
 
@@ -802,9 +898,16 @@ async def detect_images_zip(
             ))
         db.commit()
 
-        out_name = f"{media.id}.jpg"
+        # Use UUID for file name to avoid cache issues
+        file_uuid = str(uuid.uuid4())
+        out_name = f"{file_uuid}.jpg"
         out_path = STATIC_DIR / out_name
         await run_in_threadpool(cv2.imwrite, str(out_path), annotated)
+        
+        # Store the UUID filename in the media record
+        media.static_filename = out_name
+        db.add(media)
+        db.commit()
 
         enqueue_embeddings(background_tasks, media.id)
 

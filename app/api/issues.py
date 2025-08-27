@@ -78,6 +78,7 @@ def get_issue(
         "verified_at": det.verified_at.isoformat() if det.verified_at else None,
         "created_at": det.created_at.isoformat() if det.created_at else None,
         "resolved_at": det.resolved_at.isoformat() if det.resolved_at else None,
+        "track_thumbnail_url": det.track_thumbnail_url,
     }
 
 

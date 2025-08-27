@@ -93,6 +93,19 @@ export async function verifyIssue(id: number, verified: boolean) {
   return data as { id: number; verified_by: string | null; verified_at: string | null };
 }
 
+export async function bulkUpdateStatus(mediaId: number, status: "resolved" | "ignored") {
+  const { data } = await client.patch("/problems/issues/bulk_status", {
+    media_id: mediaId,
+    status
+  });
+  return data as {
+    updated_count: number;
+    media_id: number;
+    new_status: string;
+    message: string;
+  };
+}
+
 import type { Problem } from "./problems";
 
 export function issueToProblemLike(i: Issue): Problem {

@@ -143,6 +143,7 @@ async def ingest_media(db: Session, media_id: int):
         db.add(
             RAGChunk(
                 media_id=media_id,
+                track_id=det.track_id,  # Store track_id for videos (null for images)
                 chunk=chunk_txt,
                 embedding=emb,
             )

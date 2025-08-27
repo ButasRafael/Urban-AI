@@ -25,18 +25,31 @@ def _abs_static_url(request: Request, filename: str) -> str:
     base = str(request.base_url).rstrip("/")
     return f"{base}/static/{filename}"
 
-def _image_url_for_media(media, request: Request) -> Optional[str]:
+def _image_url_for_media(media, request: Request, track_id: Optional[int] = None) -> Optional[str]:
     if not media:
         return None
 
     static_root = Path(os.getenv("STATIC_DIR", "static"))
 
-    # 1) Prefer annotated image <id>.jpg produced by inference
+    # 1) For videos with track_id: prefer track-specific thumbnail
+    if track_id is not None and media.media_type == "video":
+        tracks_folder = f"{media.id}_tracks"
+        track_thumb = f"track_{track_id}.jpg"
+        track_path = static_root / tracks_folder / track_thumb
+        if track_path.exists():
+            return _abs_static_url(request, f"{tracks_folder}/{track_thumb}")
+
+    # 2) Prefer UUID-based static_filename if available (new system)
+    if hasattr(media, 'static_filename') and media.static_filename:
+        if (static_root / media.static_filename).exists():
+            return _abs_static_url(request, media.static_filename)
+
+    # 3) Fallback to annotated image <id>.jpg produced by inference (old system)
     annotated = f"{media.id}.jpg"
     if (static_root / annotated).exists():
         return _abs_static_url(request, annotated)
 
-    # 2) Fallback to stored filename (normalize ext to a common image type)
+    # 4) Fallback to stored filename (normalize ext to a common image type)
     if media.filename:
         name = Path(media.filename).name
         ext = Path(name).suffix.lower()
@@ -45,8 +58,8 @@ def _image_url_for_media(media, request: Request) -> Optional[str]:
         if (static_root / name).exists():
             return _abs_static_url(request, name)
 
-    # 3) Last resort: still return a plausible absolute URL
-    return _abs_static_url(request, annotated if media.filename is None else Path(media.filename).name)
+    # 5) Last resort: still return a plausible absolute URL
+    return _abs_static_url(request, media.static_filename if hasattr(media, 'static_filename') and media.static_filename else annotated)
 
 @router.get("/chunk/{chunk_id}", response_model=ChunkOut)
 def get_chunk(chunk_id: int, request: Request, db: Session = Depends(get_db)):  # ⬅ add request
@@ -63,5 +76,5 @@ def get_chunk(chunk_id: int, request: Request, db: Session = Depends(get_db)):  
         id=row.id,
         media_id=row.media_id,
         chunk=row.chunk,
-        image_url=_image_url_for_media(row.media, request),
+        image_url=_image_url_for_media(row.media, request, row.track_id),
     )

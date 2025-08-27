@@ -33,6 +33,7 @@ type IssueRow = {
   assigned_to?: string | null;
   verified_by?: string | null;
   verified_at?: string | null;
+  track_thumbnail_url?: string | null;
 };
 
 type IssuesQuery = {
@@ -486,13 +487,22 @@ const clearFilters = useCallback(() => {
                     {r.annotated_image_url && <img className="mediaThumb" src={absUrl(r.annotated_image_url) ?? undefined} alt="" loading="lazy" />}
                     {r.annotated_video_url && (
                       <div className="videoThumbWrapper">
-                        <video
-                          className="mediaThumb"
-                          src={`${import.meta.env.VITE_API_BASE}${r.annotated_video_url}`}
-                          poster={`${import.meta.env.VITE_API_BASE}/static/${r.media_id}.jpg`}
-                          muted
-                          preload="metadata"
-                        />
+                        {r.track_thumbnail_url ? (
+                          <img 
+                            className="mediaThumb" 
+                            src={absUrl(r.track_thumbnail_url) ?? undefined} 
+                            alt="Track thumbnail" 
+                            loading="lazy" 
+                          />
+                        ) : (
+                          <video
+                            className="mediaThumb"
+                            src={`${import.meta.env.VITE_API_BASE}${r.annotated_video_url}`}
+                            poster={`${import.meta.env.VITE_API_BASE}${r.annotated_image_url || `/static/${r.media_id}.jpg`}`}
+                            muted
+                            preload="metadata"
+                          />
+                        )}
                         <div className="videoOverlay">
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="white" opacity="0.9">
                             <circle cx="12" cy="12" r="10" fill="rgba(0,0,0,0.6)" />
@@ -638,20 +648,29 @@ const clearFilters = useCallback(() => {
                           </a>
                         ) : r.annotated_video_url ? (
                           <a
-                            href={`${import.meta.env.VITE_API_BASE}/static/${r.media_id}.mp4`}
+                            href={`${import.meta.env.VITE_API_BASE}${r.annotated_video_url}`}
                             target="_blank"
                             rel="noreferrer"
                             className="thumbLink"
                             title={`Open video #${r.media_id}`}
                           >
                             <div className="videoThumbWrapper">
-                              <video
-                                className="mediaThumb"
-                                src={`${import.meta.env.VITE_API_BASE}${r.annotated_video_url}`}
-                                poster={`${import.meta.env.VITE_API_BASE}/static/${r.media_id}.jpg`}
-                                muted
-                                preload="metadata"
-                              />
+                              {r.track_thumbnail_url ? (
+                                <img 
+                                  className="mediaThumb" 
+                                  src={absUrl(r.track_thumbnail_url) ?? undefined} 
+                                  alt="Track thumbnail" 
+                                  loading="lazy" 
+                                />
+                              ) : (
+                                <video
+                                  className="mediaThumb"
+                                  src={`${import.meta.env.VITE_API_BASE}${r.annotated_video_url}`}
+                                  poster={`${import.meta.env.VITE_API_BASE}${r.annotated_image_url || `/static/${r.media_id}.jpg`}`}
+                                  muted
+                                  preload="metadata"
+                                />
+                              )}
                               <div className="videoOverlay">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="white" opacity="0.9">
                                   <circle cx="12" cy="12" r="10" fill="rgba(0,0,0,0.6)" />

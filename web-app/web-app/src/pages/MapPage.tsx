@@ -946,7 +946,7 @@ export default function MapPage() {
                       {p.annotated_image_url && (
                           <img
                               className="infocard__img"
-                              src={`${import.meta.env.VITE_API_BASE}/static/${p.media_id}.jpg`}
+                              src={`${import.meta.env.VITE_API_BASE}${p.annotated_image_url}`}
                               alt=""
                               loading="lazy"
                           />
@@ -959,7 +959,7 @@ export default function MapPage() {
                                   src={`${import.meta.env.VITE_API_BASE}${p.annotated_video_url}`}
                                   muted
                                   preload="metadata"
-                                  poster={`${import.meta.env.VITE_API_BASE}/static/${p.media_id}.jpg`}
+                                  poster={`${import.meta.env.VITE_API_BASE}${p.annotated_image_url || `/static/${p.media_id}.jpg`}`}
                               />
                               <div className="infocard__video-overlay">
                                   <svg width="48" height="48" viewBox="0 0 24 24" fill="white" opacity="0.9">
