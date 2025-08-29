@@ -28,24 +28,38 @@ type LoadState = 'idle'|'loading'|'ready'|'error';
 
 const SLA_DEFAULTS = { low: 168, medium: 72, high: 24 };
 
-function fmtDayLabel(iso: string) {
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const RO_TZ = 'Europe/Bucharest';
+
+function roISODate(d: Date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: RO_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
 }
-function isoDaysRange(days = 7): string[] {
+
+function roDaysRange(days = 7): string[] {
   const out: string[] = [];
   const end = new Date();
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(end);
-    d.setDate(end.getDate() - i);
-    out.push(d.toISOString().slice(0,10));
+    d.setUTCDate(d.getUTCDate() - i);
+    out.push(roISODate(d));
   }
   return out;
 }
+
 function fillMissingDays(raw: DayStat[], days = 7): DayStat[] {
   const map = new Map(raw.map(r => [r.date, r.count]));
-  return isoDaysRange(days).map(date => ({ date, count: map.get(date) ?? 0 }));
+  return roDaysRange(days).map(date => ({ date, count: map.get(date) ?? 0 }));
 }
+
+function fmtDayLabel(iso: string) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: RO_TZ });
+}
+
 const sum = (arr: number[]) => arr.reduce((a,b)=>a+b,0);
 
 function useCountUp(value: number, duration = 600) {

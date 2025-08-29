@@ -39,11 +39,3 @@ def init_db() -> None:
 
     from app.models import media, rag 
     Base.metadata.create_all(bind=engine)
-
-    with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_rag_chunks_embedding_ivfflat
-            ON rag_chunks
-            USING ivfflat (embedding vector_cosine_ops)
-            WITH (lists = 100);
-        """))

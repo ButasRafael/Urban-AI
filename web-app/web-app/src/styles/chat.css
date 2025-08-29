@@ -447,6 +447,7 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-400) 12%, transparent);
 }
 
+.composer-textarea.no-caret { caret-color: transparent; }
 
 .composer-hint { padding: 0 var(--l) var(--m); font-size: 12px; }
 
@@ -563,7 +564,6 @@
 :root.dark .conv-item.active { background: #0e1628; border-color: #2a3a4a; color: #dbeafe; }
 :root.dark .conv-item__main small { color: #94a3b8; }
 
-/* user bubble override retained */
 :root.dark .msg--user {
   background: linear-gradient(180deg, #0e1628, #0b1220);
 }
@@ -583,7 +583,7 @@
   font-size: 18px;
   font-weight: 800;
   line-height: 1.1;
-  color: var(--on-surface, #111); /* fallback if no clip support */
+  color: var(--on-surface, #111);
 }
 
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
@@ -661,8 +661,6 @@
 }
 :root.dark .iconX { background: #0b1220; border-color: #1f2c38; color: #e2e8f0; }
 
-
-/* Chat composer primary button — match the darker auth styling in dark mode */
 :root.dark .composer .btn.btn-primary {
   background: linear-gradient(
     180deg,
@@ -673,7 +671,6 @@
   color: #E8F6F3;
 }
 
-/* Slightly deepen on hover, keep your existing glow/shadow behavior */
 :root.dark .composer .btn.btn-primary:hover {
   background: linear-gradient(
     180deg,
@@ -700,3 +697,73 @@
     color-mix(in srgb, var(--primary-300) 96%, #000 4%)
   );
 }
+
+/* ===========================
+   CSV Download Button
+   =========================== */
+.csv-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(180deg, var(--primary-400), var(--primary-500));
+  color: white;
+  border: 1px solid var(--primary-500);
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.csv-download-btn:hover {
+  background: linear-gradient(180deg, var(--primary-500), var(--primary-600));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  color: white;
+  text-decoration: none;
+}
+
+.csv-download-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary-500) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.csv-download-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.csv-download-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
+}
+
+:root.dark .csv-download-btn {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 88%, #000 12%),
+    color-mix(in srgb, var(--primary-300) 92%, #000 8%)
+  );
+  border-color: color-mix(in srgb, var(--primary-300) 85%, #000 15%);
+  color: #E8F6F3;
+}
+
+:root.dark .csv-download-btn:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 90%, #000 10%),
+    color-mix(in srgb, var(--primary-300) 96%, #000 4%)
+  );
+  color: #F0FDF9;
+}
+
+@media (max-width: 520px) {
+  .csv-download-btn { display: flex; width: 100%; justify-content: center; }
+}
+
+.msg { overflow-wrap: anywhere; }

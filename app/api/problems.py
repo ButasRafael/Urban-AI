@@ -7,6 +7,7 @@ from typing import List, Optional, Literal
 
 from app.core.database import get_db
 from app.core.security import require_roles
+from app.core.datetime_utils import format_datetime_iso_ro
 from app.models import media as dbm
 from app.models.schemas_portal import ProblemOut
 
@@ -163,7 +164,7 @@ def list_issues(
             id=det.id,
             media_id=med.id,
             frame_id=fr.id,
-            created_at=det.created_at.isoformat(),
+            created_at=format_datetime_iso_ro(det.created_at),
             class_name=det.class_name,
             confidence=det.confidence,
             bbox=[det.x1, det.y1, det.x2, det.y2],
@@ -179,7 +180,7 @@ def list_issues(
             longitude=med.longitude,
             assigned_to=det.assigned_to,
             verified_by=det.verified_by,
-            verified_at=det.verified_at.isoformat() if det.verified_at else None,
+            verified_at=format_datetime_iso_ro(det.verified_at),
             track_thumbnail_url=det.track_thumbnail_url,
         ))
     return out
@@ -217,14 +218,13 @@ from typing import Dict
 
 class BulkUpdateRequest(BaseModel):
     media_id: int
-    status: Literal["resolved", "ignored"]  # Only allow resolved or ignored for bulk updates
+    status: Literal["resolved", "ignored"]
 
 @router.patch("/issues/bulk_status")
 def bulk_update_status(
     request: BulkUpdateRequest,
     db: Session = Depends(get_db),
 ):
-    """Update status of all open detections for a specific media item"""
     # Get all open detections for the media
     detections = (
         db.query(dbm.Detection)

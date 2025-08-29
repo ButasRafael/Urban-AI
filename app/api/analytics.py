@@ -5,6 +5,7 @@ from datetime import date, timedelta, datetime, timezone
 from typing import Optional, Literal
 from app.core.database import get_db
 from app.core.security import require_roles
+from app.core.datetime_utils import format_datetime_iso_ro, ro_date_bounds_to_utc, RO_TZ
 from app.models import media as dbm
 
 try:
@@ -21,14 +22,19 @@ router = APIRouter(
 # ---- helpers ----
 def _start_date(days: int | None, start: Optional[date], end: Optional[date]) -> tuple[datetime, datetime]:
     if start and end:
-        start_dt = datetime.combine(start, datetime.min.time()).replace(tzinfo=timezone.utc)
-        end_dt   = datetime.combine(end,   datetime.max.time()).replace(tzinfo=timezone.utc)
+        # Treat date inputs as Romanian dates and convert to UTC bounds
+        start_dt_utc, _ = ro_date_bounds_to_utc(start)
+        _, end_dt_utc = ro_date_bounds_to_utc(end)
+        return start_dt_utc, end_dt_utc
     else:
         days = 7 if days is None else max(1, days)
-        today_utc = datetime.now(timezone.utc).date()
-        end_dt   = datetime.combine(today_utc, datetime.max.time()).replace(tzinfo=timezone.utc)
-        start_dt = end_dt - timedelta(days=days-1)
-    return start_dt, end_dt
+        # Use Romanian timezone for "today" calculation
+        today_ro = datetime.now(RO_TZ).date()
+        # Window is [today - (days-1), today] in Romanian timezone
+        start_date_ro = today_ro - timedelta(days=days-1)
+        start_dt_utc, _ = ro_date_bounds_to_utc(start_date_ro)
+        _, end_dt_utc = ro_date_bounds_to_utc(today_ro)
+        return start_dt_utc, end_dt_utc
 
 
 def _media_base(db: Session, start_dt: datetime, end_dt: datetime, media_type: Optional[Literal["image","video"]]):
@@ -61,7 +67,9 @@ def uploads_by_day(
     media_type: Optional[Literal["image","video"]] = None,
 ):
     start_dt, end_dt = _start_date(days, start, end)
-    dcol = func.date(dbm.Media.created_at)
+    # Convert to Romanian timezone before date extraction
+    ro_time = func.timezone('Europe/Bucharest', dbm.Media.created_at)
+    dcol = func.date(ro_time)
     q = (
         _media_base(db, start_dt, end_dt, media_type)
         .with_entities(dcol.label("d"), func.count().label("c"))
@@ -122,7 +130,7 @@ def kpis(
     ).scalar()
 
     return {
-        "window": {"start": start_dt.isoformat(), "end": end_dt.isoformat()},
+        "window": {"start": format_datetime_iso_ro(start_dt), "end": format_datetime_iso_ro(end_dt)},
         "uploads": {"total": total_uploads, "images": total_images, "videos": total_videos},
         "latency_ms": {"avg": float(lat_q.avg_ms or 0), "p95": float(lat_q.p95_ms or 0)},
         "detections": {"total": int(detect_q or 0)},
@@ -138,7 +146,9 @@ def latency_by_day(
     media_type: Optional[Literal["image","video"]] = None,
 ):
     start_dt, end_dt = _start_date(days, start, end)
-    dcol = func.date(dbm.Media.created_at)
+    # Convert to Romanian timezone before date extraction
+    ro_time = func.timezone('Europe/Bucharest', dbm.Media.created_at)
+    dcol = func.date(ro_time)
     q = (
         _media_base(db, start_dt, end_dt, media_type)
         .with_entities(
@@ -168,7 +178,9 @@ def detections_severity_by_day(
     media_type: Optional[Literal["image","video"]] = None,
 ):
     start_dt, end_dt = _start_date(days, start, end)
-    dcol = func.date(dbm.Media.created_at)
+    # Convert to Romanian timezone before date extraction
+    ro_time = func.timezone('Europe/Bucharest', dbm.Media.created_at)
+    dcol = func.date(ro_time)
     q = (
         _detect_base(db, start_dt, end_dt, media_type)
         .with_entities(dcol.label("d"), dbm.Detection.severity, func.count().label("c"))
@@ -295,7 +307,7 @@ def geo_heatmap(
     )
     rows = q.all()
     return [
-        {"geohash6": gh, "count": int(c), "latest": latest.isoformat()}
+        {"geohash6": gh, "count": int(c), "latest": format_datetime_iso_ro(latest)}
         for gh, c, latest in rows
     ]
 
@@ -395,7 +407,7 @@ def geo_hotspots(
             "count": c,
             "prev_count": int(prev),
             "trend_pct": float(trend_pct),
-            "latest": latest.isoformat() if latest else None,
+            "latest": format_datetime_iso_ro(latest),
             "uploaders": int(uploaders or 0),
             "severity": sev_map.get(gh, {"low": 0, "medium": 0, "high": 0}),
             "top_classes": [{"class_name": n, "count": cc} for n, cc in top_map.get(gh, [])],
@@ -457,7 +469,9 @@ def daily_health_metrics(
     media_type: Optional[Literal["image","video"]] = None,
 ):
     start_dt, end_dt = _start_date(days, start, end)
-    dcol = func.date(dbm.Media.created_at)
+    # Convert to Romanian timezone before date extraction
+    ro_time = func.timezone('Europe/Bucharest', dbm.Media.created_at)
+    dcol = func.date(ro_time)
     
     # Daily upload and processing metrics
     upload_metrics = (
@@ -525,7 +539,7 @@ def user_engagement_metrics(
         .with_entities(
             dbm.Media.user_username,
             func.count().label("total_uploads"),
-            func.count(func.distinct(func.date(dbm.Media.created_at))).label("active_days"),
+            func.count(func.distinct(func.date(func.timezone('Europe/Bucharest', dbm.Media.created_at)))).label("active_days"),
             func.min(dbm.Media.created_at).label("first_upload"),
             func.max(dbm.Media.created_at).label("last_upload"),
         )
@@ -557,8 +571,8 @@ def user_engagement_metrics(
             "uploads_per_active_day": uploads_per_day,
             "avg_hours_between_uploads": avg_hours_between,
             "engagement_score": engagement_score,
-            "first_upload": first.isoformat() if first else None,
-            "last_upload": last.isoformat() if last else None,
+            "first_upload": format_datetime_iso_ro(first),
+            "last_upload": format_datetime_iso_ro(last),
         })
     
     return result
@@ -574,30 +588,33 @@ def temporal_patterns(
 ):
     start_dt, end_dt = _start_date(days, start, end)
 
+    # Convert UTC timestamps to Romanian timezone for hour/day extraction
+    ro_time = func.timezone('Europe/Bucharest', dbm.Media.created_at)
+    
     hourly_pattern = (
         _media_base(db, start_dt, end_dt, media_type)
         .with_entities(
-            func.extract("hour", dbm.Media.created_at).label("hour"),
+            func.extract("hour", ro_time).label("hour"),
             func.count().label("uploads"),
             func.avg(dbm.Media.process_ms_total).label("avg_processing_ms"),
         )
-        .group_by(func.extract("hour", dbm.Media.created_at))
+        .group_by(func.extract("hour", ro_time))
         .order_by("hour")
     ).all()
 
     dow_pattern = (
         _media_base(db, start_dt, end_dt, media_type)
         .with_entities(
-            func.extract("dow", dbm.Media.created_at).label("dow"),
+            func.extract("dow", ro_time).label("dow"),
             func.count().label("uploads"),
             func.avg(dbm.Media.process_ms_total).label("avg_processing_ms"),
         )
-        .group_by(func.extract("dow", dbm.Media.created_at))
+        .group_by(func.extract("dow", ro_time))
         .order_by("dow")
     ).all()
     
     # Map day numbers to names
-    dow_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    dow_names = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
     
     return {
         "hourly": [
@@ -766,12 +783,12 @@ def detection_quality_metrics(
     daily_quality = (
         _detect_base(db, start_dt, end_dt, media_type)
         .with_entities(
-            func.date(dbm.Media.created_at).label("date"),
+            func.date(func.timezone('Europe/Bucharest', dbm.Media.created_at)).label("date"),
             func.count().label("total_detections"),
             func.count(case((dbm.Detection.status == dbm.IssueStatus.ignored, 1), else_=None)).label("ignored_count"),
             func.avg(dbm.Detection.confidence).label("avg_confidence"),
         )
-        .group_by(func.date(dbm.Media.created_at))
+        .group_by(func.date(func.timezone('Europe/Bucharest', dbm.Media.created_at)))
         .order_by("date")
     ).all()
 
@@ -863,7 +880,7 @@ def geographic_issue_patterns(
             geocol.label("geohash"),
             dbm.Detection.class_name,
             func.count().label("issue_count"),
-            func.count(func.distinct(func.date(dbm.Media.created_at))).label("unique_days"),
+            func.count(func.distinct(func.date(func.timezone('Europe/Bucharest', dbm.Media.created_at)))).label("unique_days"),
             func.min(dbm.Media.created_at).label("first_occurrence"),
             func.max(dbm.Media.created_at).label("latest_occurrence"),
             func.avg(dbm.Detection.confidence).label("avg_confidence"),
@@ -871,7 +888,7 @@ def geographic_issue_patterns(
         .filter(dbm.Media.geohash6.isnot(None))
         .group_by(geocol, dbm.Detection.class_name)
         .having(func.count() >= 3)
-        .having(func.count(func.distinct(func.date(dbm.Media.created_at))) >= 2)
+        .having(func.count(func.distinct(func.date(func.timezone('Europe/Bucharest', dbm.Media.created_at)))) >= 2)
         .order_by(desc("issue_count"))
     ).all()
 
@@ -899,7 +916,7 @@ def geographic_issue_patterns(
                 "medium": med_sev or 0,
                 "low": low_sev or 0,
             },
-            "latest_issue": latest_issue.isoformat() if latest_issue else None,
+            "latest_issue": format_datetime_iso_ro(latest_issue),
             "lat": lat,
             "lon": lon,
         })
@@ -911,8 +928,8 @@ def geographic_issue_patterns(
             "issue_count": issue_count,
             "unique_days": unique_days,
             "recurrence_rate": round(issue_count / max(1, unique_days), 2),
-            "first_occurrence": first_occurrence.isoformat() if first_occurrence else None,
-            "latest_occurrence": latest_occurrence.isoformat() if latest_occurrence else None,
+            "first_occurrence": format_datetime_iso_ro(first_occurrence),
+            "latest_occurrence": format_datetime_iso_ro(latest_occurrence),
             "avg_confidence": float(avg_confidence or 0),
         }
         for geohash, class_name, issue_count, unique_days, first_occurrence, latest_occurrence, avg_confidence in recurring_locations
@@ -1084,7 +1101,7 @@ def issues_aging_buckets(
         rate_map[sev] = (breach_n / open_n * 100.0) if open_n > 0 else 0.0
 
     return {
-        "window": {"start": start_dt.isoformat(), "end": end_dt.isoformat()},
+        "window": {"start": format_datetime_iso_ro(start_dt), "end": format_datetime_iso_ro(end_dt)},
         "sla_hours": {"low": sla_low_h, "medium": sla_medium_h, "high": sla_high_h},
         "by_severity": {
             k: {

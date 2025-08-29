@@ -456,15 +456,15 @@ When they are BOTH important and realistically solvable:
 - "dino_prompt": string
 
 ### Dino Prompt Rules
-       • 1 – 3 **lower-case tokens**, each ≤ 2 words.
-       • Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. "traffic light", "trash bin").
-       • NO commas, punctuation, verbs, prepositions, or numerals.
-       • Color/material adjectives when they are the *sole* reliable cue (e.g. "red cone").
-       • Put the **most visually distinctive token first**; order the rest by distinctiveness.
-       • Prefer the canonical dataset label ("fire hydrant" not "hydrant").
-       • Use singular form unless plurality is visually obvious.
-       • Hard cap of three tokens — if unsure, pick ONE high-precision noun.
-       • Separate tokens with ONE space exactly.
+• 1 – 3 **lower-case tokens**, each ≤ 2 words.
+• Choose COCO/LVIS/VisualGenome-style nouns whenever possible (e.g. "traffic light", "trash bin").
+• NO commas, punctuation, verbs, prepositions, or numerals.
+• Color/material adjectives when they are the *sole* reliable cue (e.g. "red cone").
+• Put the **most visually distinctive token first**; order the rest by distinctiveness.
+• Prefer the canonical dataset label ("fire hydrant" not "hydrant").
+• Use singular form unless plurality is visually obvious.
+• Hard cap of three tokens — if unsure, pick ONE high-precision noun.
+• Separate tokens with ONE space exactly.
 
 Skip minor, cosmetic, or trivial issues entirely — return ZERO new detections if the photo appears clean.
 Do NOT specify exact bounding-box coordinates; these additional detections will be logged as coarse issues.
@@ -1073,12 +1073,9 @@ async def _gpt_describe_tracks(
     batch_size: int = 3,  # Reduced from 10 to 3 tracks per GPT call
     max_images_per_track: int = 3,
 ) -> Dict[int, Dict[str, str]]:
-    """
-    Returns: { track_id: { 'keep': bool, 'description': str, 'solution': str, 'severity': 'low|medium|high' } }
-    """
+
     out: Dict[int, Dict[str, str]] = {}
 
-    # Instructions moved to instructions parameter for GPT-4.1
     instructions = """# Role and Objective
 You are an urban infrastructure expert analyzing video footage of urban environments. Evaluate tracked objects across multiple video frames and determine whether each represents a legitimate infrastructure issue requiring remediation.
 

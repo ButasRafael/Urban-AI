@@ -187,6 +187,7 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm, disab
               autoFillOnNotFound
               keyboardShouldPersistTaps="always"
               enablePoweredByContainer={false}
+              timeout={20000} // 20 seconds timeout for Android
               query={{
                 key: GOOGLE_API_KEY,
                 language: 'ro',

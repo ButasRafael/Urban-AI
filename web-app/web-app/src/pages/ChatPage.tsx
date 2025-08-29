@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
-  sendChat,
   listSessions,
   getSessionHistory,
   deleteSession,
   getRagChunk,
   updateSessionTitle,
+    sendChatStream
 } from '../api/chat';
 import type React from 'react';
 import type { ChatMessage, SessionSummary, RagChunk } from '../api/chat';
@@ -46,18 +46,24 @@ export default function ChatPage() {
   const [editingTitle, setEditingTitle] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
+  const streamingRef = useRef(false);
   useEffect(() => { listSessions().then(setSessions); }, []);
   useEffect(() => {
-    if (selectedSession != null) getSessionHistory(selectedSession).then(setMessages);
-    else setMessages([]);
-  }, [selectedSession]);
+   if (streamingRef.current) return;
+   if (selectedSession != null) {
+     getSessionHistory(selectedSession).then(setMessages);
+  } else {
+     setMessages([]);
+  }
+ }, [selectedSession]);
 
   useEffect(() => {
     const el = logRef.current;
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
-    requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight, behavior: nearBottom ? 'smooth' : 'auto' }));
-  }, [messages, busy]);
+    const behavior: ScrollBehavior = streamingRef.current ? 'auto' : (nearBottom ? 'smooth' : 'auto');
+    requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight, behavior }));
+}, [messages, busy]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -112,25 +118,67 @@ export default function ChatPage() {
   };
 
   async function handleSend(e: FormEvent) {
-    e.preventDefault();
-    if (!text.trim() || busy) return;
+  e.preventDefault();
+  if (!text.trim() || busy) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: text };
-    setMessages((m) => [...m, userMsg]);
-    setText('');
-    setBusy(true);
-    try {
-      const resp = await sendChat({ message: userMsg.content, session_id: selectedSession });
-      if (!selectedSession) {
-        setSelectedSession(resp.session_id);
-        localStorage.setItem('chatSessionId', String(resp.session_id));
+  const content = text;
+  setText('');
+  setBusy(true);
+
+  const baseLen = messages.length;
+  const userMsg: ChatMessage = { role: 'user', content };
+  const assistantIdx = baseLen + 1;
+
+  setMessages(m => [...m, userMsg, { role: 'assistant', content: '', streaming: true }]);
+  streamingRef.current = true;
+
+  try {
+    let sid = selectedSession;
+
+    const result = await sendChatStream(
+      { message: content, session_id: sid },
+      (delta) => {
+        setMessages(m => {
+          const copy = m.slice();
+          const cur = copy[assistantIdx];
+          if (cur) copy[assistantIdx] = { ...cur, content: (cur.content ?? '') + delta };
+          return copy;
+        });
+      },
+      (sessionId) => {
+        if (!sid) {
+          sid = sessionId;
+          setSelectedSession(sessionId);
+          localStorage.setItem('chatSessionId', String(sessionId));
+        }
       }
-      setMessages((m) => [...m, { role: 'assistant', content: resp.answer }]);
-      listSessions().then(setSessions);
-    } finally {
-      setBusy(false);
+    );
+
+    if (!sid) {
+      sid = result.session_id;
+      setSelectedSession(sid);
+      localStorage.setItem('chatSessionId', String(sid));
     }
+
+    listSessions().then(setSessions);
+  } catch {
+    setMessages(m => {
+      const copy = m.slice();
+      const cur = copy[assistantIdx];
+      if (cur) copy[assistantIdx] = { ...cur, content: (cur.content ?? '') + '\n\n_(stream error)_' };
+      return copy;
+    });
+  } finally {
+    // Mark that specific assistant bubble as no longer streaming
+    setMessages(m => {
+      const copy = m.slice();
+      if (copy[assistantIdx]) copy[assistantIdx] = { ...copy[assistantIdx], streaming: false };
+      return copy;
+    });
+    streamingRef.current = false;
+    setBusy(false);
   }
+}
 
   function copyToClipboard(txt: string) {
     navigator.clipboard?.writeText(txt).catch(() => {});
@@ -150,12 +198,36 @@ export default function ChatPage() {
 
   const markdownComponents: Components = useMemo(
     () => ({
-      a({ node, ...props }) {
-        return <a {...props} target="_blank" rel="noopener noreferrer" />;
+      a({ node, href, children, ...props }) {
+        // Check if it's a CSV download link
+        if (href && href.includes('/download-csv/')) {
+          return (
+              <a
+                  {...props}
+                  href={href}
+                  className="csv-download-btn"
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Download full CSV (opens in a new tab)"
+                  title="Download full CSV"
+              >
+                <IconDownload/>
+                <span>{children}</span>
+              </a>
+          );
+        }
+        // Regular link
+        return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
       },
-      ul(props) { return <ul className="md-ul" {...props} />; },
-      ol(props) { return <ol className="md-ol" {...props} />; },
-      p(props)  { return <p className="md-p"  {...props} />; },
+      ul(props) {
+        return <ul className="md-ul" {...props} />;
+      },
+      ol(props) {
+        return <ol className="md-ol" {...props} />;
+      },
+      p(props) {
+        return <p className="md-p"  {...props} />; },
       h4(props) { return <h4 className="md-h4" {...props} />; },
       code({ inline, className, children, ...props }: any) {
         if (inline) return <code className="md-code-inline" {...props}>{children}</code>;
@@ -313,92 +385,110 @@ export default function ChatPage() {
           )}
 
           {messages.map((m, i) => {
-            const isUser = m.role === 'user';
-            const citationIds = !isUser
-              ? Array.from(new Set(Array.from(m.content.matchAll(/\[#(\d+)\]/g)).map((g) => g[1])))
-              : [];
-            return (
-              <div key={i} className={`msg-row ${isUser ? 'is-user' : 'is-assistant'}`}>
-                <div className={`msg ${isUser ? 'msg--user' : 'msg--assistant'}`}>
-                  {isUser ? (
-                    <div className="msg__text" style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-                  ) : (
-                    <>
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeSanitize]}
-                        components={markdownComponents}
-                      >
-                        {m.content}
-                      </ReactMarkdown>
+  const isUser = m.role === 'user';
+  const isStreaming = !isUser && !!m.streaming;
+  const isEmptyAssistant = !isUser && (!m.content || !m.content.trim());
+  const citationIds = !isUser
+    ? Array.from(new Set(Array.from(m.content.matchAll(/\[#(\d+)\]/g)).map((g) => g[1])))
+    : [];
 
-                      {citationIds.length > 0 && (
-                        <div className="citations">
-                          {citationIds.map((id) => (
-                            <button
-                              key={id}
-                              className="rag-chip"
-                              title={`Open chunk #${id}`}
-                              onMouseEnter={() => prefetchChunk(Number(id))}
-                              onClick={() => openPreview(i, Number(id))}
-                            >
-                              #{id}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+   if (isStreaming && isEmptyAssistant) return null;
 
-                      {preview && preview.msgIdx === i && (
-                        <div className="preview">
-                          <div className="preview__head">
-                            <strong>Chunk #{preview.id}</strong>
-                            <Button variant="ghost" size="sm" iconOnly aria-label="Close preview" onClick={() => setPreview(null)}>
-                              <IconX />
-                            </Button>
-                          </div>
+  return (
+    <div key={i} className={`msg-row ${isUser ? 'is-user' : 'is-assistant'}`}>
+      <div className={`msg ${isUser ? 'msg--user' : 'msg--assistant'} ${isStreaming ? 'is-streaming' : ''}`}>
+        {isUser ? (
+          <div className="msg__text" style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+        ) : (
+          <>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeSanitize]}
+              components={markdownComponents}
+            >
+              {m.content}
+            </ReactMarkdown>
 
-                          {preview.data ? (
-                            <>
-                              {preview.data.image_url ? (
-                                <div className="preview__media">
-                                  <img src={preview.data.image_url} alt={`media for chunk #${preview.id}`} loading="lazy" />
-                                </div>
-                              ) : (
-                                <div className="preview__meta">media_id: {preview.data.media_id}</div>
-                              )}
-                              <div className="preview__text">{preview.data.chunk}</div>
-                            </>
-                          ) : (
-                            <div className="sk-line shimmer" style={{ height: 18, borderRadius: 6 }} />
-                          )}
-                        </div>
-                      )}
+            {citationIds.length > 0 && (
+              <div className="citations">
+                {citationIds.map((id) => (
+                  <button
+                    key={id}
+                    className="rag-chip"
+                    title={`Open chunk #${id}`}
+                    onMouseEnter={() => prefetchChunk(Number(id))}
+                    onClick={() => openPreview(i, Number(id))}
+                  >
+                    #{id}
+                  </button>
+                ))}
+              </div>
+            )}
 
-                      <Button
-                        className="copy-btn"
-                        variant="ghost"
-                        size="sm"
-                        iconOnly
-                        title="Copy answer"
-                        aria-label="Copy answer"
-                        onClick={() => copyToClipboard(m.content)}
-                      >
-                        <IconCopy />
-                      </Button>
-                    </>
-                  )}
+            {preview && preview.msgIdx === i && preview.data && (
+              <div className="preview">
+                <div className="preview__head">
+                  <strong>Chunk #{preview.id}</strong>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    iconOnly
+                    onClick={() => setPreview(null)}
+                    aria-label="Close preview"
+                  >
+                    <IconX />
+                  </Button>
+                </div>
+                {preview.data.image_url && (
+                  <div className="preview__media">
+                    <img src={preview.data.image_url} alt={`Media for chunk #${preview.id}`} />
+                  </div>
+                )}
+                {preview.data.media_id && (
+                  <div className="preview__meta">
+                    Media ID: {preview.data.media_id}
+                  </div>
+                )}
+                <div className="preview__text">
+                  {preview.data.chunk}
                 </div>
               </div>
-            );
-          })}
+            )}
 
-          {busy && (
-            <div className="msg-row is-assistant">
-              <div className="msg msg--assistant thinking">
-                <span className="dot" /><span className="dot" /><span className="dot" />
-              </div>
-            </div>
-          )}
+            {/* show copy only when there’s content AND not streaming */}
+            {!!m.content.trim() && !m.streaming && (
+              <Button
+                className="copy-btn"
+                variant="ghost"
+                size="sm"
+                iconOnly
+                title="Copy answer"
+                aria-label="Copy answer"
+                onClick={() => copyToClipboard(m.content)}
+              >
+                <IconCopy />
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+})}
+
+
+          {busy && (() => {
+  const last = messages[messages.length - 1];
+  const showDots = !last || last.role !== 'assistant' || !last.content.trim();
+  return showDots ? (
+    <div className="msg-row is-assistant">
+      <div className="msg msg--assistant thinking">
+        <span className="dot" /><span className="dot" /><span className="dot" />
+      </div>
+    </div>
+  ) : null;
+})()}
+
         </div>
 
         {/* composer */}
@@ -407,7 +497,7 @@ export default function ChatPage() {
             <span className="composer-icon"><IconPrompt /></span>
             <textarea
               ref={inputRef}
-              className="composer-textarea"
+              className={`composer-textarea ${busy ? 'no-caret' : ''}`}
               placeholder="Ask about issues…"
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -419,11 +509,9 @@ export default function ChatPage() {
                     handleSend(e as unknown as FormEvent<HTMLFormElement>);
                   }
                 }
-                // Allow Shift+Enter for new line (default behavior)
                 if (e.key === 'Escape') {
                   setPreview(null);
                 }
-                // Stop propagation for all keys to prevent global shortcuts
                 e.stopPropagation();
               }}
               rows={1}
@@ -485,3 +573,4 @@ function IconCopy(){ return (<svg viewBox="0 0 24 24" width="16" height="16" fil
 function IconX(){ return (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>); }
 function IconPrompt(){ return (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 8l-4 4 4 4"/><path d="M11 12h6"/></svg>); }
 function IconSend(){ return (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>); }
+function IconDownload(){ return (<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>); }

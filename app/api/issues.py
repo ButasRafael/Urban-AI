@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_roles, get_current_user
+from app.core.datetime_utils import format_datetime_iso_ro
 from app.models import media as dbm
 from app.models.user import User
+from app.services.rag import sync_detection_updates
 
 router = APIRouter(
     prefix="/issues",
@@ -75,15 +77,15 @@ def get_issue(
         "severity": det.severity.value,
         "assigned_to": det.assigned_to,
         "verified_by": det.verified_by,
-        "verified_at": det.verified_at.isoformat() if det.verified_at else None,
-        "created_at": det.created_at.isoformat() if det.created_at else None,
-        "resolved_at": det.resolved_at.isoformat() if det.resolved_at else None,
+        "verified_at": format_datetime_iso_ro(det.verified_at),
+        "created_at": format_datetime_iso_ro(det.created_at),
+        "resolved_at": format_datetime_iso_ro(det.resolved_at),
         "track_thumbnail_url": det.track_thumbnail_url,
     }
 
 
 @router.patch("/{detection_id}/status")
-def update_status(
+async def update_status(
     detection_id: int,
     body: StatusUpdate,
     db: Session = Depends(get_db),
@@ -106,7 +108,7 @@ def update_status(
         return {
             "id": det.id,
             "status": det.status.value,
-            "resolved_at": det.resolved_at.isoformat() if det.resolved_at else None,
+            "resolved_at": format_datetime_iso_ro(det.resolved_at),
         }
 
     det.status = new_status
@@ -116,17 +118,20 @@ def update_status(
     db.add(det)
     db.commit()
     db.refresh(det)
+    
+    # Sync RAG chunks with updated status
+    await sync_detection_updates(db, detection_id)
 
     return {
         "id": det.id,
         "old_status": old_status.value,
         "new_status": det.status.value,
-        "resolved_at": det.resolved_at.isoformat() if det.resolved_at else None,
+        "resolved_at": format_datetime_iso_ro(det.resolved_at),
     }
 
 
 @router.patch("/{detection_id}/severity")
-def update_severity(
+async def update_severity(
     detection_id: int,
     body: SeverityUpdate,
     db: Session = Depends(get_db),
@@ -141,11 +146,15 @@ def update_severity(
     db.add(det)
     db.commit()
     db.refresh(det)
+    
+    # Sync RAG chunks with updated severity
+    await sync_detection_updates(db, detection_id)
+    
     return {"id": det.id, "severity": det.severity.value}
 
 
 @router.patch("/{detection_id}/assign", dependencies=[require_roles("admin")])  # <-- only admins
-def assign_issue(
+async def assign_issue(
     detection_id: int,
     body: AssignUpdate,
     db: Session = Depends(get_db),
@@ -162,10 +171,14 @@ def assign_issue(
     db.add(det)
     db.commit()
     db.refresh(det)
+    
+    # Sync RAG chunks with updated assignment
+    await sync_detection_updates(db, detection_id)
+    
     return {"id": det.id, "assigned_to": det.assigned_to}
 
 @router.patch("/{detection_id}/verify", dependencies=[require_roles("admin")])  # <-- admin only
-def verify_issue(
+async def verify_issue(
     detection_id: int,
     body: VerifyUpdate,
     db: Session = Depends(get_db),
@@ -182,8 +195,12 @@ def verify_issue(
     db.add(det)
     db.commit()
     db.refresh(det)
+    
+    # Sync RAG chunks with updated verification
+    await sync_detection_updates(db, detection_id)
+    
     return {
         "id": det.id,
         "verified_by": det.verified_by,
-        "verified_at": det.verified_at.isoformat() if det.verified_at else None,
+        "verified_at": format_datetime_iso_ro(det.verified_at),
     }
