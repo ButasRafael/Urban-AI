@@ -41,6 +41,7 @@ services:
       - "./weights:/weights"
       - "./static:/app/static"
       - "./ultralytics_config:/app/ultralytics_config"
+      - "huggingface_cache:/root/.cache/huggingface"
     env_file: .env
     ports:
       - "8000:8000"
@@ -195,3 +196,4 @@ volumes:
   prometheus_data:
   pgdata:
   grafana_data:
+  huggingface_cache:

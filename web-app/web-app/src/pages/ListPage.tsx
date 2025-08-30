@@ -471,16 +471,7 @@ export default function ListPage() {
                   </span>
                 </div>
 
-                {it.annotated_image_url && (
-                    <img
-                        className="thumb"
-                        src={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url}`}
-                        alt=""
-                        loading="lazy"
-                    />
-                )}
-                
-                {it.annotated_video_url && (
+                {it.annotated_video_url ? (
                     <div className="videoThumb">
                       <video
                         className="thumb"
@@ -496,6 +487,13 @@ export default function ListPage() {
                         </svg>
                       </div>
                     </div>
+                ) : it.annotated_image_url && (
+                    <img
+                        className="thumb"
+                        src={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url}`}
+                        alt=""
+                        loading="lazy"
+                    />
                 )}
 
               </div>
@@ -599,15 +597,7 @@ export default function ListPage() {
                   <td className="td left">{it.summary_description || it.descriptions?.[0] || "—"}</td>
                   <td className="td left">{it.summary_solution || it.solutions?.[0] || "—"}</td>
                   <td className="td">
-                    {it.annotated_image_url && (
-                      <img
-                        src={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url}`}
-                        className="thumbTable"
-                        alt=""
-                        loading="lazy"
-                      />
-                    )}
-                    {it.annotated_video_url && (
+                    {it.annotated_video_url ? (
                       <div className="videoThumbTable">
                         <video
                           className="thumbTable"
@@ -623,6 +613,13 @@ export default function ListPage() {
                           </svg>
                         </div>
                       </div>
+                    ) : it.annotated_image_url && (
+                      <img
+                        src={`${import.meta.env.VITE_API_BASE}${it.annotated_image_url}`}
+                        className="thumbTable"
+                        alt=""
+                        loading="lazy"
+                      />
                     )}
                   </td>
                   <td className="td left">

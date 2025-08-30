@@ -27,6 +27,7 @@ try:
 except Exception:
     _geohash_mod = None
 
+
 def _geohash6(lat: float | None, lon: float | None) -> str | None:
     if lat is None or lon is None:
         return None
@@ -37,22 +38,24 @@ def _geohash6(lat: float | None, lon: float | None) -> str | None:
             pass
     return None
 
+
 _FFMPEG_PATH = None
+
 
 def _find_ffmpeg():
     global _FFMPEG_PATH
     if _FFMPEG_PATH is not None:
         return _FFMPEG_PATH
-    
+
     import shutil
 
     try:
         which_result = shutil.which("ffmpeg")
         if which_result:
-            result = subprocess.run([which_result, "-version"], 
-                                  stdout=subprocess.PIPE, 
-                                  stderr=subprocess.PIPE, 
-                                  timeout=5)
+            result = subprocess.run([which_result, "-version"],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    timeout=5)
             if result.returncode == 0:
                 _FFMPEG_PATH = which_result
                 logger.info(f"Found ffmpeg at: {_FFMPEG_PATH}")
@@ -67,29 +70,30 @@ def _find_ffmpeg():
         r"C:\ffmpeg\ffmpeg\ffmpeg\bin\ffmpeg.exe",
         "ffmpeg.exe",
     ]
-    
+
     for path in fallback_paths:
         try:
-            result = subprocess.run([path, "-version"], 
-                                  stdout=subprocess.PIPE, 
-                                  stderr=subprocess.PIPE, 
-                                  timeout=5)
+            result = subprocess.run([path, "-version"],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    timeout=5)
             if result.returncode == 0:
                 _FFMPEG_PATH = path
                 logger.info(f"Found ffmpeg at: {_FFMPEG_PATH}")
                 return _FFMPEG_PATH
         except (subprocess.SubprocessError, subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
-    
+
     raise RuntimeError(
         "ffmpeg not found. Please ensure ffmpeg is installed in your container. "
         "Add 'ffmpeg' to your Dockerfile's apt-get install command."
     )
 
+
 def _generate_video_thumbnail(video_path: str, thumbnail_path: str):
     import os
     logger.info(f"Generating video thumbnail: {video_path} -> {thumbnail_path}")
-    
+
     if not os.path.exists(video_path):
         raise RuntimeError(f"Video file does not exist: {video_path}")
 
@@ -99,7 +103,7 @@ def _generate_video_thumbnail(video_path: str, thumbnail_path: str):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open video file: {video_path}")
-    
+
     try:
         ret, frame = cap.read()
         if not ret:
@@ -108,11 +112,12 @@ def _generate_video_thumbnail(video_path: str, thumbnail_path: str):
         success = cv2.imwrite(thumbnail_path, frame)
         if not success:
             raise RuntimeError(f"Failed to save thumbnail: {thumbnail_path}")
-            
+
         logger.info(f"Successfully generated thumbnail: {thumbnail_path}")
-        
+
     finally:
         cap.release()
+
 
 def _to_h264(src: str, dst: str):
     import os
@@ -120,7 +125,7 @@ def _to_h264(src: str, dst: str):
 
     src_abs = os.path.abspath(src)
     dst_abs = os.path.abspath(dst)
-    
+
     logger.info(f"Absolute paths: {src_abs} -> {dst_abs}")
 
     if not os.path.exists(src_abs):
@@ -130,7 +135,7 @@ def _to_h264(src: str, dst: str):
     dst_path.parent.mkdir(parents=True, exist_ok=True)
 
     ffmpeg_exec = _find_ffmpeg()
-    
+
     cmd = [
         ffmpeg_exec, "-y", "-i", src_abs,
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
@@ -139,13 +144,13 @@ def _to_h264(src: str, dst: str):
         "-an",
         dst_abs,
     ]
-    
+
     logger.info(f"Running ffmpeg command: {' '.join(cmd)}")
-    
+
     try:
         p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         logger.info(f"ffmpeg return code: {p.returncode}")
-        
+
         if p.returncode != 0:
             logger.error(f"ffmpeg failed with return code {p.returncode}")
             logger.error(f"ffmpeg stderr: {p.stderr}")
@@ -154,15 +159,16 @@ def _to_h264(src: str, dst: str):
 
         if not os.path.exists(dst_abs):
             raise RuntimeError(f"ffmpeg completed but output file not created: {dst_abs}")
-            
+
         logger.info(f"Successfully transcoded to {dst_abs}")
-        
+
     except subprocess.SubprocessError as e:
         logger.error(f"Subprocess error during ffmpeg: {e}")
         raise RuntimeError(f"ffmpeg subprocess error: {e}")
     except Exception as e:
         logger.error(f"Unexpected error during ffmpeg: {e}")
         raise
+
 
 IMAGE_EXTS = {
     ".bmp", ".dng", ".jpeg", ".jpg", ".mpo", ".png", ".tif", ".tiff",
@@ -196,6 +202,7 @@ INFERENCE_VIDEO_LATENCY = Histogram(
 STATIC_DIR = Path("static")
 MAX_DIM = 1024
 
+
 def _resize_if_needed(img: np.ndarray) -> np.ndarray:
     h, w = img.shape[:2]
     if max(h, w) <= MAX_DIM:
@@ -204,23 +211,26 @@ def _resize_if_needed(img: np.ndarray) -> np.ndarray:
     new_w, new_h = int(w * scale), int(h * scale)
     return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
+
 def _save_temp(f: UploadFile) -> Path:
     dst = Path("/tmp") / f"{uuid.uuid4()}_{f.filename}"
     with dst.open("wb") as w:
         shutil.copyfileobj(f.file, w)
     return dst
 
+
 def reverse_geocode(lat, lon):
     try:
         r = httpx.get(
             "https://nominatim.openstreetmap.org/reverse",
-            params={"format":"jsonv2","lat":lat,"lon":lon},
+            params={"format": "jsonv2", "lat": lat, "lon": lon},
             timeout=5.0
         )
         r.raise_for_status()
-        return r.json().get("display_name","")
+        return r.json().get("display_name", "")
     except:
         return ""
+
 
 # --- map detection dict -> DetectionSource enum (analytics) ---
 def _infer_source(d: dict) -> dbm.DetectionSource:
@@ -237,6 +247,7 @@ def _infer_source(d: dict) -> dbm.DetectionSource:
         return dbm.DetectionSource.sam_fallback
     return dbm.DetectionSource.yolo
 
+
 def _to_severity_enum(val: str | None) -> dbm.Severity:
     try:
         return dbm.Severity((val or "medium").lower())
@@ -250,17 +261,17 @@ def _to_severity_enum(val: str | None) -> dbm.Severity:
     dependencies=[require_roles("user", "admin")],
 )
 async def detect_image(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    use_sam: bool = Query(
-        True,
-        description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
-    ),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    latitude:  float | None = Form(None),
-    longitude: float | None = Form(None),
-    address:   str   | None = Form(None),
+        background_tasks: BackgroundTasks,
+        file: UploadFile = File(...),
+        use_sam: bool = Query(
+            True,
+            description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
+        ),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+        latitude: float | None = Form(None),
+        longitude: float | None = Form(None),
+        address: str | None = Form(None),
 ):
     logger.info("Received image inference request", extra={
         "upload_filename": file.filename, "use_sam": use_sam
@@ -294,7 +305,9 @@ async def detect_image(
         longitude=longitude,
         geohash6=_geohash6(latitude, longitude),
     )
-    db.add(media); db.commit(); db.refresh(media)
+    db.add(media);
+    db.commit();
+    db.refresh(media)
     logger.debug("Inserted media row", extra={"media_id": media.id})
 
     # 2) run inference with real latency measurement
@@ -308,7 +321,8 @@ async def detect_image(
     except Exception as e:
         sentry_sdk.capture_exception(e)
         logger.exception("❌ Inference or DB write failed")
-        db.delete(media); db.commit()
+        db.delete(media);
+        db.commit()
         raise HTTPException(500, f"Inference failed: {e!r}")
     dt_s = time.perf_counter() - t0
     INFERENCE_IMAGE_LATENCY.observe(dt_s)
@@ -319,11 +333,14 @@ async def detect_image(
     media.process_ms_total = int(dt_s * 1000)
     media.summary_description = summary.get("description")
     media.summary_solution = summary.get("solution")
-    db.add(media); db.commit()
+    db.add(media);
+    db.commit()
 
     # 4) persist Frame + Detection rows
     fr = dbm.Frame(media_id=media.id, frame_index=0, timestamp=0.0)
-    db.add(fr); db.commit(); db.refresh(fr)
+    db.add(fr);
+    db.commit();
+    db.refresh(fr)
 
     for d in dets:
         mask = d.get("mask", {}) or {}
@@ -335,11 +352,11 @@ async def detect_image(
             confidence=d.get("confidence"),
             x1=d["bbox"][0], y1=d["bbox"][1],
             x2=d["bbox"][2], y2=d["bbox"][3],
-            mask_rle     = mask.get("rle", {}),
-            mask_polygon = mask.get("polygon", []),
-            description  = d.get("description"),
-            solution     = d.get("solution"),
-            source       = _infer_source(d),
+            mask_rle=mask.get("rle", {}),
+            mask_polygon=mask.get("polygon", []),
+            description=d.get("description"),
+            solution=d.get("solution"),
+            source=_infer_source(d),
             severity=_to_severity_enum(d.get("severity")),
         ))
     db.commit()
@@ -351,7 +368,7 @@ async def detect_image(
     out_name = f"{file_uuid}.jpg"
     out_path = STATIC_DIR / out_name
     await run_in_threadpool(cv2.imwrite, str(out_path), annotated)
-    
+
     # Store the UUID filename in the media record
     media.static_filename = out_name
     db.add(media)
@@ -375,17 +392,17 @@ async def detect_image(
     dependencies=[require_roles("user", "admin")],
 )
 async def detect_video(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    use_sam: bool = Query(
-        True,
-        description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
-    ),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    latitude:  float | None = Form(None),
-    longitude: float | None = Form(None),
-    address:   str   | None = Form(None),
+        background_tasks: BackgroundTasks,
+        file: UploadFile = File(...),
+        use_sam: bool = Query(
+            True,
+            description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
+        ),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+        latitude: float | None = Form(None),
+        longitude: float | None = Form(None),
+        address: str | None = Form(None),
 ):
     logger.info("Received video inference request", extra={"upload_filename": file.filename})
     INFERENCE_VIDEO_COUNT.inc()
@@ -412,7 +429,9 @@ async def detect_video(
         longitude=longitude,
         geohash6=_geohash6(latitude, longitude),
     )
-    db.add(media); db.commit(); db.refresh(media)
+    db.add(media);
+    db.commit();
+    db.refresh(media)
 
     t0 = time.perf_counter()
     try:
@@ -421,38 +440,23 @@ async def detect_video(
         )
     except Exception as e:
         sentry_sdk.capture_exception(e)
-        db.delete(media); db.commit()
+        db.delete(media);
+        db.commit()
         raise HTTPException(500, f"Inference failed: {e!r}")
     dt_s = time.perf_counter() - t0
     INFERENCE_VIDEO_LATENCY.observe(dt_s)
 
     media.num_frames = len(frames_meta)
     media.process_ms_total = int(dt_s * 1000)
-    db.add(media); db.commit()
+    db.add(media);
+    db.commit()
 
-    # Save track thumbnails to organized folder structure
-    STATIC_DIR.mkdir(exist_ok=True)
+    # Track thumbnails will be saved later after we have the video UUID
     track_thumbnail_paths = {}
-    if track_thumbnails:
-        from PIL import Image
-        # Create tracks folder for this video with UUID naming
-        tracks_folder_uuid = str(uuid.uuid4())
-        tracks_folder_name = f"{tracks_folder_uuid}_tracks"
-        tracks_folder_path = STATIC_DIR / tracks_folder_name
-        tracks_folder_path.mkdir(exist_ok=True)
-        
-        for track_id, thumbnail_img in track_thumbnails.items():
-            thumb_filename = f"track_{track_id}.jpg"
-            thumb_path = tracks_folder_path / thumb_filename
-            # Convert OpenCV image (BGR) to PIL Image (RGB)
-            thumbnail_rgb = cv2.cvtColor(thumbnail_img, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(thumbnail_rgb)
-            await run_in_threadpool(pil_image.save, str(thumb_path))
-            track_thumbnail_paths[track_id] = f"/static/{tracks_folder_name}/{thumb_filename}"
 
     # Group detections by track (for LLM-analyzed videos) or class (for legacy videos)
     track_aggregates = {}
-    
+
     # Process frames and aggregate detections by track_id (preserving individual LLM annotations)
     for fr in frames_meta:
         fr_row = dbm.Frame(
@@ -460,23 +464,28 @@ async def detect_video(
             frame_index=fr["frame_index"],
             timestamp=fr["timestamp_ms"],
         )
-        db.add(fr_row); db.commit(); db.refresh(fr_row)
-        
+        db.add(fr_row);
+        db.commit();
+        db.refresh(fr_row)
+
         for d in fr["objects"]:
             track_id = d.get("track_id")
             class_name = d.get("class_name", "")
-            
+
             if not class_name:
                 continue
-            
+
             # Use track_id as key if available (for LLM-analyzed videos), otherwise use class_name (legacy)
             aggregate_key = f"track_{track_id}" if track_id is not None else f"class_{class_name}"
-                
+
             # Initialize or update track/class aggregate
             if aggregate_key not in track_aggregates:
                 mask = d.get("mask", {}) or {}
-                # Get track thumbnail URL if available
+                # Get track thumbnail URL if available, fallback to video thumbnail
                 thumbnail_url = track_thumbnail_paths.get(track_id) if track_id is not None else None
+                if not thumbnail_url and media.thumbnail_filename:
+                    # Fallback to video thumbnail if track thumbnail is missing
+                    thumbnail_url = f"/static/{media.thumbnail_filename}"
                 track_aggregates[aggregate_key] = {
                     "first_frame_id": fr_row.id,
                     "track_id": track_id,
@@ -504,7 +513,7 @@ async def detect_video(
                     agg["bbox"] = d["bbox"]
                     agg["mask_rle"] = mask.get("rle", {})
                     agg["mask_polygon"] = mask.get("polygon", [])
-                    
+
                     # Only overwrite text fields if new value is non-empty
                     if d.get("description"):
                         agg["description"] = d["description"]
@@ -512,11 +521,11 @@ async def detect_video(
                         agg["solution"] = d["solution"]
                     if d.get("severity"):
                         agg["severity"] = _to_severity_enum(d.get("severity"))
-                
+
                 track_aggregates[aggregate_key]["total_frames"] += 1
                 if track_id:
                     track_aggregates[aggregate_key]["track_ids"].add(track_id)
-    
+
     # Generate comprehensive summary for video
     summary_input = []
     for aggregate_key, agg in track_aggregates.items():
@@ -530,7 +539,7 @@ async def detect_video(
                 else (str(agg.get("severity") or "medium")).lower()
             ),
         })
-    
+
     # Generate summary if we have detections with descriptions
     if summary_input:
         try:
@@ -541,12 +550,12 @@ async def detect_video(
             db.commit()
         except Exception as e:
             logger.warning(f"Video summary generation failed: {e}")
-    
+
     # Create one detection record per track (or class for legacy videos)
     for aggregate_key, agg in track_aggregates.items():
         # Use the track_id if available, otherwise None
         track_id = agg.get("track_id")
-        
+
         db.add(dbm.Detection(
             frame_id=agg["first_frame_id"],  # Reference first frame where class was detected
             track_id=track_id,
@@ -564,7 +573,7 @@ async def detect_video(
             frames_detected=agg["total_frames"],  # Track how many frames contained this class
             track_thumbnail_url=agg.get("track_thumbnail_url"),
         ))
-    
+
     db.commit()
 
     STATIC_DIR.mkdir(exist_ok=True)
@@ -578,10 +587,34 @@ async def detect_video(
     thumbnail_name = f"{thumbnail_uuid}.jpg"
     thumbnail_path = STATIC_DIR / thumbnail_name
     await run_in_threadpool(_generate_video_thumbnail, str(annotated_tmp), str(thumbnail_path))
-    
+
     # Store the UUID filenames in the media record
     media.static_filename = out_name
     media.thumbnail_filename = thumbnail_name
+
+    # Now save track thumbnails using the video UUID for folder naming
+    if track_thumbnails:
+        from PIL import Image
+
+        video_uuid = Path(out_name).stem
+        tracks_folder_name = f"{video_uuid}_tracks"
+        tracks_folder_path = STATIC_DIR / tracks_folder_name
+        tracks_folder_path.mkdir(exist_ok=True)
+
+        for track_id, thumbnail_img in track_thumbnails.items():
+            thumb_filename = f"track_{track_id}.jpg"
+            thumb_path = tracks_folder_path / thumb_filename
+            # Convert OpenCV image (BGR) to PIL Image (RGB)
+            thumbnail_rgb = cv2.cvtColor(thumbnail_img, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(thumbnail_rgb)
+            await run_in_threadpool(pil_image.save, str(thumb_path))
+            track_thumbnail_paths[track_id] = f"/static/{tracks_folder_name}/{thumb_filename}"
+        
+        # Update Detection records with track thumbnail URLs
+        for detection in db.query(dbm.Detection).join(dbm.Frame).filter(dbm.Frame.media_id == media.id).all():
+            if detection.track_id is not None and detection.track_id in track_thumbnail_paths:
+                detection.track_thumbnail_url = track_thumbnail_paths[detection.track_id]
+        db.commit()
 
     try:
         await run_in_threadpool(_to_h264, str(annotated_tmp), str(out_path))
@@ -594,7 +627,7 @@ async def detect_video(
             annotated_tmp.unlink(missing_ok=True)
         except Exception:
             pass
-    
+
     # Save the media with updated filenames
     db.add(media)
     db.commit()
@@ -617,14 +650,14 @@ async def detect_video(
     dependencies=[require_roles("user", "admin")],
 )
 def list_my_uploads(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
 ):
     rows = (
         db.query(dbm.Media)
-          .filter(dbm.Media.user_username == current_user.username)
-          .order_by(dbm.Media.created_at.desc())
-          .all()
+        .filter(dbm.Media.user_username == current_user.username)
+        .order_by(dbm.Media.created_at.desc())
+        .all()
     )
 
     out: List[MediaListItem] = []
@@ -639,43 +672,43 @@ def list_my_uploads(
                 img_url = f"/static/{m.thumbnail_filename}" if m.thumbnail_filename else f"/static/{m.id}.jpg"
         else:
             # Fallback for old records without UUID filenames
-            img_url   = f"/static/{m.id}.jpg" if m.media_type == "image" else None
+            img_url = f"/static/{m.id}.jpg" if m.media_type == "image" else None
             video_url = f"/static/{m.id}.mp4" if m.media_type == "video" else None
 
         first_frame = (
             db.query(dbm.Frame)
-              .filter(dbm.Frame.media_id == m.id)
-              .order_by(dbm.Frame.frame_index)
-              .first()
+            .filter(dbm.Frame.media_id == m.id)
+            .order_by(dbm.Frame.frame_index)
+            .first()
         )
         classes: List[str] = []
         if first_frame:
             classes = [
                 c[0] for c in
                 db.query(dbm.Detection.class_name)
-                  .filter(dbm.Detection.frame_id == first_frame.id)
-                  .distinct()
-                  .all()
+                .filter(dbm.Detection.frame_id == first_frame.id)
+                .distinct()
+                .all()
             ]
         descriptions, solutions = [], []
         if first_frame:
             descriptions = [
                 d[0] for d in
                 db.query(dbm.Detection.description)
-                  .filter(
-                      dbm.Detection.frame_id == first_frame.id,
-                      dbm.Detection.description.isnot(None),
-                  )
-                  .all()
+                .filter(
+                    dbm.Detection.frame_id == first_frame.id,
+                    dbm.Detection.description.isnot(None),
+                )
+                .all()
             ]
             solutions = [
-               s[0] for s in
+                s[0] for s in
                 db.query(dbm.Detection.solution)
-                  .filter(
-                      dbm.Detection.frame_id == first_frame.id,
-                      dbm.Detection.solution.isnot(None),
-                  )
-                  .all()
+                .filter(
+                    dbm.Detection.frame_id == first_frame.id,
+                    dbm.Detection.solution.isnot(None),
+                )
+                .all()
             ]
 
         out.append(MediaListItem(
@@ -702,17 +735,17 @@ def list_my_uploads(
     dependencies=[require_roles("user", "admin")],
 )
 async def detect_images(
-    background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(...),
-    use_sam: bool = Query(
-        True,
-        description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
-    ),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    latitude:  float | None = Form(None),
-    longitude: float | None = Form(None),
-    address:   str   | None = Form(None),
+        background_tasks: BackgroundTasks,
+        files: List[UploadFile] = File(...),
+        use_sam: bool = Query(
+            True,
+            description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
+        ),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+        latitude: float | None = Form(None),
+        longitude: float | None = Form(None),
+        address: str | None = Form(None),
 ):
     responses: List[ImageResponse] = []
 
@@ -743,23 +776,29 @@ async def detect_images(
             longitude=longitude,
             geohash6=_geohash6(latitude, longitude),
         )
-        db.add(media); db.commit(); db.refresh(media)
+        db.add(media);
+        db.commit();
+        db.refresh(media)
 
         t0 = time.perf_counter()
         try:
             annotated, dets = await svc.process_image_combined(img, use_sam, str(media.id))
         except Exception as e:
-            db.delete(media); db.commit()
+            db.delete(media);
+            db.commit()
             raise HTTPException(500, f"Inference failed for {file.filename}: {e!r}")
         dt_s = time.perf_counter() - t0
 
-        media.width  = annotated.shape[1]
+        media.width = annotated.shape[1]
         media.height = annotated.shape[0]
         media.process_ms_total = int(dt_s * 1000)
-        db.add(media); db.commit()
+        db.add(media);
+        db.commit()
 
         fr = dbm.Frame(media_id=media.id, frame_index=0, timestamp=0.0)
-        db.add(fr); db.commit(); db.refresh(fr)
+        db.add(fr);
+        db.commit();
+        db.refresh(fr)
         for d in dets:
             mask = d.get("mask", {}) or {}
             db.add(dbm.Detection(
@@ -770,11 +809,11 @@ async def detect_images(
                 confidence=d.get("confidence"),
                 x1=d["bbox"][0], y1=d["bbox"][1],
                 x2=d["bbox"][2], y2=d["bbox"][3],
-                mask_rle     = mask.get("rle", {}),
-                mask_polygon = mask.get("polygon", []),
-                description  = d.get("description"),
-                solution     = d.get("solution"),
-                source       = _infer_source(d),
+                mask_rle=mask.get("rle", {}),
+                mask_polygon=mask.get("polygon", []),
+                description=d.get("description"),
+                solution=d.get("solution"),
+                source=_infer_source(d),
                 severity=_to_severity_enum(d.get("severity")),
             ))
         db.commit()
@@ -784,7 +823,7 @@ async def detect_images(
         out_name = f"{file_uuid}.jpg"
         out_path = STATIC_DIR / out_name
         await run_in_threadpool(cv2.imwrite, str(out_path), annotated)
-        
+
         # Store the UUID filename in the media record
         media.static_filename = out_name
         db.add(media)
@@ -804,12 +843,11 @@ async def detect_images(
             )
         )
 
-
-
     return responses
 
 
 import zipfile
+
 
 @router.post(
     "/images_zip",
@@ -817,17 +855,17 @@ import zipfile
     dependencies=[require_roles("user", "admin")],
 )
 async def detect_images_zip(
-    background_tasks: BackgroundTasks,
-    archive: UploadFile = File(..., media_type="application/zip"),
-    use_sam: bool = Query(
-        True,
-        description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
-    ),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    latitude:  float | None = Form(None),
-    longitude: float | None = Form(None),
-    address:   str   | None = Form(None),
+        background_tasks: BackgroundTasks,
+        archive: UploadFile = File(..., media_type="application/zip"),
+        use_sam: bool = Query(
+            True,
+            description="Set to False to draw only YOLO boxes; True to draw YOLO+SAM masks",
+        ),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+        latitude: float | None = Form(None),
+        longitude: float | None = Form(None),
+        address: str | None = Form(None),
 ):
     tmp_zip = _save_temp(archive)
 
@@ -837,8 +875,8 @@ async def detect_images_zip(
             ext = Path(name).suffix.lower()
             if ext in IMAGE_EXTS:
                 data = zf.read(name)
-                arr  = np.frombuffer(data, np.uint8)
-                img  = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                arr = np.frombuffer(data, np.uint8)
+                img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                 if img is not None:
                     images.append((name, _resize_if_needed(img)))
 
@@ -863,22 +901,28 @@ async def detect_images_zip(
             longitude=longitude,
             geohash6=_geohash6(latitude, longitude),
         )
-        db.add(media); db.commit(); db.refresh(media)
+        db.add(media);
+        db.commit();
+        db.refresh(media)
 
         t0 = time.perf_counter()
         try:
             annotated, dets = await svc.process_image_combined(img, use_sam, str(media.id))
         except Exception as e:
-            db.delete(media); db.commit()
+            db.delete(media);
+            db.commit()
             raise HTTPException(500, f"Inference failed for {filename}: {e!r}")
         dt_s = time.perf_counter() - t0
 
         media.width, media.height = annotated.shape[1], annotated.shape[0]
         media.process_ms_total = int(dt_s * 1000)
-        db.add(media); db.commit()
+        db.add(media);
+        db.commit()
 
         fr = dbm.Frame(media_id=media.id, frame_index=0, timestamp=0.0)
-        db.add(fr); db.commit(); db.refresh(fr)
+        db.add(fr);
+        db.commit();
+        db.refresh(fr)
         for d in dets:
             mask = d.get("mask", {}) or {}
             db.add(dbm.Detection(
@@ -889,11 +933,11 @@ async def detect_images_zip(
                 confidence=d.get("confidence"),
                 x1=d["bbox"][0], y1=d["bbox"][1],
                 x2=d["bbox"][2], y2=d["bbox"][3],
-                mask_rle     = mask.get("rle", {}),
-                mask_polygon = mask.get("polygon", []),
-                description  = d.get("description"),
-                solution     = d.get("solution"),
-                source       = _infer_source(d),
+                mask_rle=mask.get("rle", {}),
+                mask_polygon=mask.get("polygon", []),
+                description=d.get("description"),
+                solution=d.get("solution"),
+                source=_infer_source(d),
                 severity=_to_severity_enum(d.get("severity")),
             ))
         db.commit()
@@ -903,7 +947,7 @@ async def detect_images_zip(
         out_name = f"{file_uuid}.jpg"
         out_path = STATIC_DIR / out_name
         await run_in_threadpool(cv2.imwrite, str(out_path), annotated)
-        
+
         # Store the UUID filename in the media record
         media.static_filename = out_name
         db.add(media)

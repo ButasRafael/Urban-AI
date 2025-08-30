@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 from fastapi import Request
 import csv
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 _CSV_CACHE: dict[str, dict] = {}
 _CSV_CACHE_EXPIRY = timedelta(minutes=15)
@@ -23,26 +26,52 @@ def image_url_for_media(media, request: Request, track_id: int | None = None) ->
         return None
 
     static_root = Path(os.getenv("STATIC_DIR", "static"))
+    media_type = getattr(media, "media_type", None)
+    static_filename = getattr(media, "static_filename", None)
+    
+    logger.info(f"image_url_for_media: media_id={media.id if media else 'None'}, track_id={track_id}, media_type={media_type}, static_filename={static_filename}")
 
-    # 1) Track-specific thumbnail for videos
-    if track_id is not None and getattr(media, "media_type", None) == "video":
+    # 1) HIGHEST PRIORITY: Track-specific thumbnail for videos (if track_id provided)
+    if track_id is not None and media_type == "video":
+        # First try with the actual static_filename-based tracks folder
+        if static_filename:
+            # Extract the UUID part from static_filename (e.g., "uuid.mp4" -> "uuid")
+            video_uuid = Path(static_filename).stem
+            tracks_folder = f"{video_uuid}_tracks"
+            track_thumb = f"track_{track_id}.jpg"
+            track_path = static_root / tracks_folder / track_thumb
+            logger.info(f"Checking UUID-based track path: {track_path}, exists: {track_path.exists()}")
+            if track_path.exists():
+                url = _abs_static_url(request, f"{tracks_folder}/{track_thumb}")
+                logger.info(f"Returning UUID-based track URL: {url}")
+                return url
+        
+        # Fallback to media.id based tracks folder (legacy)
         tracks_folder = f"{media.id}_tracks"
         track_thumb = f"track_{track_id}.jpg"
         track_path = static_root / tracks_folder / track_thumb
+        logger.info(f"Checking ID-based track path: {track_path}, exists: {track_path.exists()}")
         if track_path.exists():
-            return _abs_static_url(request, f"{tracks_folder}/{track_thumb}")
+            url = _abs_static_url(request, f"{tracks_folder}/{track_thumb}")
+            logger.info(f"Returning ID-based track URL: {url}")
+            return url
 
-    # 2) UUID-based static filename (new system)
-    static_filename = getattr(media, "static_filename", None)
-    if static_filename and (static_root / static_filename).exists():
+    # 2) For videos without track_id, use thumbnail_filename
+    if media_type == "video":
+        thumbnail_filename = getattr(media, "thumbnail_filename", None)
+        if thumbnail_filename and (static_root / thumbnail_filename).exists():
+            return _abs_static_url(request, thumbnail_filename)
+    
+    # 3) UUID-based static filename (for images only)
+    if static_filename and media_type == "image" and (static_root / static_filename).exists():
         return _abs_static_url(request, static_filename)
 
-    # 3) Fallback to annotated image <id>.jpg
+    # 4) Fallback to annotated image <id>.jpg
     annotated = f"{media.id}.jpg"
     if (static_root / annotated).exists():
         return _abs_static_url(request, annotated)
 
-    # 4) Fallback to stored filename (normalize ext)
+    # 5) Fallback to stored filename (normalize ext)
     filename = getattr(media, "filename", "")
     if filename:
         name = Path(filename).name
@@ -52,7 +81,14 @@ def image_url_for_media(media, request: Request, track_id: int | None = None) ->
         if (static_root / name).exists():
             return _abs_static_url(request, name)
 
-    # 5) Last resort: return whatever static_filename we have, or annotated name, as an absolute URL
+    # 6) Last resort: For videos, use thumbnail or annotated jpg, never the video file
+    if media_type == "video":
+        thumbnail_filename = getattr(media, "thumbnail_filename", None)
+        if thumbnail_filename:
+            return _abs_static_url(request, thumbnail_filename)
+        return _abs_static_url(request, annotated)
+    
+    # For images, return static_filename or annotated as fallback
     if static_filename:
         return _abs_static_url(request, static_filename)
     return _abs_static_url(request, annotated)

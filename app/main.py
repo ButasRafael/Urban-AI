@@ -32,8 +32,6 @@ from app.api.chat import router as chat_router
 from app.api.rag import router as rag_router
 from app.api.issues import router as issues_router
 from app.api.users import router as users_router
-from app.core.database import init_db
-
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +100,29 @@ def _ping():
     return {"status": "ok"}
 
 @app.on_event("startup")
-def _startup():
-    init_db()
+async def startup_event():
+    logger.info("Starting model preloading...")
+    
+    # Load RAG reranker model
+    try:
+        from app.services.rag import load_reranker
+        load_reranker()
+        logger.info("✓ RAG reranker loaded")
+    except Exception as e:
+        logger.error(f"Failed to load RAG reranker: {e}")
+    
+    # Load inference models (YOLO, SAM2, GroundingDINO)
+    try:
+        from app.services.inference import _load_models, _load_grounder
+        _load_models()  # Loads YOLO and SAM2
+        logger.info("✓ YOLO and SAM2 models loaded")
+        
+        _load_grounder()  # Loads GroundingDINO
+        logger.info("✓ GroundingDINO model loaded")
+    except Exception as e:
+        logger.error(f"Failed to load inference models: {e}")
+    
+    logger.info("All models preloaded successfully!")
 
 @app.get("/sentry-test",dependencies=[require_roles("admin")])
 def test():
@@ -138,7 +157,7 @@ async def metrics(request: Request):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://urban-ai.netlify.app"],
-    allow_credentials=False,  # We use Bearer tokens, not cookies
+    allow_credentials=False,
     allow_methods=["*"],
-    allow_headers=["*"],  # This includes Authorization header
+    allow_headers=["*"],
 )

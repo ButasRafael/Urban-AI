@@ -71,11 +71,19 @@ def get_chunk(chunk_id: int, request: Request, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(404, "Chunk not found")
 
+    # Generate image URL with track_id for videos
+    image_url = image_url_for_media(row.media, request, row.track_id)
+    
+    # Log for debugging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Chunk {chunk_id}: media_id={row.media_id}, track_id={row.track_id}, media_type={row.media.media_type if row.media else 'None'}, image_url={image_url}")
+
     return ChunkOut(
         id=row.id,
         media_id=row.media_id,
         chunk=row.chunk,
-        image_url=image_url_for_media(row.media, request, row.track_id),
+        image_url=image_url,
         severity=row.severity.value if row.severity else None,
         status=row.status.value if row.status else None,
         assigned_to=row.assigned_to,
@@ -101,19 +109,6 @@ async def search_rag(
         request: Request,
         db: Session = Depends(get_db)
 ):
-    """
-    Smart RAG search with optimized retrieval:
-    1. GPT parses query to extract semantic search and dynamic filters
-    2. If SQL-only query (filters + generic terms):
-       - Returns ALL matching results without limits
-       - No semantic search, no k limit, no per-media cap
-    3. Otherwise, two-phase retrieval:
-       - Phase 1: Apply SQL filters on dynamic fields (severity, status, assigned_to)
-       - Phase 2: Vector similarity search on filtered results (respects k limit)
-
-    The semantic query handles: locations, areas, issue types, dates
-    The SQL filters handle: severity, status, assigned_to
-    """
 
     # Parse the query using GPT to extract filters
     parsed = await parse_query_with_filters(search_request.query)
@@ -139,6 +134,7 @@ async def search_rag(
         db,
         query_embedding,
         k=search_request.k,
+        query_text=parsed["query"],
         severity_filter=parsed["severity"],
         status_filter=parsed["status"],
         assigned_to_filter=parsed["assigned_to"],

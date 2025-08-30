@@ -40,4 +40,6 @@ yapf
 pgvector
 sse-starlette
 geohash2
+sentence-transformers
+FlagEmbedding
 --extra-index-url https://download.pytorch.org/whl/cu124

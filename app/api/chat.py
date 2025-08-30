@@ -31,10 +31,7 @@ def _sse(event: str, data: dict | str) -> str:
 
 
 async def generate_conversation_title(first_message: str) -> str:
-    """
-    Generate a concise, punctuation-free, Title Case conversation title.
-    Target: 20-45 characters (hard cap 50) using the Responses API.
-    """
+
     try:
         resp = await client.responses.create(
             model="gpt-4.1",
@@ -72,11 +69,9 @@ You generate concise, descriptive conversation titles for an urban maintenance a
 # Final Instruction
 Return a single line with only the title. No punctuation. No quotes.
 """.strip(),
-            # For this simple case, pass the user input as a plain string
             input=first_message,
             temperature=0.2,
-            max_output_tokens=30,  # Slightly higher to accommodate 45-char target
-            # store=True is default - enables OpenAI dashboard logging
+            max_output_tokens=30,
         )
 
         raw = (resp.output_text or "").strip()
@@ -110,6 +105,7 @@ async def _build_context(
 
     chunks = rag_svc.retrieve(
         db, emb, k=k,
+        query_text=parsed["query"],
         severity_filter=parsed.get("severity"),
         status_filter=parsed.get("status"),
         assigned_to_filter=parsed.get("assigned_to"),

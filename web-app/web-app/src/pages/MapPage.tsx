@@ -943,16 +943,7 @@ export default function MapPage() {
                       </div>
 
 
-                      {p.annotated_image_url && (
-                          <img
-                              className="infocard__img"
-                              src={`${import.meta.env.VITE_API_BASE}${p.annotated_image_url}`}
-                              alt=""
-                              loading="lazy"
-                          />
-                      )}
-
-                      {p.annotated_video_url && (
+                      {p.annotated_video_url ? (
                           <div className="infocard__video-thumb" onClick={() => setModalProblem(p)}>
                               <video
                                   className="infocard__img"
@@ -968,6 +959,13 @@ export default function MapPage() {
                                   </svg>
                               </div>
                           </div>
+                      ) : p.annotated_image_url && (
+                          <img
+                              className="infocard__img"
+                              src={`${import.meta.env.VITE_API_BASE}${p.annotated_image_url}`}
+                              alt=""
+                              loading="lazy"
+                          />
                       )}
 
                       <div className="infocard__actions">

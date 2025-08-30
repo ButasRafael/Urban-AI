@@ -155,7 +155,13 @@ def list_issues(
                 video_url = None
             else:
                 video_url = f"/static/{med.static_filename}"
-                img_url = f"/static/{med.thumbnail_filename}" if med.thumbnail_filename else f"/static/{med.id}.jpg"
+                # Use track-specific thumbnail if available, otherwise fall back to video thumbnail
+                if det.track_thumbnail_url:
+                    img_url = det.track_thumbnail_url
+                elif med.thumbnail_filename:
+                    img_url = f"/static/{med.thumbnail_filename}"
+                else:
+                    img_url = f"/static/{med.id}.jpg"
         else:
             # Fallback for old records without UUID filenames
             img_url = f"/static/{med.id}.jpg" if med.media_type == "image" else None

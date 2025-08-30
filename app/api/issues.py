@@ -62,6 +62,18 @@ def get_issue(
     db: Session = Depends(get_db),
 ):
     det = _get_detection_or_404(db, detection_id)
+    
+    # Get media info for fallback thumbnails
+    frame = db.query(dbm.Frame).filter(dbm.Frame.id == det.frame_id).first()
+    media = db.query(dbm.Media).filter(dbm.Media.id == frame.media_id).first() if frame else None
+    
+    # Determine thumbnail URL with fallbacks
+    thumbnail_url = None
+    if det.track_thumbnail_url:
+        thumbnail_url = det.track_thumbnail_url
+    elif media and media.media_type == "video" and media.thumbnail_filename:
+        thumbnail_url = f"/static/{media.thumbnail_filename}"
+    
     return {
         "id": det.id,
         "frame_id": det.frame_id,
@@ -80,7 +92,7 @@ def get_issue(
         "verified_at": format_datetime_iso_ro(det.verified_at),
         "created_at": format_datetime_iso_ro(det.created_at),
         "resolved_at": format_datetime_iso_ro(det.resolved_at),
-        "track_thumbnail_url": det.track_thumbnail_url,
+        "track_thumbnail_url": thumbnail_url,
     }
 
 

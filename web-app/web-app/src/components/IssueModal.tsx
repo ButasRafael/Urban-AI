@@ -172,7 +172,17 @@ export default function IssueModal({ problem, onClose }: Props) {
         {(imagePreview || videoPreview) && (
           <div className="media-box">
             {!imgLoaded && <div className="media-skeleton shimmer" aria-hidden />}
-            {imagePreview && (
+            {videoPreview ? (
+              <video
+                className="media-el"
+                controls
+                playsInline
+                onLoadedData={() => setImgLoaded(true)}
+                poster={imagePreview || undefined}
+              >
+                <source src={videoPreview} type="video/mp4" />
+              </video>
+            ) : imagePreview && (
               <img
                 src={imagePreview}
                 alt=""
@@ -180,16 +190,6 @@ export default function IssueModal({ problem, onClose }: Props) {
                 className="media-el"
                 loading="lazy"
               />
-            )}
-            {videoPreview && (
-              <video
-                className="media-el"
-                controls
-                playsInline
-                onLoadedData={() => setImgLoaded(true)}
-              >
-                <source src={videoPreview} type="video/mp4" />
-              </video>
             )}
 
             <div className="media-toolbar">
@@ -203,7 +203,7 @@ export default function IssueModal({ problem, onClose }: Props) {
                 </a>
               ) : null}
 
-              {imagePreview && (
+              {imagePreview && !videoPreview && (
                 <a className="tool-btn" href={imagePreview} download title="Download image">
                   <IconDownload />
                 </a>
