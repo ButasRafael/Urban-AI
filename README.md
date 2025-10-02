@@ -1,25 +1,173 @@
-# 🌆 Urban AI: Comprehensive Smart City Issue Detection, Segmentation, and Reporting
+# 🏙️ Urban AI - Intelligent Urban Issue Detection System
 
-Urban AI provides a complete solution for efficiently identifying, segmenting, and managing urban issues such as potholes, graffiti, illegal parking, garbage, cracks, fallen trees, and others. The project uses advanced artificial intelligence techniques, including YOLOv11 for rapid object detection, Grounding Dino—leveraging GPT-4.1’s newly identified detections with their carefully chosen dino prompts produce accurate bounding boxes where GPT alone cannot—GPT-4.1 to validate YOLO detections, identify any missed issues, and generate human-readable descriptions and remediation suggestions, and Segment Anything Model 2 (SAM2) for precise segmentation. Integrated with a powerful backend, intuitive web interface, and user-friendly mobile application, Urban AI empowers citizens to report problems seamlessly and allows authorities to manage urban maintenance effectively.
+![Urban AI Banner](https://img.shields.io/badge/AI-Powered-blue) ![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED) ![GPU](https://img.shields.io/badge/GPU-Accelerated-76B900) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192) ![Redis](https://img.shields.io/badge/Redis-DC382D) ![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-orange)
+
+Urban AI provides a comprehensive solution for efficiently identifying, segmenting, and managing urban issues such as potholes, graffiti, illegal parking, garbage, cracks, fallen trees, and others. The project uses advanced artificial intelligence techniques, including YOLOv11 for rapid object detection, GroundingDINO for phrase-grounded detection, GPT-4.1 for validation and description generation, and Segment Anything Model 2 (SAM2) for precise segmentation.
+
+Integrated with a powerful **async backend** featuring WebSocket real-time updates, Celery task queues, Redis caching, and comprehensive monitoring, Urban AI empowers citizens to report problems seamlessly and allows authorities to manage urban maintenance effectively through web and mobile applications.
 
 ## 📑 Table of Contents
 
-* [Project Overview](#project-overview)
-* [AI Model Development and Training](#ai-model-development-and-training)
-* [Backend Development](#backend-development)
+* [Project Overview](#-project-overview)
+* [Key Features & Achievements](#-key-features--achievements)
+* [AI Model Performance](#-ai-model-performance)
+* [System Architecture](#-system-architecture)
+* [AI Model Development and Training](#-ai-model-development-and-training)
+* [Backend Development](#-backend-development)
+  * [Async Inference Pipeline](#async-inference-pipeline)
+  * [WebSocket Real-time Updates](#websocket-real-time-updates)
+  * [Rate Limiting & Validation](#rate-limiting--validation)
   * [Monitoring and Logging](#monitoring-and-logging)
-    * [Prometheus & Grafana](#prometheus--grafana)
-    * [Loki & Tempo](#loki--tempo)
-* [Frontend Applications](#frontend-applications)
-* [Chat & RAG Module](#-chat--rag-module)
-* [Docker Services Explained](#docker-services-explained)
-* [Installation and Usage Guide](#installation-and-usage-guide)
-* [Contributing and Development](#contributing-and-development)
+* [Frontend Applications](#-frontend-applications)
+* [RAG System Implementation](#-rag-system-implementation)
+* [Docker Services & Deployment](#-docker-services--deployment)
+* [Installation and Usage Guide](#-installation-and-usage-guide)
+* [Testing](#-testing)
 
 
 ## 🌟 Project Overview
 
 Urban AI simplifies the reporting and management of city issues by utilizing AI-driven analyses of user-uploaded photos and videos. Reports are processed automatically, generating accurate classifications and segmentations of urban problems, significantly enhancing response times and management efficiency.
+
+The system combines state-of-the-art computer vision models with a modern microservices architecture, featuring asynchronous processing, real-time updates, and intelligent RAG-powered chat assistance for urban management authorities.
+
+## 🚀 Key Features & Achievements
+
+### Core Achievements
+- **150K+ training images** (88K original + 38K augmented + 14K validation + 9.5K test)
+- **84.3% mAP50** accuracy on 12-class urban issue detection
+- **74.3% mAP50-95** comprehensive accuracy metric
+- **125 epochs** of optimized training with hyperparameter tuning
+- **Real-time inference** with TensorRT acceleration
+- **Async processing** with Celery task queues and WebSocket updates
+- **RAG-powered chat** with hybrid search (BM25 + vector similarity)
+
+### Technical Features
+- **12-Class Detection**: Pothole, Graffiti, Garbage, Garbage Bin, Overflow, Illegal/Empty/Legal Parking, Cracks, Open/Closed Manholes, Fallen Trees
+- **Multi-Modal Support**: Images (10MB max) and videos (50MB max, 60s duration)
+- **Real-time Updates**: WebSocket-based live task progress
+- **Distributed Processing**: GPU/CPU task separation with Celery
+- **Rate Limiting**: Redis-backed per-endpoint and user-based limits
+- **Role-Based Access**: Admin, authority, and user roles
+- **Bilingual Support**: English and Romanian text processing
+- **Geographic Analytics**: Heatmaps, hotspots, temporal patterns
+
+## 📊 AI Model Performance
+
+### YOLOv11 Custom Urban Model - Training Results
+
+#### Dataset Statistics
+- **Training**: 126,000 images (88K original + 38K augmented)
+- **Validation**: 14,000 images
+- **Test**: 9,532 images
+- **Total Instances**: ~230,000 bounding boxes across all sets
+
+#### Per-Class Test Performance
+
+| Class | Training Instances | Test Images | Precision | Recall | mAP50 | mAP50-95 |
+|-------|-------------------|-------------|-----------|--------|-------|----------|
+| **Pothole** | 30,000 | 1,050 | 80.3% | 68.9% | 76.0% | 54.1% |
+| **Graffiti** | 22,000 | 2,061 | 81.0% | 64.1% | 75.9% | 46.2% |
+| **Garbage** | 15,000 | 594 | 94.4% | 97.0% | 97.4% | 90.9% |
+| **Garbage Bin** | 24,000 | 804 | 96.3% | 96.6% | 98.2% | 92.1% |
+| **Overflow** | 25,000 | 982 | 96.1% | 86.8% | 95.0% | 89.7% |
+| **Parking Illegal** | 14,000 | 127 | 77.6% | 75.4% | 82.6% | 78.3% |
+| **Parking Empty** | 16,000 | 96 | 92.3% | 64.8% | 70.0% | 69.0% |
+| **Parking Legal** | 25,000 | 165 | 59.2% | 52.6% | 64.6% | 62.5% |
+| **Crack** | 21,000 | 979 | 77.7% | 67.0% | 75.3% | 55.5% |
+| **Open Manhole** | 13,000 | 569 | 91.5% | 91.4% | 95.2% | 90.2% |
+| **Closed Manhole** | 15,000 | 771 | 85.6% | 74.3% | 84.2% | 77.0% |
+| **Fallen Tree** | 14,000 | 684 | 92.4% | 87.1% | 94.3% | 85.9% |
+| **Overall** | **234,000** | **9,532** | **85.3%** | **76.7%** | **84.3%** | **74.3%** |
+
+#### Training Progression
+- **Final Epoch (125)**: Box Loss: 0.581, Class Loss: 0.380, DFL Loss: 1.048
+- **Training**: 125 epochs completed
+- **Hardware**: NVIDIA GPU with mixed precision (FP16) training
+
+## 🏗️ System Architecture
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Client Layer                             │
+│  ┌────────────────┐           ┌──────────────────────┐         │
+│  │  React Web App │           │ React Native Mobile   │         │
+│  └────────┬───────┘           └──────────┬───────────┘         │
+└───────────┼───────────────────────────────┼─────────────────────┘
+            │                               │
+            ▼                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         API Gateway                              │
+│  ┌──────────────┐   ┌─────────────────┐   ┌──────────────┐    │
+│  │ Rate Limiter │──▶│  FastAPI Server │◀──▶│  WebSocket   │    │
+│  └──────────────┘   └────────┬────────┘   └──────┬───────┘    │
+└───────────────────────────────┼────────────────────┼────────────┘
+                                │                    │
+            ┌───────────────────┴────────┬──────────┴────┐
+            ▼                            ▼               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Processing Layer                            │
+│  ┌─────────────────────────────┐  ┌─────────────────────────┐  │
+│  │      GPU Worker              │  │      CPU Worker         │  │
+│  │  • YOLO Detection            │  │  • Embeddings           │  │
+│  │  • SAM2 Segmentation         │  │  • RAG Indexing         │  │
+│  │  • GroundingDINO             │  │  • Background Tasks     │  │
+│  │  • GPT-4.1 Refinement        │  │                         │  │
+│  └─────────────┬───────────────┘  └──────────┬──────────────┘  │
+└────────────────┼──────────────────────────────┼─────────────────┘
+                 │                              │
+                 ▼                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Data Layer                               │
+│  ┌───────────────────────┐      ┌────────────────────────┐     │
+│  │   PostgreSQL 15       │      │     Redis 8.2         │     │
+│  │   + pgvector          │◀────▶│   Cache + Broker       │     │
+│  └───────────────────────┘      └────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Monitoring Stack                             │
+│  ┌────────┐  ┌──────────┐  ┌──────────────┐  ┌────────────┐   │
+│  │ Tempo  │──▶│ Grafana  │  │ Prometheus   │  │   Sentry   │   │
+│  └────────┘  └──────────┘  └──────────────┘  └────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Technology Stack
+
+#### Backend
+- **Framework**: FastAPI with async/await support
+- **Task Queue**: Celery 5.4 with Redis broker
+- **Database**: PostgreSQL 15 with pgvector extension
+- **Cache**: Redis 8.2 with connection pooling
+- **WebSocket**: Native FastAPI WebSocket support
+- **Authentication**: JWT with refresh tokens
+- **Rate Limiting**: slowapi with Redis backend
+- **Monitoring**: OpenTelemetry, Prometheus, Grafana, Tempo
+
+#### AI/ML Stack
+- **Object Detection**: YOLOv11 (custom trained)
+- **Segmentation**: SAM2.1 Hiera B+ (*requires separate installation - see Prerequisites*)
+- **Grounded Detection**: GroundingDINO SwinB
+- **LLM**: GPT-4.1 for refinement and chat
+- **Embeddings**: OpenAI text-embedding-3-large (3072 dims)
+- **Acceleration**: TensorRT, mixed precision (FP16)
+
+#### Frontend
+- **Web**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Mobile**: React Native + Expo + Shopify Restyle
+- **Maps**: Leaflet (web), React Native Maps (mobile)
+- **Charts**: Recharts for analytics
+- **Real-time**: WebSocket client for live updates
+
+#### Infrastructure
+- **Containerization**: Docker + Docker Compose
+- **GPU Support**: NVIDIA CUDA 12.5 + TensorRT
+- **Image**: nvcr.io/nvidia/tensorrt:25.04-py3
+- **Storage**: Local volumes for weights, cache, uploads
 
 ## 🧠 AI Model Development and Training (Expanded)
 
@@ -60,11 +208,10 @@ We perform **class-aware oversampling** to balance rare classes up to the 90th p
   # hsv / rotate / translate / scale / shear / perspective
   # fliplr, mosaic, mixup, copy_paste
 
-* **Ray Tune**:
-
-  * 300 trials, 5-epoch grace period, 1 GPU/trial, fractional training (cosine LR, AMP, 40 epochs budget).
-  * Logs streamed to Weights & Biases (optional).
-* **Result**: best hyperparameters YAML persisted at `runs/detect/tune/best_hyperparameters.yaml`.
+* **Ray Tune**: Distributed hyperparameter search with multiple trials
+  * GPU-accelerated training with mixed precision (AMP)
+  * Logs streamed to Weights & Biases (optional)
+* **Result**: Best hyperparameters saved for final training
 
 ### 5. Model Training
 
@@ -113,33 +260,25 @@ We perform **class-aware oversampling** to balance rare classes up to the 90th p
 
 ### 7. Real-Time Inference & Segmentation
 
-* **TensorRT export**:
-
+* **TensorRT export** for optimized inference:
   ```bash
-  yolo export \
-    weights=best_medium.pt \
-    format=engine \
-    half \
-    dynamic \
-    simplify \
-    imgsz=640 \
-    batch=1
+  yolo export weights=best_medium.pt format=engine half imgsz=640
   ```
-* **Inference scripts**:
 
-  * **Image-only**: `process_image_combined(img)` → YOLO→SAM2→GPT/GroundingDINO refinement → masks & overlay → persist detections.
-  * **Video**: `process_video(path)` → YOLO+BoT-SORT tracking → per-frame SAM segmentation → frame-by-frame JSON metadata + annotated mp4.
-* **Performance**:
-
-  * \~5–10 ms preprocess, \~15–25 ms inference, \~2–5 ms postprocess per 640×640 image on RTX 30xx (mixed-precision + TensorRT).
-  * 8 MP video at 30 FPS end-to-end with tracking + segmentation.
+* **Inference Pipeline**:
+  * **Image Processing**: YOLO → SAM2 → GPT/GroundingDINO refinement → masks & overlay → database storage
+  * **Video Processing**: YOLO + BoT-SORT tracking → per-frame SAM segmentation → annotated output
 
 
 This comprehensive workflow—from raw dataset consolidation through class-aware augmentation, large-scale hyperparameter search, rigorous training/validation, to real-time GPU-accelerated inference and segmentation—ensures Urban AI delivers both high accuracy and production-grade performance in dynamic urban environments.
 
 ## 🔧 Backend Development
 
-The backend is developed using FastAPI, providing robust and scalable API services. It incorporates real-time processing with TensorRT for GPU acceleration and extensive monitoring and logging functionalities.
+The backend is developed using FastAPI with full async/await support, providing robust and scalable API services. It features a sophisticated async inference pipeline with Celery task queues, WebSocket real-time updates, Redis-based rate limiting, and comprehensive monitoring.
+
+### API Documentation
+- **Interactive Swagger UI**: Available at `/api/docs` for testing and exploring all endpoints
+- **OpenAPI Schema**: Automatically generated at `/api/openapi.json`
 
 ### 🤖 AI Integration Pipeline
 
@@ -201,12 +340,161 @@ The backend is developed using FastAPI, providing robust and scalable API servic
 
 ---
 
-This tightly-coupled pipeline blends ultra-fast bounding-box inference (YOLOv11) with precise mask segmentation (SAM2), semantic refinement & augmentation (GPT-4.1), and optional phrase-grounded bounding boxes (GroundingDINO) to deliver rich, actionable urban-issue annotations in both images and video.  
+This tightly-coupled pipeline blends ultra-fast bounding-box inference (YOLOv11) with precise mask segmentation (SAM2), semantic refinement & augmentation (GPT-4.1), and optional phrase-grounded bounding boxes (GroundingDINO) to deliver rich, actionable urban-issue annotations in both images and video.
+
+### Async Inference Pipeline
+
+The system implements a fully asynchronous inference pipeline using Celery task queues and Redis for optimal performance:
+
+1. **Request Flow**:
+   ```
+   Client → FastAPI → Validation → Celery Task → Redis Queue → Worker → Processing → Result
+                ↓                                                              ↓
+           WebSocket ← Redis Pub/Sub ← Progress Updates ← Worker Status
+   ```
+
+2. **Task Distribution**:
+   - **GPU Queue**: Image/video inference (YOLO, SAM2, GroundingDINO)
+   - **CPU Queue**: Embeddings, RAG indexing, CSV exports
+   - **Default Queue**: Cleanup, maintenance tasks
+
+3. **Worker Configuration**:
+   ```python
+   # GPU Worker (1 concurrent task, solo pool)
+   celery -A app.core.celery_app worker -Q gpu --concurrency=1 --pool=solo
+
+   # CPU Worker (4 concurrent tasks, prefork pool)
+   celery -A app.core.celery_app worker -Q cpu,default --concurrency=4 --pool=prefork
+   ```
+
+4. **Task Monitoring**:
+   - Real-time progress via Redis pub/sub
+   - Prometheus metrics for task latency and throughput
+   - Health checks for worker availability
+
+### WebSocket Real-time Updates
+
+The WebSocket implementation provides live task progress and status updates:
+
+1. **Connection Management**:
+   ```python
+   # WebSocket connection with JWT authentication
+   ws://localhost:8000/ws/updates?token={jwt_token}
+   ```
+
+2. **Event Types**:
+   - `task_started`: Task begins processing
+   - `task_progress`: Progress updates (0-100%)
+   - `task_completed`: Final results ready
+   - `task_failed`: Error notification
+
+3. **Redis Bridge**:
+   - Subscribes to task-specific Redis channels
+   - Broadcasts updates to connected clients
+   - Handles connection lifecycle and cleanup
+
+### Rate Limiting & Validation
+
+#### Input Validation
+```python
+# File size limits
+MAX_IMAGE_SIZE_MB = 10
+MAX_VIDEO_SIZE_MB = 50
+
+# Resolution limits
+MAX_IMAGE_DIMENSION = 4096  # 4K max
+MAX_VIDEO_DIMENSION = 1920  # 1080p max
+MAX_VIDEO_DURATION = 60     # seconds
+
+# Supported extensions
+IMAGE_EXTS = {".jpg", ".png", ".webp", ".heic", ...}
+VIDEO_EXTS = {".mp4", ".mov", ".avi", ".webm", ...}
+```
+
+#### Rate Limiting Configuration
+```python
+INFERENCE_RATE_LIMITS = {
+    "image": "10 per minute",   # Per user
+    "video": "3 per minute",    # More resource intensive
+    "status": "60 per minute",  # Status checks
+    "media_list": "30 per minute"
+}
+
+USER_RATE_LIMITS = {
+    "default": "100 per hour",
+    "admin": "500 per hour",
+    "premium": "250 per hour"
+}
+```
+
+### API Endpoints
+
+#### Authentication & User Management
+```
+POST   /api/auth/register          - User registration
+POST   /api/auth/login             - Login with JWT
+GET    /api/auth/me                - Current user info
+POST   /api/auth/refresh           - Refresh access token
+POST   /api/auth/logout            - Logout and revoke token
+GET    /api/users                  - List users (admin only)
+```
+
+#### Async Inference Endpoints
+```
+POST   /api/inference/process-image     - Submit image for processing
+POST   /api/inference/process-video     - Submit video for processing
+GET    /api/inference/status/{task_id}  - Get task status
+GET    /api/inference/result/{task_id}  - Get processing results
+GET    /api/inference/media             - List processed media with filters
+```
+
+#### WebSocket Endpoint
+```
+WS     /ws/updates?token={token}        - Real-time task updates
+```
+
+#### Issue Management
+```
+GET    /api/problems                    - List all detected problems
+GET    /api/problems/issues             - Filtered issue list
+PATCH  /api/problems/issues/bulk_status - Bulk update status
+GET    /api/issues/{id}                 - Get issue details
+PATCH  /api/issues/{id}/status          - Update status (open/resolved/ignored)
+PATCH  /api/issues/{id}/severity        - Update severity (low/medium/high)
+PATCH  /api/issues/{id}/assign          - Assign to user (admin only)
+PATCH  /api/issues/{id}/verify          - Verify issue (admin only)
+```
+
+#### Analytics Endpoints
+```
+GET    /api/analytics/kpis                        - Key performance indicators
+GET    /api/analytics/uploads-by-day              - Daily upload statistics
+GET    /api/analytics/uploads-by-user             - User activity metrics
+GET    /api/analytics/detections/severity-by-day  - Severity trends over time
+GET    /api/analytics/detections/top-classes      - Most common issue types
+GET    /api/analytics/detections/confidence-by-class - Confidence distribution
+GET    /api/analytics/geo/heatmap                 - Geographic heatmap data
+GET    /api/analytics/geo/hotspots                - Issue concentration areas
+GET    /api/analytics/issues/aging-buckets        - Issue resolution time analysis
+GET    /api/analytics/performance/resolution-efficiency - Team performance metrics
+```
+
+#### Chat & RAG Endpoints
+```
+POST   /api/chat/stream                 - Stream chat response with RAG context
+GET    /api/chat/sessions               - List user's chat sessions
+GET    /api/chat/sessions/{id}          - Get session history
+DELETE /api/chat/sessions/{id}          - Delete chat session
+PATCH  /api/chat/sessions/{id}/title    - Update session title
+POST   /api/rag/search                  - Hybrid RAG search
+GET    /api/rag/chunk/{id}              - Get specific RAG chunk
+GET    /api/rag/download-csv/{id}       - Export RAG results as CSV
+```  
 
 
-## 🤖 Chat & RAG Module
+## 🧠 RAG System Implementation
 
-Urban AI’s Retrieval-Augmented Generation (RAG) chat ties together a React-based frontend, a FastAPI backend, and a pgvector-enabled PostgreSQL database to let city authorities ask natural-language questions and get context-aware, geo-filtered answers.
+Urban AI's Retrieval-Augmented Generation (RAG) system provides intelligent, context-aware responses about urban issues by combining hybrid search (PostgreSQL full-text search + vector similarity), cross-encoder reranking, and GPT-4.1 generation. The system enables city authorities to ask natural-language questions and get precise, geo-filtered answers.
 
 ### 🖥️ Frontend Chat Interface
 - **React chat page** with a sidebar of conversation sessions and a main chat panel.
@@ -225,22 +513,92 @@ Urban AI’s Retrieval-Augmented Generation (RAG) chat ties together a React-bas
   - `ChatSession` & `ChatMessage` store conversation history per authority user.  
   - CRUD endpoints under `/chat` for sending messages, listing sessions, fetching history, and deleting sessions.
 
-### 📚 RAG Service Implementation
-1. **Chunk storage**  
-   - **`RAGChunk`** table holds denormalized text blobs (“`<issue> detected at <location>. Description: … Suggest fix: …`”) with a `vector(1536)` embedding and optional latitude/longitude.
-2. **Embedding**  
-   - Uses OpenAI’s **text-embedding-3-small** via `rag_svc.embed(text)` to convert each chunk into a float vector.
-3. **Retrieval**  
-   - SQL query orders by `embedding.cosine_distance(query_emb)` (via pgvector), retrieving up to 4× k candidates.  
-   - Applies an Haversine filter (`_within_radius`) to enforce `latitude`, `longitude`, `radius_km` constraints.  
-   - Returns the top k closest, geo-filtered chunks.
-4. **Ingestion pipeline**  
-   - On new media upload, `ingest_media` iterates all `Detection` records, composes chunk text, embeds it, and stores `RAGChunk` entries.  
-   - Triggered asynchronously via FastAPI’s `BackgroundTasks` (`enqueue_embeddings`).
-5. **Context assembly & LLM call**  
-   - For each incoming chat request, `_build_context` embeds the user’s query, retrieves top chunks, and concatenates them with `\n---\n` separators.  
-   - The assembled context plus last 10 messages are sent as system prompts to GPT-4o.  
-   - The assistant’s response is saved and returned to the frontend.
+### 📚 RAG Service Architecture
+
+#### Hybrid Search Implementation
+
+The RAG system uses a sophisticated hybrid retrieval approach combining:
+
+1. **PostgreSQL Full-Text Search (BM25)**:
+   ```sql
+   -- Weighted FTS with bilingual support
+   ALTER TABLE rag_chunks ADD COLUMN tsv tsvector GENERATED ALWAYS AS (
+     setweight(to_tsvector('english', unaccent(class_name)), 'A') ||
+     setweight(to_tsvector('romanian', unaccent(address)), 'B') ||
+     setweight(to_tsvector('english', unaccent(chunk)), 'C')
+   ) STORED;
+
+   -- GIN index for fast search
+   CREATE INDEX idx_rag_chunks_tsv ON rag_chunks USING GIN (tsv);
+   ```
+
+2. **Vector Similarity Search**:
+   - **Embeddings**: OpenAI text-embedding-3-large (3072 dimensions)
+   - **Storage**: PostgreSQL pgvector extension
+   - **Distance**: Cosine similarity with HNSW indexing
+   - **Query**: `embedding <=> query_vector` for KNN search
+
+3. **Cross-Encoder Reranking**:
+   ```python
+   # Load cross-encoder model
+   reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+
+   # Score and rerank candidates
+   pairs = [(query, chunk.text) for chunk in candidates]
+   scores = reranker.predict(pairs)
+   reranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+   ```
+
+#### Query Processing Pipeline
+
+```
+User Query → Parse Filters → Hybrid Retrieval → Rerank → Context Assembly → LLM → Stream Response
+     ↓             ↓                ↓               ↓            ↓              ↓
+  Session ID   SQL Filters    BM25 + Vector   CrossEncoder   Top-K Chunks   GPT-4.1
+```
+
+#### RAG Query Parser Features
+
+The `rag_query_parser` extracts the following SQL filters from natural language queries:
+
+1. **Dynamic Filters Extracted**:
+   - **severity**: low/medium/high (with English/Romanian synonym mapping)
+   - **status**: open/resolved/ignored (with synonym mapping)
+   - **assigned_to**: Authority username (validated against database)
+   - **verified_by**: Admin username (validated against database)
+   - **resolved_after/resolved_before**: Date range for resolution
+   - **verified_after/verified_before**: Date range for verification
+   - **sql_only**: Boolean flag for SQL-only queries
+
+2. **Temporal Parsing**:
+   - Natural language to ISO dates ("yesterday", "last week", "January 21")
+   - Romanian timezone (RO_TZ) awareness
+   - Relative date interpretation based on current time
+
+3. **Synonym Normalization**:
+   ```python
+   # Severity mapping (English & Romanian)
+   "critical"/"urgent"/"grave"/"urgente" → "high"
+   "moderate"/"medii" → "medium"
+   "minor"/"minore"/"usoare" → "low"
+
+   # Status mapping
+   "closed"/"fixed"/"rezolvate" → "resolved"
+   "pending"/"active"/"deschise" → "open"
+   ```
+
+4. **Multi-Stage Retrieval**:
+   - Stage 1: SQL filters on dynamic fields (if applicable)
+   - Stage 2: BM25 text search on remaining query terms
+   - Stage 3: Vector similarity search in parallel
+   - Stage 4: Cross-encoder reranking of combined results
+   - Stage 5: Top-K selection based on relevance scores
+
+#### Key Features
+- **Hybrid Retrieval**: Combines BM25 and vector search
+- **Cross-Encoder Reranking**: Uses BERT-based model for relevance scoring
+- **Context Window**: 8K tokens for GPT-4.1
+- **Geographic and Temporal Filtering**: Location and date-based search
 
 ### 🗄️ Database & Docker Setup
 - **PostgreSQL with pgvector**:  
@@ -275,35 +633,294 @@ Integrated OpenTelemetry with Prometheus and Grafana for performance monitoring,
 
 ### Mobile Application (React Native + Expo)
 
-Enables citizens to easily report urban issues via photo/video uploads with automatic or manual geolocation tagging. Users manage their submissions through an intuitive gallery interface.
+A user-friendly mobile app that enables citizens to report urban issues:
 
-### Web Admin Panel (React.js + TypeScript)
+**Key Features**:
+- **Media Upload**: Select photos/videos from device gallery or capture directly
+- **Location Options**:
+  - Automatic GPS location detection
+  - Manual address picker with search
+  - Map-based location adjustment
+- **Processing Options**: Toggle SAM2 segmentation masks on/off
+- **Real-time Progress**: Live processing updates via WebSocket with progress bar
+- **Gallery View**:
+  - Grid layout with video thumbnails
+  - Processing status indicators (pending/processing/completed/failed)
+  - Date stamps and address display
+- **Detail View**:
+  - Pinch-to-zoom for images
+  - Video playback with controls
+  - Issue descriptions and solutions display
+- **File Validation**:
+  - Max 10MB for images, 50MB for videos
+  - Max 60 seconds video duration
+  - Dimension checks (4096px images, 1920px videos)
 
-Designed for authorities to monitor and manage reported urban issues effectively through interactive maps and analytics dashboards, RAG based chat, facilitating efficient urban maintenance.
+**Screens**: `HomeScreen` (upload), `GalleryScreen` (history), `ProcessingScreen` (live status), `DetailScreen` (view results)
 
-## 🐳 Docker Services Explained
+### Web Dashboard (React + TypeScript + Vite)
 
-Urban AI utilizes Docker extensively for streamlined deployment and management:
+A comprehensive dashboard for authorities to monitor and manage urban issues:
 
-### Core Application Containers:
+**Key Features**:
+- **Interactive Map** (`MapPage`):
+  - Google Maps with dark/light theme support
+  - Marker clustering for performance
+  - Color-coded severity indicators
+  - Info windows with issue details
+  - Geohash-based filtering
 
-* **Web**: FastAPI application container, managing API logic and AI inference processes.
-* **Database (PostgreSQL)**: Robust data storage and management.
+- **Issue Management** (`IssuesPage`):
+  - Sortable table with filtering options
+  - Bulk status updates
+  - Severity adjustment (low/medium/high)
+  - Authority assignment (admin only)
+  - Issue verification (admin only)
+  - Media preview with thumbnails
 
-### Monitoring and Logging:
+- **Analytics Dashboard** (`AnalyticsPage`):
+  - Key Performance Indicators (KPIs) with animations
+  - Daily upload trends (area charts)
+  - User activity metrics (bar charts)
+  - Severity distribution over time
+  - Detection source breakdown (pie charts)
+  - Issue aging buckets by SLA
+  - Geographic heatmaps
+  - Resolution performance metrics
+  - Temporal patterns analysis
 
-* **Prometheus**: Aggregates metrics from services for real-time monitoring.
-* **Grafana**: Visualizes collected metrics in accessible dashboards.
-* **Loki & Promtail**: Collect and aggregate logs for analysis.
+- **RAG-Powered Chat** (`ChatPage`):
+  - Session management (create/delete/rename)
+  - Streaming responses with markdown support
+  - Context chunks preview
+  - Chat history persistence
+  - Keyboard shortcuts (Ctrl/Cmd+K to focus)
 
-### GPU and Resource Monitoring:
+- **Additional Pages**:
+  - `ListPage`: Media gallery with filters
+  - `Landing`: Public information page
 
-* **DCGM-Exporter**: Monitors GPU resource usage.
-* **cAdvisor & Node-Exporter**: Monitor container and node-level resource usage.
+**UI Components**: Custom Button, Input, Layout, ProtectedRoute, IssueModal
+**Styling**: Tailwind CSS with dark mode support
+**Authentication**: JWT-based with role checking (user/authority/admin)
 
-### Tracing and Analytics:
+## 🐳 Docker Services & Deployment
 
-* **Tempo**: Provides distributed tracing for monitoring backend request flows.
+Urban AI utilizes a comprehensive Docker Compose setup for streamlined deployment:
+
+### Service Architecture
+
+```yaml
+services:
+  # Cache initialization
+  cache-perms:
+    image: busybox
+    command: Fix HuggingFace cache permissions
+
+  # Data Layer
+  redis:
+    image: redis:8.2-alpine
+    ports: ["6379:6379"]
+    config:
+      - maxmemory: 2gb
+      - maxmemory-policy: volatile-ttl
+      - tcp-keepalive: 60
+      - appendonly: yes
+
+  db:
+    image: pgvector/pgvector:15-pg15
+    environment:
+      - POSTGRES_DB=urbanai
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+
+  # Application Layer
+  web:
+    build: .
+    command: uvicorn app.main:app --reload
+    ports: ["8000:8000"]
+    environment:
+      - ROLE=api
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+
+  celery-worker-gpu:
+    build: .
+    command: celery worker -Q gpu --concurrency=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - ROLE=worker
+      - WORKER_KIND=gpu
+      - CUDA_VISIBLE_DEVICES=0
+
+  celery-worker-cpu:
+    build: .
+    command: celery worker -Q cpu,default --concurrency=4
+    environment:
+      - ROLE=worker
+      - WORKER_KIND=cpu
+      - CUDA_VISIBLE_DEVICES=
+
+  # Monitoring Stack
+  tempo:
+    image: grafana/tempo:latest
+    ports: ["4317:4317", "3200:3200"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3001:3000"]
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports: ["9093:9093"]
+```
+
+### Resource Requirements
+
+#### Minimum Configuration
+- **CPU**: 4 cores
+- **RAM**: 8GB
+- **GPU**: NVIDIA GPU with CUDA support (6GB+ VRAM)
+- **Storage**: 50GB for models and data
+- **Docker**: 20.10+
+- **Docker Compose**: 2.0+
+
+#### Recommended Production
+- **CPU**: 8+ cores
+- **RAM**: 16GB+
+- **GPU**: NVIDIA GPU with 12GB+ VRAM
+- **Storage**: 100GB+ SSD
+- **OS**: Linux (Ubuntu recommended)
+
+### Health Checks & Monitoring
+
+```bash
+# Service health checks
+docker-compose ps                    # Service status
+curl http://localhost:8000/healthz   # API health
+
+# Worker health
+docker-compose exec celery-gpu celery inspect ping
+docker-compose exec celery-cpu celery inspect stats
+
+# Database health
+docker-compose exec db pg_isready
+
+# Redis health
+docker-compose exec redis redis-cli -a $REDIS_PASSWORD ping
+
+# View logs
+docker-compose logs -f web           # API logs
+docker-compose logs -f celery-gpu    # GPU worker logs
+docker-compose logs -f celery-cpu    # CPU worker logs
+```
+
+### Scaling Strategies
+
+1. **Horizontal Scaling**:
+   ```yaml
+   # Scale CPU workers
+   docker-compose up -d --scale celery-worker-cpu=4
+   ```
+
+2. **GPU Worker Distribution**:
+   - Deploy GPU workers on separate nodes
+   - Use shared Redis broker for coordination
+   - Mount shared volume for model weights
+
+3. **Database Optimization**:
+   - Enable connection pooling
+   - Configure read replicas for analytics
+   - Use materialized views for dashboards
+
+## 🧪 Testing
+
+### Test Structure
+
+The project includes comprehensive testing coverage for all major components:
+
+```
+tests/
+├── unit/                    # Unit tests
+│   ├── test_auth.py        # Authentication & JWT
+│   ├── test_validation.py  # Input validation
+│   ├── test_models.py      # Database models
+│   └── test_rate_limiter.py # Rate limiting
+├── integration/             # Integration tests
+│   ├── test_inference_async.py  # Async inference pipeline
+│   ├── test_websocket.py        # WebSocket connections
+│   ├── test_celery_tasks.py     # Background tasks
+│   └── test_rag_system.py       # RAG retrieval
+├── e2e/                     # End-to-end tests
+│   ├── test_inference_flow.py   # Complete inference workflow
+│   └── test_chat_rag_flow.py    # Chat with RAG context
+└── load/                    # Performance tests
+    └── locustfile.py        # Load testing scenarios
+```
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+
+# Run all tests
+pytest -v
+
+# Run specific test categories
+pytest tests/unit -v                    # Unit tests only
+pytest tests/integration -v             # Integration tests
+pytest tests/e2e -v -m "not slow"      # E2E tests (skip slow)
+
+# Run with coverage
+pytest --cov=app --cov-report=html
+
+# Run load tests
+locust -f tests/load/locustfile.py --host=http://localhost:8000
+```
+
+### Test Coverage Areas
+
+1. **Authentication & Authorization**
+   - JWT token generation/validation
+   - Role-based access control
+   - Token refresh and revocation
+   - Rate limiting per user
+
+2. **Inference Pipeline**
+   - Image/video upload validation
+   - Async task creation and monitoring
+   - WebSocket real-time updates
+   - Result retrieval and storage
+
+3. **RAG System**
+   - Hybrid search accuracy
+   - Reranking effectiveness
+   - Context assembly
+   - Geographic filtering
+
+4. **Database Operations**
+   - CRUD operations
+   - Concurrent updates
+   - Transaction handling
+   - Migration testing
+
+5. **WebSocket Connections**
+   - Authentication
+   - Message broadcasting
+   - Connection lifecycle
+   - Error handling
+
 
 ## 🚀 Installation and Usage Guide
 
@@ -313,15 +930,38 @@ Urban AI utilizes Docker extensively for streamlined deployment and management:
 * CUDA GPU (recommended)
 * Node.js (18+), Expo CLI
 * Docker and Docker Compose
+
+### Required Dependencies (Not Included in Repository)
+
+#### 1. **SAM2 Library Folder** (REQUIRED)
+The `sam2/` folder contains the Segment Anything Model 2 library code and is essential for the segmentation functionality. Since it's not included in the repository, you must obtain it:
+
+```bash
+# Clone SAM2 repository
+git clone https://github.com/facebookresearch/segment-anything-2.git sam2_temp
+
+# Copy the sam2 folder to project root
+cp -r sam2_temp/sam2 ./sam2
+
+# Clean up
+rm -rf sam2_temp
+```
+
+#### 2. **Model Checkpoints**
+
 * **SAM2.1 Base checkpoint** (for video tracking segmentation)
-  Download `sam2.1_base.pt` from the Ultralytics release and place in: weights/sam2.1_base.pt
+  Download `sam2.1_base.pt` from the Ultralytics release and place in: `weights/sam2.1_base.pt`
 
-* **Ultralytics SAM2.1 Hiera B+ checkpoint** (for photo segmentation)  
-Download `sam2.1_hiera_b+.pt` from Meta’s SAM2.1 repo and place in: weights/sam2.1_hiera_b+.pt
+* **SAM2.1 Hiera B+ checkpoint** (for photo segmentation)
+  Download `sam2.1_hiera_b+.pt` from Meta's SAM2 repository and place in: `weights/sam2.1_hiera_b+.pt`
 
-* **GroundingDINO SwinB CoGCoor checkpoint**  
-Download `groundingdino_swinb_cogcoor.pth` from the GroundingDINO repo and place in: weights/groundingdino_swinb_cogcoor.pth
-* (Config files for SAM2 and GroundingDINO are provided in `configs/`)
+* **GroundingDINO SwinB checkpoint**
+  Download `groundingdino_swinb_cogcoor.pth` from the GroundingDINO repository and place in: `weights/groundingdino_swinb_cogcoor.pth`
+
+* **YOLOv11 Urban Model**
+  The custom-trained `best_medium.pt` model is required for urban issue detection. Place in: `weights/best_medium.pt`
+
+Note: Config files for SAM2 and GroundingDINO are already provided in the `configs/` directory.
 
 
 ### Backend Setup
@@ -375,28 +1015,41 @@ npm run dev
    ```bash
    npx expo start --clear --tunnel
    ```
-5. Download **Expo Go** on your iOS device, scan the QR code, and you’re live!
+5. Download **Expo Go** on your iOS device, scan the QR code, and you're live!
 
+## 🏆 Acknowledgments
 
-## 🤝 Contributing and Development
+This project was built with contributions from:
 
-### Testing and Development Tools
+- **AI Models**:
+  - YOLOv11 by Ultralytics
+  - SAM2 by Meta AI Research
+  - GroundingDINO by IDEA Research
+  - GPT-4.1 by OpenAI
 
-* Interactive Swagger API documentation
-* Tailscale for secure remote API access
-* Unit testing with pytest
+- **Open Source Libraries**:
+  - FastAPI for the backend framework
+  - PostgreSQL and pgvector for data storage
+  - Redis for caching and message brokering
+  - Celery for distributed task processing
+  - React and React Native for frontends
 
-### Useful Commands
+- **Special Thanks**:
+  - Urban planning departments for domain expertise
+  - Citizens who contributed training data
+  - Open source community for invaluable tools
 
-```bash
-# Backend
-docker compose up -d --build
+## 📄 License
 
-# Frontend (Web)
-npm run dev
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-# Frontend (Mobile)
-npx expo start --clear --tunnel
-```
+## 📞 Contact & Resources
 
-Urban AI aims to foster efficient, proactive management of city environments, significantly enhancing community wellbeing.
+- **API Documentation**: Interactive Swagger UI at `http://localhost:8000/docs`
+- **OpenAPI Schema**: Available at `http://localhost:8000/openapi.json`
+
+---
+
+**Urban AI** - Empowering smarter cities through artificial intelligence 🏙️🤖
+
+*Built with ❤️ for efficient, proactive management of city environments, significantly enhancing community wellbeing.*

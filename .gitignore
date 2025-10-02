@@ -193,6 +193,7 @@ checkpoint*/
 checkpoints/
 
 # SAM2 specific
+sam2/
 sam2/__pycache__/
 sam2/**/__pycache__/
 
