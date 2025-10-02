@@ -1,5 +1,39 @@
 
 services:
+  # Init container to fix cache permissions
+  cache-perms:
+    image: busybox
+    command: sh -c "mkdir -p /cache/hf && chown -R 10001:10001 /cache/hf && find /cache/hf -name '*.lock' -delete 2>/dev/null || true"
+    volumes:
+      - huggingface_cache:/cache/hf
+    restart: "no"
+
+  redis:
+    image: redis:8.2-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >-
+      redis-server
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy volatile-ttl
+      --requirepass ${REDIS_PASSWORD}
+      --tcp-keepalive 60
+      --timeout 0
+      --appendfsync everysec
+      --auto-aof-rewrite-percentage 100
+      --auto-aof-rewrite-min-size 64mb
+      --save ""
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   tempo:
     image: grafana/tempo:latest
     container_name: tempo
@@ -41,15 +75,19 @@ services:
       - "./weights:/weights"
       - "./static:/app/static"
       - "./ultralytics_config:/app/ultralytics_config"
-      - "huggingface_cache:/root/.cache/huggingface"
+      - "huggingface_cache:/cache/hf"
     env_file: .env
     ports:
       - "8000:8000"
     depends_on:
+      cache-perms:
+        condition: service_completed_successfully
       db:
-        condition: service_healthy  
+        condition: service_healthy
       tempo:
         condition: service_started
+      redis:
+        condition: service_healthy
 
     restart: unless-stopped
     healthcheck:
@@ -57,6 +95,38 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    environment:
+      - ROLE=api
+      - YOLO_CONFIG_DIR=/app/ultralytics_config
+      - WATCHFILES_FORCE_POLLING=true
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - HF_HOME=/cache/hf
+      - TRANSFORMERS_CACHE=/cache/hf
+      - HF_HUB_CACHE=/cache/hf
+
+  celery-worker-gpu:
+    build: .
+    command: celery -A app.core.celery_app worker -Q gpu --loglevel=info --concurrency=1 --pool=solo
+    volumes:
+      - "./:/app"
+      - "./weights:/weights"
+      - "./static:/app/static"
+      - "./ultralytics_config:/app/ultralytics_config"
+      - "huggingface_cache:/cache/hf"
+    env_file: .env
+    depends_on:
+      cache-perms:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         reservations:
@@ -65,8 +135,109 @@ services:
               count: 1
               capabilities: [gpu]
     environment:
+      - ROLE=worker
+      - WORKER_KIND=gpu
       - YOLO_CONFIG_DIR=/app/ultralytics_config
-      - WATCHFILES_FORCE_POLLING=true
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - OMP_NUM_THREADS=1
+      - CUDA_VISIBLE_DEVICES=0
+      - HF_HOME=/cache/hf
+      - TRANSFORMERS_CACHE=/cache/hf
+      - HF_HUB_CACHE=/cache/hf
+    healthcheck:
+      test: ["CMD", "bash", "-c", "celery -A app.core.celery_app inspect ping -t 5 | grep -q 'pong'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery-worker-cpu:
+    build: .
+    command: >-
+      celery -A app.core.celery_app worker
+      -Q cpu,default
+      --loglevel=info
+      --concurrency=4
+      --pool=prefork
+      --max-tasks-per-child=100
+    volumes:
+      - "./:/app"
+      - "./weights:/weights"
+      - "./static:/app/static"
+      - "./ultralytics_config:/app/ultralytics_config"
+      - "huggingface_cache:/cache/hf"
+    env_file: .env
+    depends_on:
+      cache-perms:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      - ROLE=worker
+      - WORKER_KIND=cpu
+      - CUDA_VISIBLE_DEVICES=
+      - YOLO_CONFIG_DIR=/app/ultralytics_config
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - HF_HOME=/cache/hf
+      - TRANSFORMERS_CACHE=/cache/hf
+      - HF_HUB_CACHE=/cache/hf
+    healthcheck:
+      test: ["CMD", "bash", "-c", "celery -A app.core.celery_app inspect ping -t 5 | grep -q 'pong'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery-beat:
+    build: .
+    command: celery -A app.core.celery_app beat --loglevel=info
+    volumes:
+      - "./:/app"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+  flower:
+    build: .
+    command: celery -A app.core.celery_app flower --port=5555 --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASS:-admin}
+    ports:
+      - "5555:5555"
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
 
   prometheus:
     image: prom/prometheus:latest
@@ -197,3 +368,4 @@ volumes:
   pgdata:
   grafana_data:
   huggingface_cache:
+  redis_data:

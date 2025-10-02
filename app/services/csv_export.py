@@ -45,16 +45,6 @@ def image_url_for_media(media, request: Request, track_id: int | None = None) ->
                 url = _abs_static_url(request, f"{tracks_folder}/{track_thumb}")
                 logger.info(f"Returning UUID-based track URL: {url}")
                 return url
-        
-        # Fallback to media.id based tracks folder (legacy)
-        tracks_folder = f"{media.id}_tracks"
-        track_thumb = f"track_{track_id}.jpg"
-        track_path = static_root / tracks_folder / track_thumb
-        logger.info(f"Checking ID-based track path: {track_path}, exists: {track_path.exists()}")
-        if track_path.exists():
-            url = _abs_static_url(request, f"{tracks_folder}/{track_thumb}")
-            logger.info(f"Returning ID-based track URL: {url}")
-            return url
 
     # 2) For videos without track_id, use thumbnail_filename
     if media_type == "video":
@@ -66,32 +56,16 @@ def image_url_for_media(media, request: Request, track_id: int | None = None) ->
     if static_filename and media_type == "image" and (static_root / static_filename).exists():
         return _abs_static_url(request, static_filename)
 
-    # 4) Fallback to annotated image <id>.jpg
-    annotated = f"{media.id}.jpg"
-    if (static_root / annotated).exists():
-        return _abs_static_url(request, annotated)
-
-    # 5) Fallback to stored filename (normalize ext)
-    filename = getattr(media, "filename", "")
-    if filename:
-        name = Path(filename).name
-        ext = Path(name).suffix.lower()
-        if ext not in IMAGE_EXTS:
-            name = f"{Path(name).stem}.jpg"
-        if (static_root / name).exists():
-            return _abs_static_url(request, name)
-
-    # 6) Last resort: For videos, use thumbnail or annotated jpg, never the video file
+    # 4) For videos, use thumbnail_filename
     if media_type == "video":
         thumbnail_filename = getattr(media, "thumbnail_filename", None)
-        if thumbnail_filename:
+        if thumbnail_filename and (static_root / thumbnail_filename).exists():
             return _abs_static_url(request, thumbnail_filename)
-        return _abs_static_url(request, annotated)
-    
-    # For images, return static_filename or annotated as fallback
+
+    # Return static_filename if available, otherwise None
     if static_filename:
         return _abs_static_url(request, static_filename)
-    return _abs_static_url(request, annotated)
+    return None
 
 
 def prepare_csv_data(chunks, request: Request) -> str:

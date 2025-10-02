@@ -25,6 +25,16 @@ import type { LatLng } from 'react-native-maps';
 import client from '../api/client';
 import { logout } from '../api/auth';
 import { GOOGLE_API_KEY } from '../config';
+import {
+  validateFileSize,
+  validateImageDimensions,
+  validateVideoProperties,
+  formatRateLimitError,
+  isRateLimitError,
+  MAX_IMAGE_SIZE_MB,
+  MAX_VIDEO_SIZE_MB,
+  MAX_VIDEO_DURATION_SECONDS
+} from '../utils/fileValidation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -129,13 +139,30 @@ export default function HomeScreen({ navigation }: Props) {
     });
     if (res.canceled) return;
     const asset = res.assets[0];
+
+    // Validate image dimensions
+    if (asset.width && asset.height) {
+      const dimValidation = validateImageDimensions(asset.width, asset.height);
+      if (!dimValidation.valid) {
+        notify.error('Imagine prea mare', dimValidation.error!);
+        return;
+      }
+    }
+
+    // Validate file size
+    const sizeValidation = await validateFileSize(asset.uri, false);
+    if (!sizeValidation.valid) {
+      notify.error('Fișier prea mare', sizeValidation.error!);
+      return;
+    }
+
     setSelected({
       uri: asset.uri,
       name: asset.fileName || asset.uri.split('/').pop() || 'image.jpg',
       mime: getMimeFromUri(asset.uri, asset.mimeType || 'image/jpeg'),
       isVideo: false,
     });
-    notify.info('Imagine selectată');
+    notify.success('Imagine selectată', `Max ${MAX_IMAGE_SIZE_MB}MB`);
   }, []);
 
   const pickVideo = useCallback(async () => {
@@ -144,16 +171,35 @@ export default function HomeScreen({ navigation }: Props) {
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       quality: 1,
       selectionLimit: 1,
+      videoMaxDuration: MAX_VIDEO_DURATION_SECONDS,
     });
     if (res.canceled) return;
     const asset = res.assets[0];
+
+    // Validate video duration
+    if (asset.duration) {
+      const durationSeconds = asset.duration / 1000;
+      const videoValidation = validateVideoProperties(durationSeconds, asset.width, asset.height);
+      if (!videoValidation.valid) {
+        notify.error('Video invalid', videoValidation.error!);
+        return;
+      }
+    }
+
+    // Validate file size
+    const sizeValidation = await validateFileSize(asset.uri, true);
+    if (!sizeValidation.valid) {
+      notify.error('Fișier prea mare', sizeValidation.error!);
+      return;
+    }
+
     setSelected({
       uri: asset.uri,
       name: asset.fileName || asset.uri.split('/').pop() || 'video.mp4',
       mime: getMimeFromUri(asset.uri, asset.mimeType || 'video/mp4'),
       isVideo: true,
     });
-    notify.info('Video selectat');
+    notify.success('Video selectat', `Max ${MAX_VIDEO_SIZE_MB}MB, ${MAX_VIDEO_DURATION_SECONDS}s`);
   }, []);
 
   const clearSelected = useCallback(() => {
@@ -202,20 +248,32 @@ export default function HomeScreen({ navigation }: Props) {
       form.append('longitude', String(pin.longitude));
 
       const endpoint = selected.isVideo
-        ? `/infer/video?use_sam=${useSam}`
-        : `/infer/image?use_sam=${useSam}`;
+        ? `/infer/async/video?use_sam=${useSam}`
+        : `/infer/async/image?use_sam=${useSam}`;
 
       const { data } = await client.post(endpoint, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      notify.success('Încărcare reușită');
+      // Extract task_id and media_id from async response
+      const { task_id, media_id } = data;
+
+      notify.success('Încărcare reușită', 'Processing started...');
       setSelected(null);
-      navigation.navigate('Detail', { media: data, showInfo: false });
+
+      // Navigate to Processing screen instead of Detail
+      navigation.navigate('Processing', { taskId: task_id, mediaId: media_id });
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || e?.message || 'Încărcare eșuată';
-      setError(msg);
-      notify.error('Eroare', msg);
+      // Handle rate limit errors specially
+      if (isRateLimitError(e)) {
+        const rateLimitMsg = formatRateLimitError(e);
+        setError(rateLimitMsg);
+        notify.error('Limită depășită', rateLimitMsg);
+      } else {
+        const msg = e?.response?.data?.detail || e?.message || 'Încărcare eșuată';
+        setError(msg);
+        notify.error('Eroare', msg);
+      }
     } finally {
       setUploading(false);
       resetFlow();

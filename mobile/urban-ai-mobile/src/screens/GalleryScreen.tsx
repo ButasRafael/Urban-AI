@@ -3,7 +3,6 @@ import {
   SafeAreaView,
   FlatList,
   Animated as RNAnimated,
-  Image,
   ActivityIndicator,
   Pressable,
   useWindowDimensions,
@@ -13,9 +12,11 @@ import {
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@shopify/restyle';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
 
 import { Box, Text } from '../components/restylePrimitives';
 import type { Theme } from '../theme';
@@ -38,6 +39,8 @@ type MediaItem = {
   descriptions?: string[];
   summary_description?: string;
   summary_solution?: string;
+  processing_status: 'pending' | 'processing' | 'completed' | 'failed'; // Made non-optional
+  task_id?: string;
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Gallery'>;
@@ -48,7 +51,6 @@ type GalleryItemProps = {
   size: number;
   marginRight: number;
   navigation: Props['navigation'];
-  index: number;
   isLastInRow: boolean;
 };
 
@@ -70,23 +72,48 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
     const onPressIn = pressable.onPressIn;
     const onPressOut = pressable.onPressOut;
 
+    // Normalize status robustly - treat undefined/null as pending
+    const isProcessing = !item.processing_status ||
+                        item.processing_status === 'pending' ||
+                        item.processing_status === 'processing';
+    const isFailed = item.processing_status === 'failed';
+    const isCompleted = item.processing_status === 'completed';
+    const hasArtifact = !!(item.annotated_image_url || item.annotated_video_url);
+
+    // Only show image if EXPLICITLY completed with artifact
+    const showImage = isCompleted && hasArtifact;
+
+    // For videos use server thumbnail first, then generated, never the mp4
     const base = item.media_type === 'image'
-    ? item.annotated_image_url
-    : (thumbUri || item.annotated_video_url);const resolved = base?.startsWith('/') ? API_BASE + base : base;
+      ? item.annotated_image_url
+      : (item.annotated_image_url || thumbUri || undefined);
+    const resolved = base?.startsWith('/') ? API_BASE + base : base;
+
     const onLoad = () =>
       RNAnimated.timing(fadeIn, { toValue: 1, duration: 250, useNativeDriver: true }).start();
 
-    const goDetail = () =>
-      navigation.navigate('Detail', {
-        media: {
-          ...item,
-          predicted_classes: item.predicted_classes,
-          descriptions: item.descriptions,
-          summary_description: item.summary_description,
-          summary_solution: item.summary_solution,
-        },
-        showInfo: true,
-      });
+    const goDetail = () => {
+      // Navigation based ONLY on completion status
+      if (!isCompleted) {
+        // Navigate to Processing for ANY non-completed state
+        navigation.navigate('Processing', {
+          taskId: item.task_id || '',
+          mediaId: item.media_id,
+        });
+      } else {
+        // Only go to Detail for explicitly completed items
+        navigation.navigate('Detail', {
+          media: {
+            ...item,
+            predicted_classes: item.predicted_classes || [],
+            descriptions: item.descriptions || [],
+            summary_description: item.summary_description,
+            summary_solution: item.summary_solution,
+          },
+          showInfo: true,
+        });
+      }
+    };
 
     return (
       <Pressable
@@ -111,9 +138,15 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
             styles.card,
             {
               borderRadius: theme.borderRadii.m,
-              backgroundColor: theme.colors.surface0,
-              borderColor: theme.colors.muted,
-              // scale + opacity from hook
+              backgroundColor: isProcessing || isFailed
+                ? theme.colors.surface0
+                : theme.colors.card,
+              borderColor: isProcessing
+                ? theme.colors.primary500
+                : isFailed
+                ? theme.colors.error
+                : theme.colors.muted,
+              borderWidth: isProcessing || isFailed ? 2 : 1,
               ...(pressable.animatedStyle as any),
               ...(Platform.OS === 'ios'
                 ? {
@@ -126,8 +159,8 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
             },
           ]}
         >
-          {/* media */}
-          {resolved ? (
+          {/* Main content */}
+          {showImage && resolved ? (
             <RNAnimated.Image
               source={{ uri: resolved }}
               style={[styles.media, { opacity: fadeIn }]}
@@ -135,19 +168,99 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
               onLoad={onLoad}
             />
           ) : (
-            <Box flex={1} alignItems="center" justifyContent="center">
-              <Text variant="label" color="muted">
-                Fără previzualizare
-              </Text>
+            <Box
+              flex={1}
+              alignItems="center"
+              justifyContent="center"
+              backgroundColor={isProcessing ? "primary100" : isFailed ? "surface50" : "surface0"}
+            >
+              {isProcessing && (
+                <>
+                  <ActivityIndicator size="large" color={theme.colors.primary500} />
+                  <Text variant="label" color="primary500" mt="s" fontWeight="600">
+                    {(!item.processing_status || item.processing_status === 'pending') ? 'În așteptare...' : 'Se procesează...'}
+                  </Text>
+                </>
+              )}
+              {isFailed && (
+                <>
+                  <Feather name="alert-circle" size={32} color={theme.colors.error} />
+                  <Text variant="label" color="error" mt="s" fontWeight="600">
+                    Procesare eșuată
+                  </Text>
+                </>
+              )}
+              {!isProcessing && !isFailed && !hasArtifact && (
+                <>
+                  <Feather name="image" size={32} color={theme.colors.muted} />
+                  <Text variant="label" color="muted" mt="s">
+                    Fără previzualizare
+                  </Text>
+                </>
+              )}
             </Box>
           )}
 
-          {/* top-right badge for video */}
-          {item.media_type === 'video' ? (
+          {/* Processing badge overlay */}
+          {isProcessing && (
             <Box
               position="absolute"
               top={8}
               right={8}
+              px="s"
+              py="xs"
+              borderRadius="s"
+              backgroundColor="primary500"
+              style={{
+                borderWidth: 1,
+                borderColor: theme.colors.primary700,
+              }}
+            >
+              <Box flexDirection="row" alignItems="center">
+                <ActivityIndicator size="small" color="#fff" />
+                <Text variant="label" style={{ color: '#fff', marginLeft: 4 }}>
+                  {(!item.processing_status || item.processing_status === 'pending') ? 'Waiting' : 'Processing'}
+                </Text>
+              </Box>
+            </Box>
+          )}
+
+          {/* Failed badge overlay */}
+          {isFailed && (
+            <Box
+              position="absolute"
+              top={8}
+              right={8}
+              px="s"
+              py="xs"
+              borderRadius="s"
+              backgroundColor="error"
+              style={{
+                borderWidth: 1,
+                borderColor: theme.colors.error,
+              }}
+            >
+              <Text variant="label" style={{ color: '#fff' }}>
+                Failed
+              </Text>
+            </Box>
+          )}
+
+          {/* Play button overlay for videos */}
+          {item.media_type === 'video' && !isProcessing && !isFailed && showImage && (
+            <View style={styles.centerOverlay} pointerEvents="none">
+              <View style={styles.playBadge}>
+                <Feather name="play" size={22} color="#fff" />
+              </View>
+            </View>
+          )}
+
+          {/* Video badge (top-left corner) */}
+          {item.media_type === 'video' && !isProcessing && !isFailed && (
+            <Box
+              position="absolute"
+              top={8}
+              left={8}
               px="s"
               py="xs"
               borderRadius="s"
@@ -156,27 +269,31 @@ const GalleryItem: React.FC<GalleryItemProps> = React.memo(
                 borderWidth: 1,
                 borderColor: 'rgba(255,255,255,0.2)',
               }}
-              >
+            >
               <Text variant="label" style={{ color: '#fff' }}>
                 Video
               </Text>
             </Box>
-          ) : null}
+          )}
 
-          {/* bottom gradient + meta */}
-          <LinearGradient
-            colors={['transparent', alpha('#000', 0.55)]}
-            style={styles.gradient}
-          />
-          <View style={styles.metaRow}>
-            <Text numberOfLines={1} style={styles.metaText}>
-              {item.summary_description ? 
-                item.summary_description.slice(0, 50) + (item.summary_description.length > 50 ? '...' : '') :
-                (firstNonEmpty(item.predicted_classes) || item.address || '—')}
-            </Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={styles.metaText}>{formatWhen(item.created_at) || ''}</Text>
-          </View>
+          {/* Bottom gradient + meta (only for completed items) */}
+          {showImage && (
+            <>
+              <LinearGradient
+                colors={['transparent', alpha('#000', 0.55)]}
+                style={styles.gradient}
+              />
+              <View style={styles.metaRow}>
+                <Text numberOfLines={1} style={styles.metaText}>
+                  {item.summary_description ?
+                    item.summary_description.slice(0, 50) + (item.summary_description.length > 50 ? '...' : '') :
+                    (firstNonEmpty(item.predicted_classes) || item.address || '—')}
+                </Text>
+                <Text style={styles.metaDot}>•</Text>
+                <Text style={styles.metaText}>{formatWhen(item.created_at) || ''}</Text>
+              </View>
+            </>
+          )}
         </Animated.View>
       </Pressable>
     );
@@ -206,14 +323,14 @@ export default function GalleryScreen({ navigation }: Props) {
 
   const itemSize = useMemo(() => {
     const totalGutter = gutter * (columns - 1);
-    const available = width - horizontalPad * 2 - totalGutter;
+    const available = width - (horizontalPad * 2) - totalGutter;
     return Math.floor(available / columns);
   }, [width, horizontalPad, gutter, columns]);
 
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const r = await client.get<MediaItem[]>('/infer/list');
+      const r = await client.get<MediaItem[]>('/infer/list?include_pending=true');
       const items = r.data ?? [];
       setData(items);
 
@@ -241,31 +358,35 @@ export default function GalleryScreen({ navigation }: Props) {
     fetchData();
   }, [fetchData]);
 
+  // Refresh data when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
   };
 
   const filtered = useMemo(() => {
-    const withMedia = data.filter((i) => i.annotated_image_url || i.annotated_video_url);
-    if (filter === 'images') return withMedia.filter((i) => i.media_type === 'image');
-    if (filter === 'videos') return withMedia.filter((i) => i.media_type === 'video');
-    return withMedia;
+    if (filter === 'images') return data.filter((i) => i.media_type === 'image');
+    if (filter === 'videos') return data.filter((i) => i.media_type === 'video');
+    return data;
   }, [data, filter]);
 
-  if (loading) {
-    const placeholders = Array.from({ length: columns * 6 }, (_, i) => i);
+  if (loading && !refreshing) {
+    const placeholders = Array.from({ length: columns * 4 }, (_, i) => i);
     return (
       <SafeAreaView style={{ flex: 1 }}>
-        <Box flex={1} bg="background" p="m">
+        <Box flex={1} bg="background" pt="m">
           <FlatList
             data={placeholders}
             keyExtractor={(i) => `ph-${i}`}
             numColumns={columns}
             contentContainerStyle={{
-              paddingBottom: spacing.l,
-              paddingLeft: horizontalPad,
-              paddingRight: horizontalPad,
+              paddingHorizontal: horizontalPad,
             }}
             renderItem={({ index }) => {
               const isLastInRow = (index + 1) % columns === 0;
@@ -319,7 +440,7 @@ export default function GalleryScreen({ navigation }: Props) {
       <SafeAreaView style={{ flex: 1 }}>
         <Box flex={1} bg="background" p="l" alignItems="center" justifyContent="center">
           <Text variant="title" color="text" mb="s">
-            My Uploads
+            Galeria Mea
           </Text>
           <Text variant="label" color="muted" textAlign="center">
             Nu ai încărcat nimic încă. Întoarce-te la ecranul de încărcare pentru a adăuga conținut.
@@ -331,19 +452,17 @@ export default function GalleryScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      <Box flex={1} bg="background" p="m">
-        {/* Header */}
+      <Box flex={1} bg="background" pt="m">
         <Box
           flexDirection="row"
           alignItems="center"
           justifyContent="space-between"
           mb="m"
+          px="m"
         >
           <Text variant="title" color="text">
-            My Uploads
+            Galeria Mea
           </Text>
-
-          {/* Tiny filter chips */}
           <Box flexDirection="row">
             {[
               { key: 'all', label: 'Toate' },
@@ -387,9 +506,8 @@ export default function GalleryScreen({ navigation }: Props) {
           keyExtractor={(i) => i.media_id.toString()}
           numColumns={columns}
           contentContainerStyle={{
+            paddingHorizontal: horizontalPad,
             paddingBottom: spacing.l,
-            paddingLeft: horizontalPad,
-            paddingRight: horizontalPad,
           }}
           refreshing={refreshing}
           onRefresh={onRefresh}
@@ -397,7 +515,6 @@ export default function GalleryScreen({ navigation }: Props) {
           windowSize={7}
           removeClippedSubviews
           getItemLayout={(_, index) => {
-
             const row = Math.floor(index / columns);
             const rowHeight = itemSize + gutter;
             return {
@@ -415,7 +532,6 @@ export default function GalleryScreen({ navigation }: Props) {
                 size={itemSize}
                 marginRight={gutter}
                 navigation={navigation}
-                index={index}
                 isLastInRow={isLastInRow}
               />
             );
@@ -427,12 +543,26 @@ export default function GalleryScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  centerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardContainer: {
     overflow: 'hidden',
   },
   card: {
     flex: 1,
     borderWidth: 1,
+    overflow: 'hidden',
   },
   media: {
     width: '100%',

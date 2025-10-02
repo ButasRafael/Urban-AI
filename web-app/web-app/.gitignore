@@ -24,3 +24,19 @@ dist-ssr
 *.sw?
 .env
 .env.development
+.env.production
+.env.local
+.env.test
+
+# Testing
+coverage/
+*.cover
+.nyc_output/
+
+# Build files
+build/
+
+# Package lock files (keep one, ignore others)
+yarn.lock
+package-lock.json
+pnpm-lock.yaml

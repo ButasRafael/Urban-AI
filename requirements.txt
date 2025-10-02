@@ -1,3 +1,6 @@
+--index-url https://download.pytorch.org/whl/cu129
+--extra-index-url https://pypi.org/simple
+
 fastapi
 uvicorn[standard]
 sqlalchemy
@@ -5,17 +8,18 @@ psycopg2-binary
 alembic
 python-dotenv
 openai
-passlib[bcrypt]
+bcrypt
 python-jose
 python-multipart
 httpx
 pytest
 pycocotools
-ultralytics>=8.3.0
+ultralytics
+lapx
 opencv-python-headless
 git+https://github.com/facebookresearch/sam2.git
-torch==2.6.0+cu124
-torchvision==0.21.0+cu124
+torch
+torchvision
 prometheus_client
 starlette-exporter
 python-json-logger
@@ -27,10 +31,10 @@ opentelemetry-instrumentation-logging
 opentelemetry-instrumentation-requests
 opentelemetry-instrumentation-sqlalchemy
 opentelemetry-instrumentation-psycopg2
-sentry-sdk[fastapi]  
-sentry-sdk[sqlalchemy] 
+sentry-sdk[fastapi]
+sentry-sdk[sqlalchemy]
 sentry-sdk[logging]
-sentry-cli 
+sentry-cli
 pillow
 groundingdino-py
 addict
@@ -42,4 +46,8 @@ sse-starlette
 geohash2
 sentence-transformers
 FlagEmbedding
---extra-index-url https://download.pytorch.org/whl/cu124
+celery[redis]
+flower
+redis
+websockets
+slowapi

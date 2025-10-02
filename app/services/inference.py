@@ -58,7 +58,19 @@ PERF_CFG = {
     "model": "auto",
 }
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+def pick_device():
+    """Choose device based on worker type and CUDA availability"""
+    # Check if we're forcing CPU (for CPU workers)
+    if os.environ.get("WORKER_KIND") == "cpu":
+        return "cpu"
+    if os.environ.get("FORCE_CPU", "").lower() in {"1", "true", "yes"}:
+        return "cpu"
+    # Check if CUDA is hidden
+    if os.environ.get("CUDA_VISIBLE_DEVICES") == "":
+        return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+DEVICE = pick_device()
 
 
 _GPT_SEMAPHORE = asyncio.Semaphore(2)
@@ -1225,13 +1237,14 @@ def process_video(video_path: Path, use_sam: bool = True):
     track_samples = _select_track_samples(dets_by_frame, max_per_track=3, diff_threshold=0.92)
     
     # Call async GPT function from sync context
+    # Create a new event loop for this synchronous context
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    track_notes = loop.run_until_complete(_gpt_describe_tracks(track_samples))
+        track_notes = loop.run_until_complete(_gpt_describe_tracks(track_samples))
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)  # Clear the loop
     
     # Optional filtering: drop non-issues (keep=false)
     drop_track_ids = {tid for tid, note in track_notes.items() if note.get("keep") is False}

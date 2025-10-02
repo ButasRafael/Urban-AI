@@ -27,6 +27,13 @@ class Severity(str, enum.Enum):
     high   = "high"
 
 
+class ProcessingStatus(str, enum.Enum):
+    pending    = "pending"
+    processing = "processing"
+    completed  = "completed"
+    failed     = "failed"
+
+
 class Media(Base):
     __tablename__ = "media"
 
@@ -55,14 +62,25 @@ class Media(Base):
     )
 
     process_ms_total = Column(Integer, nullable=True)
-    
+
     # UUID-based filenames for cache-busting
     static_filename = Column(String, nullable=True)     # UUID filename for the processed image/video
     thumbnail_filename = Column(String, nullable=True)  # UUID filename for video thumbnails
-    
+
     # Summary fields for all detections
     summary_description = Column(Text, nullable=True)
     summary_solution = Column(Text, nullable=True)
+
+    # Task queue fields
+    task_id = Column(String, nullable=True, index=True)
+    processing_status = Column(
+        SQLEnum(ProcessingStatus, name="processing_status_enum"),
+        nullable=False,
+        default=ProcessingStatus.pending,
+    )
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
     rag_chunks = relationship("RAGChunk", back_populates="media", cascade="all,delete")
     frames     = relationship("Frame", back_populates="media", cascade="all,delete")

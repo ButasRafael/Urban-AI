@@ -32,7 +32,10 @@ export default function DetailScreen({ route }: Props) {
   const insets = useSafeAreaInsets();
   const descriptions = media.descriptions ?? [];
 
-  let uri = media.annotated_image_url ?? media.annotated_video_url;
+  // Use the appropriate URL based on media type
+  let uri = media.media_type === 'video'
+    ? media.annotated_video_url
+    : media.annotated_image_url;
   if (!uri) {
     return (
       <SafeAreaView style={{ flex: 1 }}>
@@ -98,7 +101,7 @@ export default function DetailScreen({ route }: Props) {
             </Box>
 
             {/* IMAGE */}
-            {media.annotated_image_url ? (
+            {media.media_type === 'image' ? (
               <ImageZoom
                 cropWidth={width}
                 cropHeight={mediaHeight}

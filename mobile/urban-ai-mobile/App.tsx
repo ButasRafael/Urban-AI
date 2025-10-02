@@ -26,6 +26,7 @@ import RegisterScreen    from './src/screens/RegisterScreen';
 import LoginScreen       from './src/screens/LoginScreen';
 import HomeScreen        from './src/screens/HomeScreen';
 import GalleryScreen     from './src/screens/GalleryScreen';
+import ProcessingScreen  from './src/screens/ProcessingScreen';
 import DetailScreen      from './src/screens/DetailScreen';
 import TestRefreshScreen from './src/screens/TestRefreshScreen';
 import { RootToaster } from './src/components/ui/Toast';
@@ -113,6 +114,11 @@ export default function App() {
             name="Gallery"
             component={GalleryScreen}
             options={{ title: 'My Uploads' }}
+          />
+          <Stack.Screen
+            name="Processing"
+            component={ProcessingScreen}
+            options={{ title: 'Processing Upload' }}
           />
           <Stack.Screen
             name="Detail"

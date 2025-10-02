@@ -3,6 +3,10 @@ export type RootStackParamList = {
   Login: undefined
   Home: undefined
   Gallery: undefined
+  Processing: {
+    taskId?: string  // Optional to handle race conditions
+    mediaId: number
+  }
   Detail: {
     media: {
       media_id: number
@@ -16,7 +20,7 @@ export type RootStackParamList = {
       predicted_classes: string[]
       descriptions?: string[]
       summary_description?: string
-      summary_solution?: string 
+      summary_solution?: string
     }
     showInfo: boolean
   }

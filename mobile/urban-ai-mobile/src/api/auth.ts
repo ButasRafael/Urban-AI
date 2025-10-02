@@ -19,3 +19,9 @@ export async function logout() {
   await client.post('/auth/logout');
   await AsyncStorage.multiRemove(['accessToken','refreshToken']);
 }
+
+export const authService = {
+  getToken: async () => {
+    return await AsyncStorage.getItem('accessToken');
+  }
+};

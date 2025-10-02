@@ -48,18 +48,17 @@ def all_problems(
         )
         descriptions = [d.description or "n/a" for d in detects]
         solutions    = [d.solution    or "n/a" for d in detects]
-        # Use stored UUID filenames if available, fallback to ID-based names for backward compatibility
+        # Use stored UUID filenames
         if m.static_filename:
             if m.media_type == "image":
                 img_url = f"/static/{m.static_filename}"
                 video_url = None
             else:
                 video_url = f"/static/{m.static_filename}"
-                img_url = f"/static/{m.thumbnail_filename}" if m.thumbnail_filename else f"/static/{m.id}.jpg"
+                img_url = f"/static/{m.thumbnail_filename}" if m.thumbnail_filename else None
         else:
-            # Fallback for old records without UUID filenames
-            img_url = f"/static/{m.id}.jpg" if m.media_type == "image" else None
-            video_url = f"/static/{m.id}.mp4" if m.media_type == "video" else None
+            img_url = None
+            video_url = None
 
         out.append(ProblemOut(
             media_id=m.id,
@@ -148,7 +147,7 @@ def list_issues(
     )
     out: list[IssueOut] = []
     for det, fr, med in rows:
-        # Use stored UUID filenames if available, fallback to ID-based names for backward compatibility
+        # Use stored UUID filenames
         if med.static_filename:
             if med.media_type == "image":
                 img_url = f"/static/{med.static_filename}"
@@ -161,11 +160,10 @@ def list_issues(
                 elif med.thumbnail_filename:
                     img_url = f"/static/{med.thumbnail_filename}"
                 else:
-                    img_url = f"/static/{med.id}.jpg"
+                    img_url = None
         else:
-            # Fallback for old records without UUID filenames
-            img_url = f"/static/{med.id}.jpg" if med.media_type == "image" else None
-            video_url = f"/static/{med.id}.mp4" if med.media_type == "video" else None
+            img_url = None
+            video_url = None
         out.append(IssueOut(
             id=det.id,
             media_id=med.id,

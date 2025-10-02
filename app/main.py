@@ -3,7 +3,8 @@ from starlette_exporter import PrometheusMiddleware, handle_metrics
 import logging
 from pythonjsonlogger import jsonlogger
 from app.api import auth
-from app.api.inference_routes import router as infer_router
+from app.api.inference_routes_async import router as async_infer_router
+from app.api.websocket import router as ws_router, start_ws_redis_bridge, stop_ws_redis_bridge
 from app.api import problems, analytics
 from app.core.database import Base, engine
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,8 +14,11 @@ from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from sentry_sdk.tracing import Transaction 
+from sentry_sdk.tracing import Transaction
 from fastapi import Request
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from app.core.rate_limiter import limiter, check_rate_limit_health
 
 
 from opentelemetry import trace
@@ -84,6 +88,11 @@ trace.set_tracer_provider(provider)
 
 
 app = FastAPI(title="Urban AI API")
+
+# Add rate limit exceeded handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 FastAPIInstrumentor.instrument_app(app, tracer_provider=provider) 
 
 LoggingInstrumentor().instrument(set_logging_format=True)
@@ -96,33 +105,49 @@ app.add_middleware(PrometheusMiddleware)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/healthz")
-def _ping():
-    return {"status": "ok"}
+async def _ping():
+    # Check rate limiter Redis health
+    rate_limit_ok = await check_rate_limit_health()
+    return {
+        "status": "ok",
+        "rate_limiter": "healthy" if rate_limit_ok else "degraded"
+    }
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Starting model preloading...")
-    
-    # Load RAG reranker model
+    logger.info("Starting application...")
+
+    # Load RAG reranker model (lightweight, OK to load in web service)
     try:
         from app.services.rag import load_reranker
         load_reranker()
         logger.info("✓ RAG reranker loaded")
     except Exception as e:
         logger.error(f"Failed to load RAG reranker: {e}")
-    
-    # Load inference models (YOLO, SAM2, GroundingDINO)
-    try:
-        from app.services.inference import _load_models, _load_grounder
-        _load_models()  # Loads YOLO and SAM2
-        logger.info("✓ YOLO and SAM2 models loaded")
-        
-        _load_grounder()  # Loads GroundingDINO
-        logger.info("✓ GroundingDINO model loaded")
-    except Exception as e:
-        logger.error(f"Failed to load inference models: {e}")
-    
-    logger.info("All models preloaded successfully!")
+
+    # Only load inference models in GPU workers, not in API service
+    if os.getenv("ROLE") == "worker" and os.getenv("WORKER_KIND") == "gpu":
+        logger.info("Loading inference models in GPU worker...")
+        try:
+            from app.services.inference import _load_models, _load_grounder
+            _load_models()  # Loads YOLO and SAM2
+            logger.info("✓ YOLO and SAM2 models loaded")
+
+            _load_grounder()  # Loads GroundingDINO
+            logger.info("✓ GroundingDINO model loaded")
+        except Exception as e:
+            logger.error(f"Failed to load inference models: {e}")
+    else:
+        logger.info("Skipping inference model loading (not a GPU worker)")
+
+    # Start WebSocket Redis bridge
+    await start_ws_redis_bridge()
+
+    logger.info("Application startup complete!")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await stop_ws_redis_bridge()
 
 @app.get("/sentry-test",dependencies=[require_roles("admin")])
 def test():
@@ -134,9 +159,10 @@ def test():
 
 
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(infer_router)
+app.include_router(async_infer_router)
+app.include_router(ws_router)
 app.include_router(problems.router)
-app.include_router(analytics.router) 
+app.include_router(analytics.router)
 app.include_router(chat_router, prefix="/chat", tags=["Chat"])
 app.include_router(rag_router, prefix="/rag", tags=["RAG"])
 app.include_router(issues_router)

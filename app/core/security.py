@@ -1,4 +1,4 @@
-from passlib.context import CryptContext
+import bcrypt
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException
@@ -22,16 +22,20 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_EXPIRE_MIN", 60))
 REFRESH_EXPIRE_MINUTES = int(os.getenv("REFRESH_EXPIRE_MIN", 10080))
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(
+        plain_password.encode('utf-8'),
+        hashed_password.encode('utf-8')
+    )
 
 
 def create_access_token(

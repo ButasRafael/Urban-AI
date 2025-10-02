@@ -58,6 +58,8 @@ class MediaListItem(BaseModel):
     solutions: List[str] = Field(default_factory=list)
     summary_description: Optional[str] = None
     summary_solution: Optional[str] = None
+    processing_status: Optional[str] = None
+    task_id: Optional[str] = None
 
 
 
