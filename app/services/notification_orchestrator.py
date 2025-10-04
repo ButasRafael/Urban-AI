@@ -66,23 +66,29 @@ class NotificationOrchestrator:
         recipients = []
 
         try:
+            # Get the issue reporter for all events (except issue_created)
+            issue_id = data.get("issue_id")
+            reporter = None
+            if issue_id and event_type != EventType.issue_created:
+                reporter = self._get_issue_reporter(issue_id)
+
             if event_type == EventType.issue_assigned:
-                # Notify the assignee
+                # Notify the assignee and the reporter
                 assigned_to = data.get("assigned_to")
                 if assigned_to:
                     recipients.append(assigned_to)
+                if reporter and reporter not in recipients:
+                    recipients.append(reporter)
 
             elif event_type == EventType.issue_created:
-                # Notify all admins and authorities
+                # Notify all admins and authorities (not the reporter since they just created it)
                 users = self.db.query(User).filter(
                     User.role.in_(["admin", "authority"])
                 ).all()
                 recipients = [user.username for user in users]
 
             elif event_type == EventType.issue_status_changed:
-                # Notify the assignee if there is one
-                # First, get the detection to find the assignee
-                issue_id = data.get("issue_id")
+                # Notify the assignee and the reporter
                 if issue_id:
                     from app.models import media as dbm
                     detection = self.db.query(dbm.Detection).filter(
@@ -91,9 +97,11 @@ class NotificationOrchestrator:
                     if detection and detection.assigned_to:
                         recipients.append(detection.assigned_to)
 
+                if reporter and reporter not in recipients:
+                    recipients.append(reporter)
+
             elif event_type == EventType.issue_severity_changed:
-                # Notify the assignee if there is one, otherwise notify admins
-                issue_id = data.get("issue_id")
+                # Notify the assignee/admins and the reporter
                 if issue_id:
                     from app.models import media as dbm
                     detection = self.db.query(dbm.Detection).filter(
@@ -104,17 +112,47 @@ class NotificationOrchestrator:
                     else:
                         # Notify admins
                         users = self.db.query(User).filter(User.role == "admin").all()
-                        recipients = [user.username for user in users]
+                        recipients.extend([user.username for user in users])
+
+                if reporter and reporter not in recipients:
+                    recipients.append(reporter)
 
             elif event_type == EventType.issue_verified:
-                # Notify all admins
+                # Notify all admins and the reporter
                 users = self.db.query(User).filter(User.role == "admin").all()
                 recipients = [user.username for user in users]
+
+                if reporter and reporter not in recipients:
+                    recipients.append(reporter)
 
         except Exception as e:
             logger.error(f"Error determining recipients: {e}", exc_info=True)
 
         return recipients
+
+    def _get_issue_reporter(self, issue_id: int) -> Optional[str]:
+        """
+        Get the username of the user who reported an issue
+
+        Args:
+            issue_id: Detection ID
+
+        Returns:
+            Username of the reporter, or None if not found
+        """
+        try:
+            from app.models import media as dbm
+            detection = self.db.query(dbm.Detection).filter(
+                dbm.Detection.id == issue_id
+            ).first()
+
+            if detection and detection.frame and detection.frame.media:
+                return detection.frame.media.user_username
+
+        except Exception as e:
+            logger.error(f"Error getting issue reporter: {e}", exc_info=True)
+
+        return None
 
     def _process_user_notification(
         self,
