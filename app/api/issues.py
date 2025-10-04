@@ -130,9 +130,22 @@ async def update_status(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated status
     await sync_detection_updates(db, detection_id)
+
+    # Publish event for notifications
+    from app.services.event_helpers import create_issue_status_changed_event
+    from app.services.event_publisher import publish_event
+    event = create_issue_status_changed_event(
+        issue_id=det.id,
+        old_status=old_status.value,
+        new_status=det.status.value,
+        changed_by=current_user.username,
+        severity=det.severity.value,
+        class_name=det.class_name
+    )
+    publish_event(event)
 
     return {
         "id": det.id,
@@ -150,6 +163,7 @@ async def update_severity(
     current_user=Depends(get_current_user),
 ):
     det = _get_detection_or_404(db, detection_id)
+    old_severity = det.severity
     try:
         det.severity = dbm.Severity(body.severity)
     except Exception:
@@ -158,10 +172,22 @@ async def update_severity(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated severity
     await sync_detection_updates(db, detection_id)
-    
+
+    # Publish event for notifications
+    from app.services.event_helpers import create_issue_severity_changed_event
+    from app.services.event_publisher import publish_event
+    event = create_issue_severity_changed_event(
+        issue_id=det.id,
+        old_severity=old_severity.value,
+        new_severity=det.severity.value,
+        changed_by=current_user.username,
+        class_name=det.class_name
+    )
+    publish_event(event)
+
     return {"id": det.id, "severity": det.severity.value}
 
 
@@ -183,10 +209,23 @@ async def assign_issue(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated assignment
     await sync_detection_updates(db, detection_id)
-    
+
+    # Publish event for notifications (only if assigned, not unassigned)
+    if body.assigned_to:
+        from app.services.event_helpers import create_issue_assigned_event
+        from app.services.event_publisher import publish_event
+        event = create_issue_assigned_event(
+            issue_id=det.id,
+            assigned_to=body.assigned_to,
+            assigned_by=current_user.username,
+            severity=det.severity.value,
+            class_name=det.class_name
+        )
+        publish_event(event)
+
     return {"id": det.id, "assigned_to": det.assigned_to}
 
 @router.patch("/{detection_id}/verify", dependencies=[require_roles("admin")])  # <-- admin only
@@ -207,10 +246,22 @@ async def verify_issue(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated verification
     await sync_detection_updates(db, detection_id)
-    
+
+    # Publish event for notifications (only when verified, not unverified)
+    if body.verified:
+        from app.services.event_helpers import create_issue_verified_event
+        from app.services.event_publisher import publish_event
+        event = create_issue_verified_event(
+            issue_id=det.id,
+            verified_by=current_user.username,
+            severity=det.severity.value,
+            class_name=det.class_name
+        )
+        publish_event(event)
+
     return {
         "id": det.id,
         "verified_by": det.verified_by,

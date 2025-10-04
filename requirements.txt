@@ -51,3 +51,5 @@ flower
 redis
 websockets
 slowapi
+resend
+firebase-admin

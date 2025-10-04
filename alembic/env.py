@@ -17,10 +17,10 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 from app.core.database import Base
-from app.models import user 
-from app.models import revoked 
+from app.models import user
+from app.models import revoked
 from app.models.media import Media, Frame, Detection
-from app.models import rag, conversation  
+from app.models import rag, conversation, notification
 
 target_metadata = Base.metadata      # MUST NOT be None
 

@@ -19,7 +19,7 @@ services:
       redis-server
       --appendonly yes
       --maxmemory 2gb
-      --maxmemory-policy volatile-ttl
+      --maxmemory-policy noeviction
       --requirepass ${REDIS_PASSWORD}
       --tcp-keepalive 60
       --timeout 0
@@ -194,6 +194,41 @@ services:
       - HF_HOME=/cache/hf
       - TRANSFORMERS_CACHE=/cache/hf
       - HF_HUB_CACHE=/cache/hf
+    healthcheck:
+      test: ["CMD", "bash", "-c", "celery -A app.core.celery_app inspect ping -t 5 | grep -q 'pong'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery-worker-notifications:
+    build: .
+    command: >-
+      celery -A app.core.celery_app worker
+      -Q notifications
+      --loglevel=info
+      --concurrency=2
+      --pool=prefork
+      --max-tasks-per-child=50
+    volumes:
+      - "./:/app"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      - ROLE=worker
+      - WORKER_KIND=notifications
+      - CUDA_VISIBLE_DEVICES=
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     healthcheck:
       test: ["CMD", "bash", "-c", "celery -A app.core.celery_app inspect ping -t 5 | grep -q 'pong'"]
       interval: 30s

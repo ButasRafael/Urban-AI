@@ -36,5 +36,5 @@ def get_db():
         db.close()
 
 def init_db() -> None:
-    from app.models import media, rag 
+    from app.models import media, rag, notification
     Base.metadata.create_all(bind=engine)

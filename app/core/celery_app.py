@@ -9,13 +9,14 @@ celery_app = Celery(
     "urban_ai",
     broker=os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0"),
     backend=os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1"),  # Use separate DB for results
-    include=["app.services.tasks"],
+    include=["app.services.tasks", "app.services.notification_tasks"],
 )
 
 # Configure task queues for GPU and CPU separation
 celery_app.conf.task_queues = (
     Queue('gpu', routing_key='gpu.#'),
     Queue('cpu', routing_key='cpu.#'),
+    Queue('notifications', routing_key='notifications.#'),
     Queue('default', routing_key='default.#'),
 )
 
@@ -24,6 +25,7 @@ celery_app.conf.task_routes = {
     'tasks.process_video':      {'queue': 'gpu', 'routing_key': 'gpu.inference'},
     'tasks.process_embeddings': {'queue': 'cpu', 'routing_key': 'cpu.embeddings'},
     'tasks.cleanup_temp_files': {'queue': 'cpu', 'routing_key': 'cpu.maintenance'},
+    'tasks.process_notification_event': {'queue': 'notifications', 'routing_key': 'notifications.event'},
 }
 
 celery_app.conf.update(
