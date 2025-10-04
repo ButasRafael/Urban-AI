@@ -23,5 +23,5 @@ class User(Base):
     DateTime(timezone=True),
     default=lambda: datetime.now(timezone.utc)
     )
-    uploads = relationship("Media", backref="uploader")
+    uploads = relationship("Media", backref="uploader", passive_deletes=True)
 

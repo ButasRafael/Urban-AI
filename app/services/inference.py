@@ -681,7 +681,10 @@ def overlay_masks(
     cv2.addWeighted(glow, alpha * 0.3, image, 1 - alpha * 0.3, 0, dst=image)
     cv2.drawContours(image, contours, -1, color, thickness=3)
 
-    # 2) now label
+    # 2) now label (skip if label is empty)
+    if not label:
+        return
+
     ys, xs = np.where(mask)
     if not (xs.size and ys.size):
         return
@@ -823,15 +826,16 @@ def process_image(
             seg = mdata["segmentation"]
             color = tuple(random.randint(0,255) for _ in range(3))
             cv2.rectangle(img, (0,0), (0,0), color, 0)  # no box to draw
-            overlay_masks(img, seg, color, "clean", alpha=0.5)
-            det_out.append({
-                "track_id": None,
-                "class_id": -1,
-                "class_name": "clean",
-                "confidence": float(mdata.get("score", 0)),
-                "bbox": [float(x) for x in mdata["bbox"]],
-                "mask": {"rle": _encode(seg), "polygon": _poly(seg)},
-            })
+            overlay_masks(img, seg, color, "", alpha=0.5)  # Empty label
+            # Optional: Skip adding to detections if you don't want them in the output
+            # det_out.append({
+            #     "track_id": None,
+            #     "class_id": -1,
+            #     "class_name": "segmentation",
+            #     "confidence": float(mdata.get("score", 0)),
+            #     "bbox": [float(x) for x in mdata["bbox"]],
+            #     "mask": {"rle": _encode(seg), "polygon": _poly(seg)},
+            # })
 
     logger.info("process_image() complete", extra={"detections": len(det_out)})
     return img, det_out
@@ -950,19 +954,20 @@ async def process_image_combined(img_bgr, use_sam=True, run_id=None):
         for mdata in mask_gen.generate(rgb):
             seg = mdata["segmentation"]
             color = tuple(random.randint(0,255) for _ in range(3))
-            overlay_masks(annotated, seg, color, "clean", alpha=0.5)
-            final.append({
-                "track_id":   None,
-                "class_id":   -1,
-                "class_name": "clean",
-                "confidence": float(mdata.get("score", 0)),
-                "bbox":       [float(x) for x in mdata["bbox"]],
-                "mask":       {"rle": _encode(seg), "polygon": _poly(seg)},
-                "description": None,
-                "solution":    None,
-                "severity":    "low",
-                "source": "sam_fallback",
-            })
+            overlay_masks(annotated, seg, color, "", alpha=0.5)  # Empty label
+            # Optional: Skip adding to detections if you don't want them in the output
+            # final.append({
+            #     "track_id":   None,
+            #     "class_id":   -1,
+            #     "class_name": "segmentation",
+            #     "confidence": float(mdata.get("score", 0)),
+            #     "bbox":       [float(x) for x in mdata["bbox"]],
+            #     "mask":       {"rle": _encode(seg), "polygon": _poly(seg)},
+            #     "description": None,
+            #     "solution":    None,
+            #     "severity":    "low",
+            #     "source": "sam_fallback",
+            # })
 
     return annotated, final
 
