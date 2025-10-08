@@ -40,6 +40,19 @@ class ConnectionManager:
             self.active_connections[user_id].discard(websocket)
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
+
+        # Clean up all task subscriptions for this user to prevent memory leak
+        tasks_to_clean = []
+        for task_id, subscribers in self.task_subscriptions.items():
+            if user_id in subscribers:
+                subscribers.discard(user_id)
+                if not subscribers:  # No more subscribers for this task
+                    tasks_to_clean.append(task_id)
+
+        # Remove empty task subscription entries
+        for task_id in tasks_to_clean:
+            del self.task_subscriptions[task_id]
+
         logger.info(f"WebSocket disconnected for user: {user_id}")
 
     def subscribe_to_task(self, task_id: str, user_id: str):
@@ -221,6 +234,7 @@ async def _redis_ws_bridge():
             # Subscribe to channels
             pubsub = r.pubsub()
             await pubsub.psubscribe("task_updates:*")
+            await pubsub.psubscribe("notifications:*")
 
             # Reset retry count on successful connection
             if retry_count > 0:
@@ -237,15 +251,28 @@ async def _redis_ws_bridge():
                     payload = json.loads(msg["data"])
                 except Exception:
                     continue
+
+                # Handle task updates
                 task_id = payload.get("task_id")
-                if not task_id:
+                if task_id:
+                    update = {
+                        "status": payload.get("status"),
+                        "error": payload.get("error"),
+                        "progress": payload.get("progress"),
+                    }
+                    await manager.broadcast_task_update(task_id, update)
                     continue
-                update = {
-                    "status": payload.get("status"),
-                    "error": payload.get("error"),
-                    "progress": payload.get("progress"),
-                }
-                await manager.broadcast_task_update(task_id, update)
+
+                # Handle notification updates
+                username = payload.get("username")
+                if username and payload.get("type") == "notification":
+                    notification_message = json.dumps({
+                        "type": "notification",
+                        "event_type": payload.get("event_type"),
+                        "message": payload.get("message"),
+                        "notification_id": payload.get("notification_id"),
+                    })
+                    await manager.send_personal_message(notification_message, username)
 
         except asyncio.CancelledError:
             # Task was cancelled, exit gracefully

@@ -81,7 +81,10 @@ def test_user(db_session):
     """Create a test user"""
     user = UserModel(
         username="rag_test_user",
+        email="rag_test_user@test.com",
         hashed_password="hashed",
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.user
     )
     db_session.add(user)
@@ -676,12 +679,18 @@ class TestSynchronization:
         # Create users for assignment
         authority = UserModel(
             username="test_authority",
+            email="test_authority@test.com",
             hashed_password="hashed",
+            email_verified=True,
+            email_verification_token=None,
             role=RoleEnum.user
         )
         admin = UserModel(
             username="test_admin",
+            email="test_admin@test.com",
             hashed_password="hashed",
+            email_verified=True,
+            email_verification_token=None,
             role=RoleEnum.admin
         )
         db_session.add_all([authority, admin])

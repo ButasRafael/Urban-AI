@@ -148,6 +148,27 @@
 .nav-icon { display: grid; place-items: center; color: var(--primary-600); }
 .nav-label { font-weight: 600; }
 
+/* Notification badge */
+.notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--error);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(192, 57, 43, .4);
+}
+:root.dark .notification-badge {
+  background: #ef4444;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, .4);
+}
+
 /* Active pill (left edge) */
 .active .active-pill {
   position: absolute;
@@ -192,7 +213,7 @@
   border: 1px solid var(--surface-200);
   background: var(--surface-0);
 }
-:root.dark .user-card { background: #0f141a; border-color: #1f2c38; }
+:root.dark .user-card { background: #0b1220; border-color: #1f2c38; }
 
 .user-card { color: var(--secondary-900); }     
 .user-card .user-meta strong { color: var(--secondary-900); }

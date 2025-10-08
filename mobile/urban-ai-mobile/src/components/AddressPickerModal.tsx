@@ -3,11 +3,11 @@ import {
   Modal,
   View,
   StyleSheet,
-  SafeAreaView,
   Alert,
   Platform,
   StatusBar
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   GooglePlacesAutocomplete,
   GooglePlacesAutocompleteRef,
@@ -155,7 +155,7 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm, disab
             right={theme.spacing.l}
             zIndex={100}
             backgroundColor="card"
-            borderRadius="m"
+            borderRadius="xl"
             style={theme.shadows.lg}
             overflow="hidden"
           >
@@ -261,7 +261,7 @@ export default function AddressPickerModal({ visible, onCancel, onConfirm, disab
               left={theme.spacing.l}
               right={theme.spacing.l}
               backgroundColor="card"
-              borderRadius="m"
+              borderRadius="xl"
               padding="m"
               style={theme.shadows.md}
             >

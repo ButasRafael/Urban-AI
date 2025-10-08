@@ -101,7 +101,10 @@ def test_user(db_session):
 
     user = UserModel(
         username="test_user",
+        email="test_user@test.com",
         hashed_password=get_password_hash("testpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role="user",
     )
     db_session.add(user)
@@ -119,7 +122,10 @@ def admin_user(db_session):
 
     admin = UserModel(
         username="admin_user",
+        email="admin_user@test.com",
         hashed_password=get_password_hash("adminpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role="admin",
     )
     db_session.add(admin)
@@ -284,12 +290,18 @@ class TestUserBasedLimits:
         # Create two users
         user1 = UserModel(
             username="user1",
+            email="user1@test.com",
             hashed_password=get_password_hash("pass123"),
+            email_verified=True,
+            email_verification_token=None,
             role="user",
         )
         user2 = UserModel(
             username="user2",
+            email="user2@test.com",
             hashed_password=get_password_hash("pass123"),
+            email_verified=True,
+            email_verification_token=None,
             role="user",
         )
         db_session.add_all([user1, user2])
@@ -548,7 +560,10 @@ class TestMultipleLimiterCombination:
         # Create a fresh user for this test to avoid rate limit carryover
         unique_user = UserModel(
             username="dual_limit_test_user",
+            email="dual_limit_test_user@test.com",
             hashed_password=get_password_hash("testpass"),
+            email_verified=True,
+            email_verification_token=None,
             role="user",
         )
         db_session.add(unique_user)

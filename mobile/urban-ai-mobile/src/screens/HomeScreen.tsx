@@ -133,7 +133,7 @@ export default function HomeScreen({ navigation }: Props) {
   const pickImage = useCallback(async () => {
     setError(null);
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.9,
       selectionLimit: 1,
     });
@@ -168,7 +168,7 @@ export default function HomeScreen({ navigation }: Props) {
   const pickVideo = useCallback(async () => {
     setError(null);
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ['videos'],
       quality: 1,
       selectionLimit: 1,
       videoMaxDuration: MAX_VIDEO_DURATION_SECONDS,
@@ -288,7 +288,7 @@ export default function HomeScreen({ navigation }: Props) {
           <Box
             width={56}
             height={56}
-            borderRadius="s"
+            borderRadius="m"
             overflow="hidden"
             mr="m"
             alignItems="center"
@@ -347,8 +347,6 @@ export default function HomeScreen({ navigation }: Props) {
         center
         maxWidth={640}
         dismissKeyboardOnTap
-        statusBarStyle="light-content"
-        translucentStatusBar
       >
         {/* Lighter than auth: smaller hero, no blobs */}
         <HeroHeader
@@ -360,7 +358,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Box
               width={56}
               height={56}
-              borderRadius="l"
+              borderRadius="lg"
               style={{
                 backgroundColor: 'rgba(255,255,255,0.15)',
                 borderWidth: 1,
@@ -561,12 +559,12 @@ export default function HomeScreen({ navigation }: Props) {
                 <StyledButton
                   title={
                     <>
-                      <Feather name="activity" size={16} /> Test
+                      <Feather name="bell" size={16} /> Setări notificări
                     </>
                   }
-                  onPress={() => navigation.navigate('TestRefresh')}
+                  onPress={() => navigation.navigate('NotificationSettings')}
                   flex={1}
-                  variant="ghost"
+                  variant="tonal"
                   size="sm"
                 />
               </Box>

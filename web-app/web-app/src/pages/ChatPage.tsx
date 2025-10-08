@@ -198,7 +198,7 @@ export default function ChatPage() {
 
   const markdownComponents: Components = useMemo(
     () => ({
-      a({ node, href, children, ...props }) {
+      a({ href, children, ...props }) {
         // Check if it's a CSV download link
         if (href && href.includes('/download-csv/')) {
           return (
@@ -229,7 +229,7 @@ export default function ChatPage() {
       p(props) {
         return <p className="md-p"  {...props} />; },
       h4(props) { return <h4 className="md-h4" {...props} />; },
-      code({ inline, className, children, ...props }: any) {
+      code({ inline, className, children, ...props }: { inline?: boolean; className?: string; children?: React.ReactNode }) {
         if (inline) return <code className="md-code-inline" {...props}>{children}</code>;
         return (
           <pre className="md-pre">

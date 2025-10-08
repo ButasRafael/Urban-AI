@@ -32,8 +32,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 const schema = z
   .object({
     username: z.string().min(3, 'Minim 3 caractere'),
-    password: z.string().min(6, 'Minim 6 caractere'),
-    confirm:  z.string().min(6, 'Repetă parola'),
+    email: z.string().email('Email invalid'),
+    password: z.string().min(8, 'Minim 8 caractere'),
+    confirm:  z.string().min(8, 'Repetă parola'),
   })
   .refine((d) => d.password === d.confirm, {
     path: ['confirm'],
@@ -52,9 +53,10 @@ export default function RegisterScreen({ navigation }: Props) {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onChange',
-    defaultValues: { username: '', password: '', confirm: '' },
+    defaultValues: { username: '', email: '', password: '', confirm: '' },
   });
 
+  const emailRef = useRef<RNTextInput>(null);
   const passwordRef = useRef<RNTextInput>(null);
   const confirmRef  = useRef<RNTextInput>(null);
   const cardY = useRef(new Animated.Value(16)).current;
@@ -93,9 +95,9 @@ export default function RegisterScreen({ navigation }: Props) {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await apiRegister(values.username.trim(), values.password);
-      notify.success('Cont creat', 'Te poți autentifica acum.');
-      navigation.replace('Login');
+      await apiRegister(values.username.trim(), values.email.trim().toLowerCase(), values.password);
+      notify.success('Cont creat', 'Verifică emailul pentru a activa contul.');
+      navigation.replace('VerifyEmail', { email: values.email.trim().toLowerCase() });
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       const msg = Array.isArray(detail)
@@ -114,6 +116,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const onInvalid = (errs: FieldErrors<FormValues>) => {
     const first =
       (errs.username?.message as string | undefined) ??
+      (errs.email?.message as string | undefined) ??
       (errs.password?.message as string | undefined) ??
       (errs.confirm?.message as string | undefined) ??
       'Te rugăm să verifici câmpurile.';
@@ -123,7 +126,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
   const topError =
     isSubmitted
-      ? (errors.username?.message ?? errors.password?.message ?? errors.confirm?.message)
+      ? (errors.username?.message ?? errors.email?.message ?? errors.password?.message ?? errors.confirm?.message)
       : undefined;
 
   return (
@@ -134,8 +137,6 @@ export default function RegisterScreen({ navigation }: Props) {
       dismissKeyboardOnTap
       center
       maxWidth={640}
-      statusBarStyle="light-content"
-      translucentStatusBar
     >
       {/* Enhanced Hero Section */}
       <HeroHeader
@@ -148,7 +149,7 @@ export default function RegisterScreen({ navigation }: Props) {
             <Box
               width={64}
               height={64}
-              borderRadius="l"
+              borderRadius="lg"
               style={{
                 backgroundColor: 'rgba(255,255,255,0.15)',
                 borderWidth: 1,
@@ -203,7 +204,7 @@ export default function RegisterScreen({ navigation }: Props) {
               <Box
                 width={48}
                 height={48}
-                borderRadius="l"
+                borderRadius="lg"
                 backgroundColor="primary100"
                 borderColor="primary300"
                 borderWidth={1}
@@ -260,12 +261,42 @@ export default function RegisterScreen({ navigation }: Props) {
                     placeholder="Alege un nume de utilizator"
                     returnKeyType="next"
                     onBlur={onBlur}
-                    onSubmitEditing={() => passwordRef.current?.focus()}
+                    onSubmitEditing={() => emailRef.current?.focus()}
                     autoComplete="username"
                     textContentType="username"
                     allowClear
                     errorText={errors.username?.message}
                     helperText={!errors.username?.message ? "Minim 3 caractere, unic" : undefined}
+                  />
+                )}
+              />
+            </Box>
+
+            {/* Enhanced Email Input */}
+            <Box marginBottom="s">
+              <Text variant="label" color="text" marginBottom="xs" style={{ fontWeight: '600' }}>
+                Adresă email
+              </Text>
+              <Controller
+                name="email"
+                control={control}
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <StyledInput
+                    ref={emailRef}
+                    leftIcon="mail"
+                    value={value}
+                    onChangeText={onChange}
+                    placeholder="email@exemplu.ro"
+                    returnKeyType="next"
+                    onBlur={onBlur}
+                    onSubmitEditing={() => passwordRef.current?.focus()}
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    allowClear
+                    errorText={errors.email?.message}
+                    helperText={!errors.email?.message ? "Folosit pentru verificare" : undefined}
                   />
                 )}
               />
@@ -294,7 +325,7 @@ export default function RegisterScreen({ navigation }: Props) {
                     autoComplete="password-new"
                     textContentType="newPassword"
                     errorText={errors.password?.message}
-                    helperText={!errors.password?.message ? "Minim 6 caractere" : undefined}
+                    helperText={!errors.password?.message ? "Minim 8 caractere" : undefined}
                   />
                 )}
               />
@@ -366,11 +397,11 @@ export default function RegisterScreen({ navigation }: Props) {
                 flex={1} 
                 backgroundColor="border" 
               />
-              <Box 
+              <Box
                 backgroundColor="card"
                 paddingHorizontal="m"
                 paddingVertical="xs"
-                borderRadius="l"
+                borderRadius="pill"
                 borderWidth={1}
                 borderColor="border"
               >

@@ -56,7 +56,7 @@ export async function updateSessionTitle(sessionId: number, title: string): Prom
 }
 
 export async function sendChatStream(
-  body: { message: string; session_id?: number },
+  body: ChatRequest,
   onDelta: (chunk: string) => void,
   onSession?: (sid: number) => void
 ): Promise<{ session_id: number }> {

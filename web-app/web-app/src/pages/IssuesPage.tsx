@@ -1,72 +1,22 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import client from "../api/client";
 import Input from "../components/Input";
 import Button from "../components/Button";
 import { notify } from "../lib/notify";
 import { useAuth } from "../auth/useAuth";
 import { searchUsers, type UserLite } from "../api/users";
+import {
+  listIssues,
+  updateIssueStatus,
+  updateIssueSeverity,
+  assignIssue,
+  verifyIssue,
+  type Issue,
+  type IssueStatus,
+  type IssueSeverity,
+  type MediaType,
+  type IssueSource,
+} from "../api/issues";
 import "../styles/issues-page.css";
-
-type MediaType = "image" | "video";
-type IssueStatus = "open" | "resolved" | "ignored";
-type Severity = "low" | "medium" | "high";
-type DetectionSource = "yolo" | "gpt_dino" | "sam_fallback";
-
-type IssueRow = {
-  id: number;
-  media_id: number;
-  frame_id: number;
-  created_at: string;
-  class_name: string;
-  confidence: number | null;
-  bbox: number[];
-  description: string | null;
-  solution: string | null;
-  severity: Severity;
-  status: IssueStatus;
-  source: DetectionSource;
-  annotated_image_url?: string | null;
-  annotated_video_url?: string | null;
-  address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  assigned_to?: string | null;
-  verified_by?: string | null;
-  verified_at?: string | null;
-  track_thumbnail_url?: string | null;
-};
-
-type IssuesQuery = {
-  media_type?: MediaType;
-  limit?: number;
-  offset?: number;
-};
-
-async function fetchIssues(q: IssuesQuery): Promise<IssueRow[]> {
-  const params: Record<string, string> = {};
-  if (q.media_type) params.media_type = q.media_type;
-  if (typeof q.limit === "number") params.limit = String(q.limit);
-  if (typeof q.offset === "number") params.offset = String(q.offset);
-  const { data } = await client.get<IssueRow[]>("/problems/issues", { params });
-  return data ?? [];
-}
-
-async function patchStatus(id: number, status: IssueStatus) {
-  const { data } = await client.patch(`/issues/${id}/status`, { status });
-  return data as { id: number; old_status?: string; new_status?: string; resolved_at?: string | null };
-}
-async function patchSeverity(id: number, severity: Severity) {
-  const { data } = await client.patch(`/issues/${id}/severity`, { severity });
-  return data as { id: number; severity: Severity };
-}
-async function patchAssign(id: number, assigned_to: string | null) {
-  const { data } = await client.patch(`/issues/${id}/assign`, { assigned_to });
-  return data as { id: number; assigned_to: string | null };
-}
-async function patchVerify(id: number, verified: boolean) {
-  const { data } = await client.patch(`/issues/${id}/verify`, { verified });
-  return data as { id: number; verified_by: string | null; verified_at: string | null };
-}
 
 function useDebounced<T>(value: T, ms = 240) {
   const [v, setV] = useState(value);
@@ -122,14 +72,14 @@ export default function IssuesPage() {
       ? (initialStatus as IssueStatus)
       : "all"
   );
-  const [severity, setSeverity] = useState<"all" | Severity>(
+  const [severity, setSeverity] = useState<"all" | IssueSeverity>(
     initialSeverity === "low" || initialSeverity === "medium" || initialSeverity === "high"
-      ? (initialSeverity as Severity)
+      ? (initialSeverity as IssueSeverity)
       : "all"
   );
-  const [source, setSource] = useState<"all" | DetectionSource>(
+  const [source, setSource] = useState<"all" | IssueSource>(
     initialSource === "yolo" || initialSource === "gpt_dino" || initialSource === "sam_fallback"
-      ? (initialSource as DetectionSource)
+      ? (initialSource as IssueSource)
       : "all"
   );
 
@@ -138,15 +88,15 @@ export default function IssuesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const [allRows, setAllRows] = useState<IssueRow[]>([]);
+  const [allRows, setAllRows] = useState<Issue[]>([]);
 
   const [state, setState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const searchRef = useRef<HTMLInputElement | null>(null);
 
-  const [assignTarget, setAssignTarget] = useState<IssueRow | null>(null);
-  const [verifyTarget, setVerifyTarget] = useState<IssueRow | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Issue | null>(null);
+  const [verifyTarget, setVerifyTarget] = useState<Issue | null>(null);
 
   const [onlyMedia, setOnlyMedia] = useState<number | null>(initialMediaId);
 
@@ -189,10 +139,10 @@ export default function IssuesPage() {
       try {
         const limit = 200;
         let offset = 0;
-        const acc: IssueRow[] = [];
+        const acc: Issue[] = [];
 
         for (;;) {
-          const batch = await fetchIssues({
+          const batch = await listIssues({
             media_type: mediaType === "all" ? undefined : mediaType,
             limit,
             offset,
@@ -253,7 +203,7 @@ export default function IssuesPage() {
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
 
-  const changeStatus = useCallback(async (r: IssueRow, next: IssueStatus) => {
+  const changeStatus = useCallback(async (r: Issue, next: IssueStatus) => {
     if (r.status === next) return;
     if (next === "resolved" && r.assigned_to !== (user?.username ?? "")) {
       notify.error("Only the assignee can resolve this issue.");
@@ -262,7 +212,7 @@ export default function IssuesPage() {
     const prev = r.status;
     setAllRows((arr) => arr.map((x) => (x.id === r.id ? { ...x, status: next } : x)));
     try {
-      await patchStatus(r.id, next);
+      await updateIssueStatus(r.id, next);
       notify.success(`Status → ${next}`);
     } catch {
       setAllRows((arr) => arr.map((x) => (x.id === r.id ? { ...x, status: prev } : x)));
@@ -270,12 +220,12 @@ export default function IssuesPage() {
     }
   }, [user?.username]);
 
-  const changeSeverity = useCallback(async (r: IssueRow, next: Severity) => {
+  const changeSeverity = useCallback(async (r: Issue, next: IssueSeverity) => {
     if (r.severity === next) return;
     const prev = r.severity;
     setAllRows((arr) => arr.map((x) => (x.id === r.id ? { ...x, severity: next } : x)));
     try {
-      await patchSeverity(r.id, next);
+      await updateIssueSeverity(r.id, next);
       notify.success(`Severity → ${next}`);
     } catch {
       setAllRows((arr) => arr.map((x) => (x.id === r.id ? { ...x, severity: prev } : x)));
@@ -283,11 +233,11 @@ export default function IssuesPage() {
     }
   }, []);
 
-  const openAssign = useCallback((r: IssueRow) => setAssignTarget(r), []);
+  const openAssign = useCallback((r: Issue) => setAssignTarget(r), []);
   const closeAssign = useCallback(() => setAssignTarget(null), []);
-  const applyAssign = useCallback(async (r: IssueRow, username: string | null) => {
+  const applyAssign = useCallback(async (r: Issue, username: string | null) => {
     try {
-      const { assigned_to } = await patchAssign(r.id, username);
+      const { assigned_to } = await assignIssue(r.id, username);
       setAllRows((arr) => {
         const next = arr.map((x) => (x.id === r.id ? { ...x, assigned_to } : x));
         if (assignedMine && me && assigned_to !== me) {
@@ -302,11 +252,11 @@ export default function IssuesPage() {
     }
   }, [assignedMine, me]);
 
-  const openVerify = useCallback((r: IssueRow) => setVerifyTarget(r), []);
+  const openVerify = useCallback((r: Issue) => setVerifyTarget(r), []);
   const closeVerify = useCallback(() => setVerifyTarget(null), []);
-  const applyVerify = useCallback(async (r: IssueRow) => {
+  const applyVerify = useCallback(async (r: Issue) => {
     try {
-      const resp = await patchVerify(r.id, true);
+      const resp = await verifyIssue(r.id, true);
       setAllRows((arr) =>
         arr.map((x) =>
           x.id === r.id ? { ...x, verified_by: resp.verified_by, verified_at: resp.verified_at } : x
@@ -356,13 +306,13 @@ const clearFilters = useCallback(() => {
           </div>
 
           <div className="selectWrap">
-            <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value as "all" | Severity)} title="Severity" aria-label="Severity">
+            <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value as "all" | IssueSeverity)} title="Severity" aria-label="Severity">
               <option value="all">All severity</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
             </select>
           </div>
 
           <div className="selectWrap">
-            <select className="select" value={source} onChange={(e) => setSource(e.target.value as "all" | DetectionSource)} title="Source" aria-label="Source">
+            <select className="select" value={source} onChange={(e) => setSource(e.target.value as "all" | IssueSource)} title="Source" aria-label="Source">
               <option value="all">All sources</option><option value="yolo">YOLO</option><option value="gpt_dino">GPT-DINO</option><option value="sam_fallback">SAM</option>
             </select>
           </div>
@@ -451,12 +401,16 @@ const clearFilters = useCallback(() => {
               <div className="cardRow">
                 <span className="metaLabel">Severity</span>
                 <span className="metaValue">
-                  <span className="pillControl">
+                  {isAdmin ? (
+                    <span className="pillControl">
+                      <span className={`sev-pill -${r.severity}`}>{r.severity}</span>
+                      <select className="select selectInline" value={r.severity} onChange={(e) => changeSeverity(r, e.target.value as IssueSeverity)} title="Change severity" aria-label="Change severity">
+                        <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                      </select>
+                    </span>
+                  ) : (
                     <span className={`sev-pill -${r.severity}`}>{r.severity}</span>
-                    <select className="select selectInline" value={r.severity} onChange={(e) => changeSeverity(r, e.target.value as Severity)} title="Change severity" aria-label="Change severity">
-                      <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
-                    </select>
-                  </span>
+                  )}
                 </span>
               </div>
               <div className="cardRow">
@@ -473,7 +427,7 @@ const clearFilters = useCallback(() => {
                     >
                       <option value="open">Open</option>
                       <option value="resolved" disabled={r.assigned_to !== me}>Resolved</option>
-                      <option value="ignored">Ignored</option>
+                      {isAdmin && <option value="ignored">Ignored</option>}
                     </select>
                   </span>
                 </span>
@@ -599,20 +553,24 @@ const clearFilters = useCallback(() => {
                     <td className="td col-class"><span className="chip">{r.class_name}</span></td>
 
                     <td className="td col-sev">
-                      <div className="pillControl">
+                      {isAdmin ? (
+                        <div className="pillControl">
+                          <span className={`sev-pill -${r.severity}`}>{r.severity}</span>
+                          <select
+                            className="select selectInline"
+                            value={r.severity}
+                            onChange={(e) => changeSeverity(r, e.target.value as IssueSeverity)}
+                            title="Change severity"
+                            aria-label="Change severity"
+                          >
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                          </select>
+                        </div>
+                      ) : (
                         <span className={`sev-pill -${r.severity}`}>{r.severity}</span>
-                        <select
-                          className="select selectInline"
-                          value={r.severity}
-                          onChange={(e) => changeSeverity(r, e.target.value as Severity)}
-                          title="Change severity"
-                          aria-label="Change severity"
-                        >
-                          <option value="low">Low</option>
-                          <option value="medium">Medium</option>
-                          <option value="high">High</option>
-                        </select>
-                      </div>
+                      )}
                     </td>
 
                     <td className="td col-status">
@@ -627,7 +585,7 @@ const clearFilters = useCallback(() => {
                         >
                           <option value="open">Open</option>
                           <option value="resolved" disabled={r.assigned_to !== me}>Resolved</option>
-                          <option value="ignored">Ignored</option>
+                          {isAdmin && <option value="ignored">Ignored</option>}
                         </select>
                       </div>
                     </td>
@@ -830,7 +788,7 @@ function AssignDialog({
   onAssign,
   onUnassign,
 }: {
-  target: IssueRow;
+  target: Issue;
   onClose: () => void;
   onAssign: (username: string) => Promise<void>;
   onUnassign: () => Promise<void>;
@@ -891,7 +849,7 @@ function VerifyDialog({
   onClose,
   onVerify,
 }: {
-  target: IssueRow;
+  target: Issue;
   onClose: () => void;
   onVerify: () => Promise<void>;
 }) {

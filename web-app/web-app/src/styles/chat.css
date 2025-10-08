@@ -186,6 +186,11 @@
 
 .chatbar__title { display: grid; gap: 4px; }
 .chatbar__title h1 { margin: 0; font-size: 18px; }
+
+:root.dark .chatbar__title h1 {
+  color: var(--secondary-700);
+}
+
 .chatbar__title .badge {
   display: inline-block;
   padding: 4px 8px;
@@ -392,10 +397,16 @@
 .composer {
   display: grid;
   grid-template-columns: 1fr auto;
+  align-items: flex-start;
   gap: 10px;
   padding: var(--m) var(--l);
   border-top: 1px solid var(--surface-200);
   background: var(--surface-0);
+}
+
+.composer > button {
+  height: 44px;
+  min-height: 44px;
 }
 
 .composer-input-wrap {

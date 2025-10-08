@@ -11,6 +11,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Try to import HEIC support
+try:
+    from PIL import Image
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    HEIC_SUPPORT = True
+except ImportError:
+    HEIC_SUPPORT = False
+    logger.warning("pillow-heif not installed, HEIC files will not be supported")
+
 # File size limits
 MAX_IMAGE_SIZE_MB = 10
 MAX_VIDEO_SIZE_MB = 50
@@ -72,11 +82,50 @@ async def validate_file_size(file: UploadFile, max_size_bytes: int, file_type: s
     logger.info(f"File size validated: {file_size / (1024 * 1024):.2f}MB")
 
 
+def load_image_with_fallback(image_path: Path) -> Optional[np.ndarray]:
+    """
+    Load image using cv2.imread with Pillow fallback for unsupported formats (HEIC, etc.)
+
+    Returns:
+        numpy.ndarray in BGR format (OpenCV standard) or None if loading failed
+    """
+    # Try OpenCV first (faster for common formats)
+    img = cv2.imread(str(image_path))
+    if img is not None:
+        return img
+
+    # Fallback to Pillow for HEIC and other formats
+    if not HEIC_SUPPORT:
+        logger.warning(f"Could not load {image_path} with cv2 and Pillow HEIC support is not available")
+        return None
+
+    try:
+        from PIL import Image
+        # Open with Pillow (supports HEIC with pillow-heif)
+        pil_image = Image.open(image_path)
+
+        # Convert to RGB if needed
+        if pil_image.mode != 'RGB':
+            pil_image = pil_image.convert('RGB')
+
+        # Convert PIL Image to numpy array
+        img_array = np.array(pil_image)
+
+        # Convert RGB to BGR (OpenCV format)
+        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+
+        logger.info(f"Loaded {image_path} using Pillow fallback")
+        return img_bgr
+    except Exception as e:
+        logger.error(f"Failed to load {image_path} with Pillow: {e}")
+        return None
+
+
 def validate_image_dimensions(image_path: Path) -> Tuple[int, int]:
     """Validate image dimensions and return (width, height)"""
-    img = cv2.imread(str(image_path))
+    img = load_image_with_fallback(image_path)
     if img is None:
-        raise HTTPException(400, "Could not decode image file")
+        raise HTTPException(400, "Could not decode image file. Ensure the file is a valid image format.")
 
     height, width = img.shape[:2]
 

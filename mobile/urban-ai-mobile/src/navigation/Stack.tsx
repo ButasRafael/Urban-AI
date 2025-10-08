@@ -1,10 +1,10 @@
 import React from 'react';
-import { createSharedElementStackNavigator } from 'react-navigation-shared-element';
+import { createStackNavigator } from '@react-navigation/stack';
 import { FadeIn, FadeOut } from 'react-native-reanimated';
 import type { StackCardInterpolationProps } from '@react-navigation/stack';
 import type { RootStackParamList } from './types';
 
-export const Stack = createSharedElementStackNavigator<RootStackParamList>();
+export const Stack = createStackNavigator<RootStackParamList>();
 
 export const screenOptions = {
   presentation: 'card' as const,

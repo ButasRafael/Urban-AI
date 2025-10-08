@@ -3,7 +3,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar,
   TouchableWithoutFeedback,
   Keyboard,
   ViewStyle,
@@ -24,8 +23,6 @@ type Props = React.PropsWithChildren<{
   dismissKeyboardOnTap?: boolean;
   center?: boolean;
   maxWidth?: number;
-  statusBarStyle?: 'light-content' | 'dark-content';
-  translucentStatusBar?: boolean;
 }>;
 
 export default function Screen({
@@ -40,8 +37,6 @@ export default function Screen({
   dismissKeyboardOnTap = true,
   center = false,
   maxWidth = 640,
-  statusBarStyle = 'dark-content',
-  translucentStatusBar = true,
 }: Props) {
   const insets = useSafeAreaInsets();
   const theme = useTheme<Theme>();
@@ -92,7 +87,6 @@ export default function Screen({
 
   return (
     <SafeAreaView edges={edges} style={{ flex: 1 }}>
-      <StatusBar translucent={translucentStatusBar} backgroundColor="transparent" barStyle={statusBarStyle} />
       {keyboard === 'none' ? (
         body
       ) : (

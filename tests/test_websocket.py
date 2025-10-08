@@ -98,7 +98,10 @@ def test_user_regular(db_session):
     """Create a regular test user"""
     user = User(
         username="ws_testuser",
+        email="ws_testuser@test.com",
         hashed_password=get_password_hash("testpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role="user"
     )
     db_session.add(user)
@@ -112,7 +115,10 @@ def test_user_admin(db_session):
     """Create an admin test user"""
     user = User(
         username="ws_admin",
+        email="ws_admin@test.com",
         hashed_password=get_password_hash("adminpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role="admin"
     )
     db_session.add(user)
@@ -142,7 +148,10 @@ def test_media_item_other_user(db_session):
     """Create a media item for another user"""
     other_user = User(
         username="other_user",
+        email="other_user@test.com",
         hashed_password=get_password_hash("otherpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role="user"
     )
     db_session.add(other_user)
@@ -653,7 +662,10 @@ class TestConcurrentConnections:
         for i in range(3):
             user = User(
                 username=f"concurrent_user_{i}",
+                email=f"concurrent_user_{i}@test.com",
                 hashed_password=get_password_hash(f"pass{i}123"),
+                email_verified=True,
+                email_verification_token=None,
                 role="user"
             )
             db_session.add(user)

@@ -1,8 +1,10 @@
 import client from './client';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-export async function register(username: string, password: string) {
-  return client.post('/auth/register', { username, password });
+export async function register(username: string, email: string, password: string, role: string = 'user') {
+  return client.post('/auth/register', { username, email, password, role }, {
+    params: { platform: 'mobile' }
+  });
 }
 
 export async function login(username: string, password: string) {
@@ -18,6 +20,33 @@ export async function login(username: string, password: string) {
 export async function logout() {
   await client.post('/auth/logout');
   await AsyncStorage.multiRemove(['accessToken','refreshToken']);
+}
+
+export async function verifyEmail(token: string) {
+  const { data } = await client.get(`/auth/verify-email?token=${token}`);
+  return data;
+}
+
+export async function resendVerificationEmail(email: string) {
+  const { data } = await client.post('/auth/resend-verification', null, {
+    params: { email, platform: 'mobile' }
+  });
+  return data;
+}
+
+export async function forgotPassword(email: string) {
+  const { data } = await client.post('/auth/forgot-password', null, {
+    params: { email, platform: 'mobile' }
+  });
+  return data;
+}
+
+export async function resetPassword(token: string, new_password: string) {
+  const { data } = await client.post('/auth/reset-password', {
+    token,
+    new_password
+  });
+  return data;
 }
 
 export const authService = {

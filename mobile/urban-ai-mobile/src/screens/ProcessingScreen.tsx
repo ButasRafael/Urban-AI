@@ -379,7 +379,7 @@ const ProcessingScreen: React.FC<Props> = ({ navigation, route }) => {
       </Box>
 
       {/* Card */}
-      <Box mx="l" p="l" borderRadius="l" backgroundColor="card" style={[styles.cardShadow, { marginTop: -theme.spacing.l }]}>
+      <Box mx="l" p="l" borderRadius="xl" backgroundColor="card" style={[styles.cardShadow, { marginTop: -theme.spacing.l }]}>
         {/* Stages */}
         <Box flexDirection="row" justifyContent="space-between" mb="m">
           <StageChip label="Coada" active={stage === 'pending'} done={stage !== 'pending'} />

@@ -88,7 +88,10 @@ def admin_user(db_session):
     """Create an admin user"""
     user = UserModel(
         username="admin_problems",
+        email="admin_problems@test.com",
         hashed_password=get_password_hash("adminpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.admin
     )
     db_session.add(user)
@@ -102,7 +105,10 @@ def authority_user(db_session):
     """Create an authority user"""
     user = UserModel(
         username="authority_problems",
+        email="authority_problems@test.com",
         hashed_password=get_password_hash("authoritypass123"),
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.authority
     )
     db_session.add(user)
@@ -116,7 +122,10 @@ def regular_user(db_session):
     """Create a regular user"""
     user = UserModel(
         username="user_problems",
+        email="user_problems@test.com",
         hashed_password=get_password_hash("userpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.user
     )
     db_session.add(user)
@@ -803,7 +812,10 @@ class TestDatabaseLevelUpdates:
         # Create a temp user
         temp_user = UserModel(
             username="temp_user",
+            email="temp_user@test.com",
             hashed_password=get_password_hash("temp"),
+            email_verified=True,
+            email_verification_token=None,
             role=RoleEnum.user
         )
         db_session.add(temp_user)

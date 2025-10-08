@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '@shopify/restyle';
 import type { Theme } from '../theme';
@@ -27,7 +27,7 @@ import InlineNotice from '../components/ui/InlineNotice';
 import Badge from '../components/ui/Badge';
 import StatCard from '../components/ui/StatCard';
 import FeatureCard from '../components/ui/FeatureCard';
-import { login } from '../api/auth';
+import { login, resendVerificationEmail } from '../api/auth';
 import { notify } from '../components/ui/Toast';
 
 import Screen from '../components/ui/Screen';
@@ -39,18 +39,21 @@ const REMEMBER_KEY = 'auth:rememberUsername';
 
 const schema = z.object({
   username: z.string().min(3, 'Minim 3 caractere'),
-  password: z.string().min(6, 'Minim 6 caractere'),
+  password: z.string().min(8, 'Minim 8 caractere'),
   remember: z.boolean(),
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function LoginScreen({ navigation }: Props) {
   const theme = useTheme<Theme>();
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
 
   const {
     control,
     handleSubmit,
     setValue,
+    getValues,
     formState: { errors, isValid, isSubmitting, isSubmitted },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -101,8 +104,24 @@ export default function LoginScreen({ navigation }: Props) {
 
   const canSubmit = useMemo(() => isValid && !isSubmitting, [isValid, isSubmitting]);
 
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return;
+
+    setIsResending(true);
+    try {
+      await resendVerificationEmail(unverifiedEmail);
+      notify.success('Email trimis', 'Verifică-ți inbox-ul pentru link-ul de verificare.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Eroare la trimiterea emailului';
+      notify.error('Eroare', msg);
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     try {
+      setUnverifiedEmail(null);
       await login(values.username.trim(), values.password);
       if (values.remember) {
         await AsyncStorage.setItem(REMEMBER_KEY, values.username.trim());
@@ -112,12 +131,24 @@ export default function LoginScreen({ navigation }: Props) {
       notify.success('Autentificare reușită');
       navigation.replace('Home');
     } catch (err: any) {
+      const status = err?.response?.status;
       const msg = err?.response?.data?.detail || err?.message || 'Autentificare eșuată';
-      if (lastErrorRef.current !== msg) {
-        lastErrorRef.current = msg;
-        triggerShake();
+
+      // Check if error is 403 (email not verified)
+      if (status === 403 && msg.toLowerCase().includes('email')) {
+        setUnverifiedEmail(values.username.trim());
+        if (lastErrorRef.current !== msg) {
+          lastErrorRef.current = msg;
+          triggerShake();
+        }
+        notify.error('Email neverificat', msg);
+      } else {
+        if (lastErrorRef.current !== msg) {
+          lastErrorRef.current = msg;
+          triggerShake();
+        }
+        notify.error(msg);
       }
-      notify.error(msg);
     }
   };
 
@@ -141,8 +172,6 @@ export default function LoginScreen({ navigation }: Props) {
       dismissKeyboardOnTap
       center
       maxWidth={640}
-      statusBarStyle="light-content"
-      translucentStatusBar
 >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View>
@@ -157,7 +186,7 @@ export default function LoginScreen({ navigation }: Props) {
                 <Box
                   width={64}
                   height={64}
-                  borderRadius="l"
+                  borderRadius="lg"
                   style={{
                     backgroundColor: 'rgba(255,255,255,0.15)',
                     borderWidth: 1,
@@ -212,7 +241,7 @@ export default function LoginScreen({ navigation }: Props) {
                   <Box
                     width={48}
                     height={48}
-                    borderRadius="l"
+                    borderRadius="lg"
                     backgroundColor="primary100"
                     borderColor="primary300"
                     borderWidth={1}
@@ -253,28 +282,51 @@ export default function LoginScreen({ navigation }: Props) {
                   </Box>
                 ) : null}
 
-                {/* Enhanced Username Input */}
+                {/* Email Verification Notice */}
+                {unverifiedEmail ? (
+                  <Box marginBottom="m">
+                    <InlineNotice
+                      variant="warning"
+                      title="Email neverificat"
+                      message="Verifică-ți emailul pentru a activa contul."
+                      compact
+                    />
+                    <Box marginTop="s" alignItems="center">
+                      <StyledButton
+                        title="Retrimite email de verificare"
+                        variant="tonal"
+                        onPress={handleResendVerification}
+                        loading={isResending}
+                        size="sm"
+                        leftIconName="mail"
+                      />
+                    </Box>
+                  </Box>
+                ) : null}
+
+                {/* Enhanced Username/Email Input */}
                 <Box marginBottom="s">
                   <Text variant="label" color="text" marginBottom="xs" style={{ fontWeight: '600' }}>
-                    Nume utilizator
+                    Email sau nume utilizator
                   </Text>
                   <Controller
                     name="username"
                     control={control}
                     render={({ field: { value, onChange, onBlur } }) => (
                       <StyledInput
-                        leftIcon="user"
+                        leftIcon="mail"
                         value={value}
                         onChangeText={onChange}
-                        placeholder="Introdu numele de utilizator"
+                        placeholder="Email sau nume de utilizator"
                         returnKeyType="next"
                         onBlur={onBlur}
                         onSubmitEditing={() => passwordRef.current?.focus()}
                         autoComplete="username"
                         textContentType="username"
+                        autoCapitalize="none"
                         allowClear
                         errorText={errors.username?.message}
-                        helperText={!errors.username?.message ? "Minim 3 caractere" : undefined}
+                        helperText={!errors.username?.message ? "Email sau nume utilizator" : undefined}
                       />
                     )}
                   />
@@ -303,7 +355,7 @@ export default function LoginScreen({ navigation }: Props) {
                         autoComplete="password"
                         textContentType="password"
                         errorText={errors.password?.message}
-                        helperText={!errors.password?.message ? "Minim 6 caractere" : undefined}
+                        helperText={!errors.password?.message ? "Minim 8 caractere" : undefined}
                       />
                     )}
                   />
@@ -350,7 +402,7 @@ export default function LoginScreen({ navigation }: Props) {
                     variant="caption"
                     color="primary500"
                     style={{ textDecorationLine: 'underline' }}
-                    onPress={() => notify.info('Contactează administratorul pentru resetare parolă.')}
+                    onPress={() => navigation.navigate('ForgotPassword')}
                   >
                     Ai uitat parola?
                   </Text>
@@ -395,11 +447,11 @@ export default function LoginScreen({ navigation }: Props) {
                     flex={1} 
                     backgroundColor="border" 
                   />
-                  <Box 
+                  <Box
                     backgroundColor="card"
                     paddingHorizontal="m"
                     paddingVertical="xs"
-                    borderRadius="l"
+                    borderRadius="pill"
                     borderWidth={1}
                     borderColor="border"
                   >

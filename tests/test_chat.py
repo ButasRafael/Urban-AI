@@ -96,7 +96,10 @@ def authority_user(db_session):
     """Create an authority user for testing"""
     user = UserModel(
         username="test_authority",
+        email="test_authority@test.com",
         hashed_password="hashed",
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.authority
     )
     db_session.add(user)

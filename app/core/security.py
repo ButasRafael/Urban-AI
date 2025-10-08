@@ -92,7 +92,12 @@ def get_current_user(
         logger.warning("User not found for token", extra={"username": username})
         raise HTTPException(status_code=401, detail="User not found")
     logger.info("Authenticated user", extra={"username": username, "jti": jti})
-    return UserOut(username=user.username, role=user.role)
+    return UserOut(
+        username=user.username,
+        email=user.email,
+        email_verified=user.email_verified,
+        role=user.role
+    )
 
 
 def revoke_token(jti: str, db: Session):

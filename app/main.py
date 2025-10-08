@@ -36,6 +36,8 @@ from app.api.chat import router as chat_router
 from app.api.rag import router as rag_router
 from app.api.issues import router as issues_router
 from app.api.users import router as users_router
+from app.api.notifications import router as notifications_router
+from app.api.notification_store import router as notification_store_router
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +127,17 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to load RAG reranker: {e}")
 
+    # Create default notification templates
+    try:
+        from app.core.database import SessionLocal
+        from app.services.notification_templates import NotificationTemplateService
+        db = SessionLocal()
+        NotificationTemplateService.create_default_templates(db)
+        db.close()
+        logger.info("✓ Notification templates seeded")
+    except Exception as e:
+        logger.error(f"Failed to create notification templates: {e}")
+
     # Only load inference models in GPU workers, not in API service
     if os.getenv("ROLE") == "worker" and os.getenv("WORKER_KIND") == "gpu":
         logger.info("Loading inference models in GPU worker...")
@@ -167,6 +180,8 @@ app.include_router(chat_router, prefix="/chat", tags=["Chat"])
 app.include_router(rag_router, prefix="/rag", tags=["RAG"])
 app.include_router(issues_router)
 app.include_router(users_router)
+app.include_router(notifications_router)
+app.include_router(notification_store_router)
 
 app.add_route(
     "/metrics/raw",
@@ -180,9 +195,13 @@ app.add_route(
 async def metrics(request: Request):
     return handle_metrics(request)
 
+# CORS origins from environment variable (comma-separated list)
+cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://urban-ai.netlify.app"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

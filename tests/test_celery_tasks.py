@@ -123,7 +123,10 @@ def test_user(db_session):
     """Create a test user for media"""
     user = UserModel(
         username="celery_test_user",
+        email="celery_test_user@test.com",
         hashed_password=get_password_hash("testpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.user,
     )
     db_session.add(user)

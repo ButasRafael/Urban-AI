@@ -109,10 +109,24 @@ async def update_status(
     except Exception:
         raise HTTPException(400, "Invalid status")
 
-    if new_status == dbm.IssueStatus.resolved:
+    # Only admins can set status to "ignored"
+    if new_status == dbm.IssueStatus.ignored and current_user.role != "admin":
+        raise HTTPException(403, "Only admins can ignore issues")
+
+    # Authorities can only set status to "resolved" for issues assigned to them
+    if current_user.role == "authority":
+        if new_status != dbm.IssueStatus.resolved:
+            raise HTTPException(403, "Authorities can only resolve issues")
         if not det.assigned_to:
             raise HTTPException(403, "Cannot resolve an unassigned issue")
         if det.assigned_to != current_user.username:
+            raise HTTPException(403, "Only the assignee can resolve this issue")
+
+    # Admins can resolve any assigned issue
+    if new_status == dbm.IssueStatus.resolved:
+        if not det.assigned_to:
+            raise HTTPException(403, "Cannot resolve an unassigned issue")
+        if current_user.role == "authority" and det.assigned_to != current_user.username:
             raise HTTPException(403, "Only the assignee can resolve this issue")
 
     old_status = det.status
@@ -130,9 +144,27 @@ async def update_status(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated status
     await sync_detection_updates(db, detection_id)
+
+    # Get media_id for notification
+    frame = db.query(dbm.Frame).filter(dbm.Frame.id == det.frame_id).first()
+    media_id = frame.media_id if frame else None
+
+    # Publish event for notifications
+    from app.services.event_helpers import create_issue_status_changed_event
+    from app.services.event_publisher import publish_event
+    event = create_issue_status_changed_event(
+        issue_id=det.id,
+        old_status=old_status.value,
+        new_status=det.status.value,
+        changed_by=current_user.username,
+        severity=det.severity.value,
+        class_name=det.class_name,
+        media_id=media_id
+    )
+    publish_event(event)
 
     return {
         "id": det.id,
@@ -142,7 +174,7 @@ async def update_status(
     }
 
 
-@router.patch("/{detection_id}/severity")
+@router.patch("/{detection_id}/severity", dependencies=[require_roles("admin")])
 async def update_severity(
     detection_id: int,
     body: SeverityUpdate,
@@ -150,6 +182,7 @@ async def update_severity(
     current_user=Depends(get_current_user),
 ):
     det = _get_detection_or_404(db, detection_id)
+    old_severity = det.severity
     try:
         det.severity = dbm.Severity(body.severity)
     except Exception:
@@ -158,10 +191,27 @@ async def update_severity(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated severity
     await sync_detection_updates(db, detection_id)
-    
+
+    # Get media_id for notification
+    frame = db.query(dbm.Frame).filter(dbm.Frame.id == det.frame_id).first()
+    media_id = frame.media_id if frame else None
+
+    # Publish event for notifications
+    from app.services.event_helpers import create_issue_severity_changed_event
+    from app.services.event_publisher import publish_event
+    event = create_issue_severity_changed_event(
+        issue_id=det.id,
+        old_severity=old_severity.value,
+        new_severity=det.severity.value,
+        changed_by=current_user.username,
+        class_name=det.class_name,
+        media_id=media_id
+    )
+    publish_event(event)
+
     return {"id": det.id, "severity": det.severity.value}
 
 
@@ -183,10 +233,28 @@ async def assign_issue(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated assignment
     await sync_detection_updates(db, detection_id)
-    
+
+    # Publish event for notifications (only if assigned, not unassigned)
+    if body.assigned_to:
+        # Get media_id for notification
+        frame = db.query(dbm.Frame).filter(dbm.Frame.id == det.frame_id).first()
+        media_id = frame.media_id if frame else None
+
+        from app.services.event_helpers import create_issue_assigned_event
+        from app.services.event_publisher import publish_event
+        event = create_issue_assigned_event(
+            issue_id=det.id,
+            assigned_to=body.assigned_to,
+            assigned_by=current_user.username,
+            severity=det.severity.value,
+            class_name=det.class_name,
+            media_id=media_id
+        )
+        publish_event(event)
+
     return {"id": det.id, "assigned_to": det.assigned_to}
 
 @router.patch("/{detection_id}/verify", dependencies=[require_roles("admin")])  # <-- admin only
@@ -207,10 +275,27 @@ async def verify_issue(
     db.add(det)
     db.commit()
     db.refresh(det)
-    
+
     # Sync RAG chunks with updated verification
     await sync_detection_updates(db, detection_id)
-    
+
+    # Publish event for notifications (only when verified, not unverified)
+    if body.verified:
+        # Get media_id for notification
+        frame = db.query(dbm.Frame).filter(dbm.Frame.id == det.frame_id).first()
+        media_id = frame.media_id if frame else None
+
+        from app.services.event_helpers import create_issue_verified_event
+        from app.services.event_publisher import publish_event
+        event = create_issue_verified_event(
+            issue_id=det.id,
+            verified_by=current_user.username,
+            severity=det.severity.value,
+            class_name=det.class_name,
+            media_id=media_id
+        )
+        publish_event(event)
+
     return {
         "id": det.id,
         "verified_by": det.verified_by,

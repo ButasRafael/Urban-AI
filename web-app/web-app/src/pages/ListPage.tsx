@@ -4,16 +4,30 @@ import type { Problem } from "../api/problems";
 import Input from "../components/Input";
 import Button from "../components/Button";
 import IssueModal from "../components/IssueModal";
-import { issuesSummaryByMedia, type IssuesSummary } from "../api/issues";
-import { bulkUpdateStatus } from "../api/issues";
+import { issuesSummaryByMedia, type IssuesSummary, bulkUpdateStatus, bulkAssign, bulkVerify } from "../api/issues";
+import { searchUsers } from "../api/users";
 import { notify } from "../lib/notify";
+import { useAuth } from "../auth/useAuth";
 import "../styles/list-page.css";
 
 type MediaType = "all" | "image" | "video";
 type SortKey = "date" | "id";
 type SortDir = "desc" | "asc";
 
+function useDebounced<T>(value: T, ms = 240) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
 export default function ListPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const isAuthority = user?.role === "authority";
+
   const initialType = (() => {
     const sp = new URLSearchParams(location.search);
     const t = sp.get("type");
@@ -46,6 +60,9 @@ export default function ListPage() {
 
   const [summByMedia, setSummByMedia] = useState<Record<number, IssuesSummary>>({});
   const [bulkResolving, setBulkResolving] = useState<Set<number>>(new Set());
+  const [bulkAssigning, setBulkAssigning] = useState<Set<number>>(new Set());
+  const [bulkVerifying, setBulkVerifying] = useState<Set<number>>(new Set());
+  const [assignDialogMediaId, setAssignDialogMediaId] = useState<number | null>(null);
 
   useEffect(() => {
   let cancelled = false;
@@ -194,22 +211,23 @@ export default function ListPage() {
     setMediaFilter(null);
   };
 
+
   const handleBulkResolve = async (mediaId: number) => {
     if (bulkResolving.has(mediaId)) return;
-    
+
     setBulkResolving(prev => new Set(prev.add(mediaId)));
-    
+
     try {
       const result = await bulkUpdateStatus(mediaId, "resolved");
       notify.success(`${result.updated_count} detection(s) marked as resolved`);
-      
+
       // Update the summary to reflect the changes
       setSummByMedia(prev => {
         const updated = { ...prev };
         if (updated[mediaId]) {
           // Move all open issues to resolved
           const summary = updated[mediaId];
-          
+
           // Reset open counts and add to resolved
           ['high', 'medium', 'low'].forEach(sev => {
             if (summary[sev as keyof IssuesSummary]?.open) {
@@ -226,6 +244,47 @@ export default function ListPage() {
       notify.error('Bulk update failed', message);
     } finally {
       setBulkResolving(prev => {
+        const updated = new Set(prev);
+        updated.delete(mediaId);
+        return updated;
+      });
+    }
+  };
+
+  const handleBulkAssign = async (mediaId: number, assignedTo: string) => {
+    if (bulkAssigning.has(mediaId)) return;
+
+    setBulkAssigning(prev => new Set(prev.add(mediaId)));
+
+    try {
+      const result = await bulkAssign(mediaId, assignedTo);
+      notify.success(`${result.assigned_count} detection(s) assigned to ${assignedTo}`);
+      setAssignDialogMediaId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to assign detections';
+      notify.error('Bulk assign failed', message);
+    } finally {
+      setBulkAssigning(prev => {
+        const updated = new Set(prev);
+        updated.delete(mediaId);
+        return updated;
+      });
+    }
+  };
+
+  const handleBulkVerify = async (mediaId: number) => {
+    if (bulkVerifying.has(mediaId)) return;
+
+    setBulkVerifying(prev => new Set(prev.add(mediaId)));
+
+    try {
+      const result = await bulkVerify(mediaId);
+      notify.success(`${result.verified_count} detection(s) marked as verified`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to verify detections';
+      notify.error('Bulk verify failed', message);
+    } finally {
+      setBulkVerifying(prev => {
         const updated = new Set(prev);
         updated.delete(mediaId);
         return updated;
@@ -509,19 +568,56 @@ export default function ListPage() {
                 </Button>
                 {(() => {
                   const summary = summByMedia[it.media_id];
+                  const hasIssues = summary && Object.values(summary).some(sev =>
+                    (sev?.open && sev.open > 0) || (sev?.resolved && sev.resolved > 0) || (sev?.ignored && sev.ignored > 0)
+                  );
+
+                  // Admin: Show "Verify All" and "Assign All" buttons
+                  if (isAdmin && hasIssues) {
+                    return (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="view-btn"
+                          onClick={() => handleBulkVerify(it.media_id)}
+                          disabled={bulkVerifying.has(it.media_id)}
+                          title="Verify all unverified detections"
+                        >
+                          {bulkVerifying.has(it.media_id) ? "Verifying..." : "Verify All"}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="view-btn"
+                          onClick={() => setAssignDialogMediaId(it.media_id)}
+                          disabled={bulkAssigning.has(it.media_id)}
+                          title="Assign all verified, unassigned detections"
+                        >
+                          {bulkAssigning.has(it.media_id) ? "Assigning..." : "Assign All"}
+                        </Button>
+                      </>
+                    );
+                  }
+
+                  // Authority: Show "Resolve All" button
                   const hasOpenIssues = summary && Object.values(summary).some(sev => sev?.open && sev.open > 0);
-                  return hasOpenIssues ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="view-btn"
-                      onClick={() => handleBulkResolve(it.media_id)}
-                      disabled={bulkResolving.has(it.media_id)}
-                      title="Mark all open detections as resolved"
-                    >
-                      {bulkResolving.has(it.media_id) ? "Resolving..." : "Resolve All"}
-                    </Button>
-                  ) : null;
+                  if (isAuthority && hasOpenIssues) {
+                    return (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="view-btn"
+                        onClick={() => handleBulkResolve(it.media_id)}
+                        disabled={bulkResolving.has(it.media_id)}
+                        title="Mark all open detections as resolved"
+                      >
+                        {bulkResolving.has(it.media_id) ? "Resolving..." : "Resolve All"}
+                      </Button>
+                    );
+                  }
+
+                  return null;
                 })()}
               </footer>
             </article>
@@ -640,19 +736,56 @@ export default function ListPage() {
                       </Button>
                       {(() => {
                         const summary = summByMedia[it.media_id];
+                        const hasIssues = summary && Object.values(summary).some(sev =>
+                          (sev?.open && sev.open > 0) || (sev?.resolved && sev.resolved > 0) || (sev?.ignored && sev.ignored > 0)
+                        );
+
+                        // Admin: Show "Verify All" and "Assign All" buttons
+                        if (isAdmin && hasIssues) {
+                          return (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="view-btn"
+                                onClick={() => handleBulkVerify(it.media_id)}
+                                disabled={bulkVerifying.has(it.media_id)}
+                                title="Verify all unverified detections"
+                              >
+                                {bulkVerifying.has(it.media_id) ? "Verifying..." : "Verify All"}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="view-btn"
+                                onClick={() => setAssignDialogMediaId(it.media_id)}
+                                disabled={bulkAssigning.has(it.media_id)}
+                                title="Assign all verified, unassigned detections"
+                              >
+                                {bulkAssigning.has(it.media_id) ? "Assigning..." : "Assign All"}
+                              </Button>
+                            </>
+                          );
+                        }
+
+                        // Authority: Show "Resolve All" button
                         const hasOpenIssues = summary && Object.values(summary).some(sev => sev?.open && sev.open > 0);
-                        return hasOpenIssues ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="view-btn"
-                            onClick={() => handleBulkResolve(it.media_id)}
-                            disabled={bulkResolving.has(it.media_id)}
-                            title="Mark all open detections as resolved"
-                          >
-                            {bulkResolving.has(it.media_id) ? "Resolving..." : "Resolve All"}
-                          </Button>
-                        ) : null;
+                        if (isAuthority && hasOpenIssues) {
+                          return (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="view-btn"
+                              onClick={() => handleBulkResolve(it.media_id)}
+                              disabled={bulkResolving.has(it.media_id)}
+                              title="Mark all open detections as resolved"
+                            >
+                              {bulkResolving.has(it.media_id) ? "Resolving..." : "Resolve All"}
+                            </Button>
+                          );
+                        }
+
+                        return null;
                       })()}
                     </div>
                   </td>
@@ -729,6 +862,13 @@ export default function ListPage() {
       {modalProblem && (
         <IssueModal problem={modalProblem} onClose={handleCloseModal} />
       )}
+      {assignDialogMediaId !== null && (
+        <AssignAllDialog
+          mediaId={assignDialogMediaId}
+          onClose={() => setAssignDialogMediaId(null)}
+          onAssign={(username) => handleBulkAssign(assignDialogMediaId, username)}
+        />
+      )}
     </div>
   );
 }
@@ -766,5 +906,66 @@ function Th({
         </span>
       </span>
     </th>
+  );
+}
+
+function AssignAllDialog({
+  mediaId,
+  onClose,
+  onAssign,
+}: {
+  mediaId: number;
+  onClose: () => void;
+  onAssign: (username: string) => Promise<void>;
+}) {
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<Array<{ username: string; role: string }>>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const dq = useDebounced(q, 220);
+
+  useEffect(() => {
+    let cancel = false;
+    setErr(null);
+    if (!dq) { setResults([]); return; }
+    searchUsers(dq, 50, "authority")
+      .then((users) => { if (!cancel) setResults(users); })
+      .catch(() => { if (!cancel) setErr("Search failed"); });
+    return () => { cancel = true; };
+  }, [dq]);
+
+  return (
+    <>
+      <div className="assignOverlay" onClick={onClose} />
+      <div className="assignDialog" role="dialog" aria-modal="true" aria-labelledby="assignTitle">
+        <div className="assignHead">
+          <h3 id="assignTitle">Assign all detections for media #{mediaId}</h3>
+          <button className="iconX" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="assignBody">
+          <Input placeholder="Search username…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          {err && <div className="assignErr">{err}</div>}
+          <ul className="assignList">
+            {results.map((u) => (
+              <li key={u.username}>
+                <button
+                  className="assignRow"
+                  disabled={busy}
+                  onClick={async () => { setBusy(true); await onAssign(u.username); setBusy(false); }}
+                  title={`Assign to @${u.username}`}
+                >
+                  <span className="uName">@{u.username}</span>
+                  <span className="uRole">{u.role}</span>
+                </button>
+              </li>
+            ))}
+            {dq && results.length === 0 && !err && (<li className="assignEmpty">No matches</li>)}
+          </ul>
+        </div>
+        <div className="assignFoot">
+          <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </>
   );
 }

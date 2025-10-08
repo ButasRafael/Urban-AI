@@ -88,7 +88,10 @@ def test_user(db_session):
     """Create a test user"""
     user = UserModel(
         username="testuser",
+        email="testuser@test.com",
         hashed_password=get_password_hash("password123"),
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.user,
     )
     db_session.add(user)
@@ -467,9 +470,9 @@ class TestCascadingDeletes:
     def test_set_null_on_user_delete_for_assignments(self, db_session):
         """Test SET NULL behavior for assigned_to and verified_by"""
         # Create users
-        user1 = UserModel(username="user1", hashed_password="hash1", role=RoleEnum.user)
-        user2 = UserModel(username="user2", hashed_password="hash2", role=RoleEnum.user)
-        user3 = UserModel(username="user3", hashed_password="hash3", role=RoleEnum.user)
+        user1 = UserModel(username="user1", email="user1@test.com", hashed_password="hash1", email_verified=True, email_verification_token=None, role=RoleEnum.user)
+        user2 = UserModel(username="user2", email="user2@test.com", hashed_password="hash2", email_verified=True, email_verification_token=None, role=RoleEnum.user)
+        user3 = UserModel(username="user3", email="user3@test.com", hashed_password="hash3", email_verified=True, email_verification_token=None, role=RoleEnum.user)
         db_session.add_all([user1, user2, user3])
         db_session.commit()
 

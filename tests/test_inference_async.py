@@ -126,7 +126,10 @@ def auth_headers(db_session):
     if not existing_user:
         user = UserModel(
             username=username,
+            email="test_user@test.com",
             hashed_password="hashed_password",
+            email_verified=True,
+            email_verification_token=None,
             role="user"
         )
         db_session.add(user)
@@ -146,7 +149,10 @@ def admin_headers(db_session):
     if not existing_user:
         user = UserModel(
             username=username,
+            email="test_admin@test.com",
             hashed_password="hashed_password",
+            email_verified=True,
+            email_verification_token=None,
             role="admin"
         )
         db_session.add(user)
