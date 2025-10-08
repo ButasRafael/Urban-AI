@@ -19,26 +19,26 @@ class Event:
 
 
 @dataclass
-class IssueCreatedEvent(Event):
-    """Event fired when a new issue is created"""
+class MediaCreatedEvent(Event):
+    """Event fired when new media is created with detections"""
     def __init__(
         self,
-        issue_id: int,
-        class_name: str,
-        severity: str,
-        description: Optional[str],
-        created_by: Optional[str],
+        media_id: int,
+        num_detections: int,
+        created_by: str,
+        media_type: str,
+        max_severity: str = "medium",
         timestamp: Optional[datetime] = None
     ):
         super().__init__(
-            event_type=EventType.issue_created,
+            event_type=EventType.media_created,
             timestamp=timestamp or datetime.now(timezone.utc),
             data={
-                "issue_id": issue_id,
-                "class_name": class_name,
-                "severity": severity,
-                "description": description,
+                "media_id": media_id,
+                "num_detections": num_detections,
                 "created_by": created_by,
+                "media_type": media_type,
+                "severity": max_severity,  # Add severity for notification filtering
             }
         )
 
@@ -54,6 +54,7 @@ class IssueStatusChangedEvent(Event):
         changed_by: str,
         severity: str,
         class_name: str,
+        media_id: Optional[int] = None,
         timestamp: Optional[datetime] = None
     ):
         super().__init__(
@@ -66,6 +67,7 @@ class IssueStatusChangedEvent(Event):
                 "changed_by": changed_by,
                 "severity": severity,
                 "class_name": class_name,
+                "media_id": media_id,
             }
         )
 
@@ -80,6 +82,7 @@ class IssueAssignedEvent(Event):
         assigned_by: str,
         severity: str,
         class_name: str,
+        media_id: Optional[int] = None,
         timestamp: Optional[datetime] = None
     ):
         super().__init__(
@@ -91,6 +94,7 @@ class IssueAssignedEvent(Event):
                 "assigned_by": assigned_by,
                 "severity": severity,
                 "class_name": class_name,
+                "media_id": media_id,
             }
         )
 
@@ -105,6 +109,7 @@ class IssueSeverityChangedEvent(Event):
         new_severity: str,
         changed_by: str,
         class_name: str,
+        media_id: Optional[int] = None,
         timestamp: Optional[datetime] = None
     ):
         super().__init__(
@@ -116,6 +121,7 @@ class IssueSeverityChangedEvent(Event):
                 "new_severity": new_severity,
                 "changed_by": changed_by,
                 "class_name": class_name,
+                "media_id": media_id,
             }
         )
 
@@ -129,6 +135,7 @@ class IssueVerifiedEvent(Event):
         verified_by: str,
         severity: str,
         class_name: str,
+        media_id: Optional[int] = None,
         timestamp: Optional[datetime] = None
     ):
         super().__init__(
@@ -139,5 +146,6 @@ class IssueVerifiedEvent(Event):
                 "verified_by": verified_by,
                 "severity": severity,
                 "class_name": class_name,
+                "media_id": media_id,
             }
         )

@@ -2,6 +2,10 @@ import {NavLink, Outlet, useLocation} from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import '../styles/shell.css';
+import { cleanupNotifications, initializeNotifications, areNotificationsEnabled } from '../lib/notifications';
+import { getNotificationPreferences } from '../api/notifications';
+import { useNotifications } from '../contexts/NotificationContext';
+import { logout } from '../api/auth';
 
 type Role = 'user' | 'authority' | 'admin';
 
@@ -24,6 +28,8 @@ export default function Layout({ children }: LayoutProps) {
     if (saved === 'light' || saved === 'dark') return saved;
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
+  const { unreadCount } = useNotifications();
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
@@ -46,6 +52,10 @@ export default function Layout({ children }: LayoutProps) {
     } else {
       base.push({ to: '/chat', label: 'Chat', icon: <IconChat /> });
     }
+    // Add notifications for all authenticated users
+    base.push({ to: '/notifications', label: 'Notifications', icon: <IconBell /> });
+    // Add settings for all authenticated users
+    base.push({ to: '/settings/notifications', label: 'Settings', icon: <IconSettings /> });
     return base;
   }, [isAuthed, role]);
 
@@ -53,6 +63,32 @@ export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   useEffect(() => { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); }, [collapsed]);
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Initialize push notifications on app load if user is logged in and has them enabled
+  useEffect(() => {
+    if (!isAuthed) return;
+
+    async function setupNotifications() {
+      try {
+        // Check if browser permission is granted
+        if (!areNotificationsEnabled()) return;
+
+        // Get user preferences
+        const prefs = await getNotificationPreferences();
+
+        // If push is enabled in preferences, initialize FCM
+        if (prefs.push_enabled) {
+          await initializeNotifications();
+          console.log('Push notifications re-initialized');
+        }
+      } catch (error) {
+        console.error('Failed to initialize notifications:', error);
+      }
+    }
+
+    setupNotifications();
+  }, [isAuthed]);
+
   const isMap = location.pathname.startsWith('/map');
   const displayName = getDisplayName(user);
   const initials = getInitials(displayName);
@@ -92,6 +128,9 @@ export default function Layout({ children }: LayoutProps) {
                     >
                       <span className="nav-icon">{icon}</span>
                       {!collapsed && <span className="nav-label">{label}</span>}
+                      {to === '/notifications' && unreadCount > 0 && (
+                        <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                      )}
                       <span className="active-pill" aria-hidden/>
                     </NavLink>
                 ))}
@@ -123,9 +162,20 @@ export default function Layout({ children }: LayoutProps) {
 
                 <button
                     className="btn-logout"
-                    onClick={() => {
-                      localStorage.clear();
-                      window.location.href = '/login';
+                    onClick={async () => {
+                      try {
+                        // Clean up notifications before logging out
+                        await cleanupNotifications();
+                        // Call backend logout endpoint
+                        await logout();
+                        // Redirect to login
+                        window.location.href = '/login';
+                      } catch (error) {
+                        console.error('Logout failed:', error);
+                        // Fallback: clear localStorage and redirect anyway
+                        localStorage.clear();
+                        window.location.href = '/login';
+                      }
                     }}
                 >
                   <IconLogout/>
@@ -162,11 +212,27 @@ function IconChart() {
 function IconMap()   { return (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/><path d="M9 3v15"/><path d="M15 6v15"/></svg>); }
 function IconList()  { return (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="4" cy="18" r="1.5"/></svg>); }
 function IconChat()  { return (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V6a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>); }
+function IconBell()  { return (<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>); }
 function IconIssues() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M9 12h6M9 16h6M9 8h6" />
       <path d="M4 6h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+function IconSettings() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
     </svg>
   );
 }

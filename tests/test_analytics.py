@@ -95,7 +95,10 @@ def admin_user(db_session):
     """Create an admin user for testing"""
     user = UserModel(
         username="admin_analytics",
+        email="admin_analytics@test.com",
         hashed_password=get_password_hash("adminpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.admin
     )
     db_session.add(user)
@@ -109,7 +112,10 @@ def regular_user(db_session):
     """Create a regular user for testing"""
     user = UserModel(
         username="user_analytics",
+        email="user_analytics@test.com",
         hashed_password=get_password_hash("userpass123"),
+        email_verified=True,
+        email_verification_token=None,
         role=RoleEnum.user
     )
     db_session.add(user)

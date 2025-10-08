@@ -17,8 +17,8 @@ dist/
 build/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -140,6 +140,7 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
+nul
 
 # IDEs and Editors
 .idea/
@@ -251,6 +252,15 @@ temp/
 *.cer
 private_key.txt
 secret_token.txt
+
+# Firebase credentials
+firebase-credentials.json
+*firebase-credentials*.json
+
+# Firebase cache and build artifacts
+.firebase/
+.firebaserc.local
+dev-dist/
 
 # Package managers
 pnpm-lock.yaml

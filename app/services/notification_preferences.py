@@ -1,6 +1,7 @@
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime, time, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from app.models.notification import NotificationPreference, EventType, NotificationChannel
 
@@ -41,16 +42,14 @@ class NotificationPreferenceService:
                 email_enabled=True,
                 push_enabled=True,
                 event_preferences={
-                    "issue_created": {"email": True, "push": True},
                     "issue_status_changed": {"email": True, "push": True},
                     "issue_assigned": {"email": True, "push": True},
                     "issue_severity_changed": {"email": True, "push": True},
                     "issue_verified": {"email": True, "push": True},
+                    "media_created": {"email": True, "push": True},
                 },
                 min_severity="low",
-                quiet_hours={"enabled": False},
-                digest_enabled=False,
-                digest_frequency="immediate"
+                quiet_hours={"enabled": False}
             )
             db.add(prefs)
             db.commit()
@@ -128,13 +127,21 @@ class NotificationPreferenceService:
             start_time = time(start_hour, start_minute)
             end_time = time(end_hour, end_minute)
 
-            # Get current time (in UTC or user's timezone if specified)
-            # TODO: Support user timezones
-            current_time = datetime.now(timezone.utc).time()
+            # Get user's timezone, default to UTC if not specified
+            user_timezone = quiet_hours.get("timezone", "UTC")
+            try:
+                tz = ZoneInfo(user_timezone)
+            except Exception as tz_error:
+                logger.warning(f"Invalid timezone '{user_timezone}', falling back to UTC: {tz_error}")
+                tz = ZoneInfo("UTC")
+
+            # Get current time in user's timezone
+            current_dt = datetime.now(tz)
+            current_time = current_dt.time()
 
             # Check if current time is within quiet hours
             if start_time <= end_time:
-                # Normal case: e.g., 22:00 to 08:00 next day
+                # Normal case: e.g., 10:00 to 18:00
                 return start_time <= current_time <= end_time
             else:
                 # Wraps around midnight: e.g., 22:00 to 08:00

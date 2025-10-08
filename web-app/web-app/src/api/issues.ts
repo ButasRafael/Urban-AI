@@ -26,6 +26,7 @@ export interface Issue {
   assigned_to?: string | null;
   verified_by?: string | null;
   verified_at?: string | null;
+  track_thumbnail_url?: string | null;
 }
 
 export type IssuesSummary =
@@ -61,18 +62,6 @@ export async function issuesSummaryByMedia(mediaIds: number[]) {  // <-- NEW
   return data ?? {};
 }
 
-export async function issuesSummary(media_type?: MediaType) {
-  const q = new URLSearchParams();
-  if (media_type) q.set("media_type", media_type);
-  const { data } = await client.get<IssuesSummary>("/problems/issues/summary", { params: q });
-  return data ?? {};
-}
-
-export async function getIssue(id: number) {
-  const { data } = await client.get(`/issues/${id}`);
-  return data as Issue;
-}
-
 export async function updateIssueStatus(id: number, status: IssueStatus) {
   const { data } = await client.patch(`/issues/${id}/status`, { status });
   return data as { id: number; old_status?: IssueStatus; new_status?: IssueStatus; resolved_at?: string | null };
@@ -106,22 +95,27 @@ export async function bulkUpdateStatus(mediaId: number, status: "resolved" | "ig
   };
 }
 
-import type { Problem } from "./problems";
+export async function bulkAssign(mediaId: number, assignedTo: string) {
+  const { data } = await client.patch("/problems/issues/bulk_assign", {
+    media_id: mediaId,
+    assigned_to: assignedTo
+  });
+  return data as {
+    assigned_count: number;
+    media_id: number;
+    assigned_to: string;
+    message: string;
+  };
+}
 
-export function issueToProblemLike(i: Issue): Problem {
-  return {
-    media_id: i.media_id,
-    address: i.address ?? undefined,
-    latitude: i.latitude ?? undefined,
-    longitude: i.longitude ?? undefined,
-    user_username: "", // not present on IssueOut
-    media_type: i.annotated_image_url ? "image" : "video",
-    annotated_image_url: i.annotated_image_url ?? undefined,
-    annotated_video_url: i.annotated_video_url ?? undefined,
-    created_at: i.created_at,
-    predicted_classes: [i.class_name],
-    descriptions: i.description ? [i.description] : [],
-    solutions: i.solution ? [i.solution] : [],
-
+export async function bulkVerify(mediaId: number) {
+  const { data } = await client.patch("/problems/issues/bulk_verify", {
+    media_id: mediaId
+  });
+  return data as {
+    verified_count: number;
+    media_id: number;
+    verified_by: string;
+    message: string;
   };
 }

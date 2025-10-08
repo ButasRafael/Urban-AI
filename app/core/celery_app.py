@@ -24,8 +24,8 @@ celery_app.conf.task_routes = {
     'tasks.process_image':      {'queue': 'gpu', 'routing_key': 'gpu.inference'},
     'tasks.process_video':      {'queue': 'gpu', 'routing_key': 'gpu.inference'},
     'tasks.process_embeddings': {'queue': 'cpu', 'routing_key': 'cpu.embeddings'},
-    'tasks.cleanup_temp_files': {'queue': 'cpu', 'routing_key': 'cpu.maintenance'},
     'tasks.process_notification_event': {'queue': 'notifications', 'routing_key': 'notifications.event'},
+    'tasks.retry_pending_notifications': {'queue': 'notifications', 'routing_key': 'notifications.retry'},
 }
 
 celery_app.conf.update(
@@ -34,13 +34,6 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    # Celery Beat schedule for periodic tasks
-    beat_schedule={
-        'cleanup-temp-files': {
-            'task': 'tasks.cleanup_temp_files',
-            'schedule': 604800.0,  # Run once a week (604800 seconds = 7 days)
-        },
-    },
     result_expires=1800,  # Reduced from 3600 to save memory
     task_track_started=True,
     task_send_sent_event=True,
@@ -75,4 +68,10 @@ celery_app.conf.update(
     worker_task_log_format="[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s",
     worker_pool_restarts=True,
     worker_max_memory_per_child=8000000,
+    beat_schedule={
+        'retry-pending-notifications': {
+            'task': 'tasks.retry_pending_notifications',
+            'schedule': 900.0,  # Run every 15 minutes (900 seconds)
+        },
+    },
 )

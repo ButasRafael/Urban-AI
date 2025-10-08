@@ -17,6 +17,7 @@ class NotificationTemplateService:
         db: Session,
         event_type: EventType,
         channel: NotificationChannel,
+        user_role: Optional[str] = None,
         language: str = "en"
     ) -> Optional[NotificationTemplate]:
         """
@@ -26,14 +27,30 @@ class NotificationTemplateService:
             db: Database session
             event_type: Type of event
             channel: Notification channel
+            user_role: User role (user, admin, authority) - will try role-specific template first, then fallback to general
             language: Template language (default: "en")
 
         Returns:
             NotificationTemplate if found, None otherwise
         """
+        # Try to get role-specific template first
+        if user_role:
+            template = db.query(NotificationTemplate).filter(
+                NotificationTemplate.event_type == event_type,
+                NotificationTemplate.channel == channel,
+                NotificationTemplate.user_role == user_role,
+                NotificationTemplate.language == language,
+                NotificationTemplate.is_active == True
+            ).order_by(NotificationTemplate.version.desc()).first()
+
+            if template:
+                return template
+
+        # Fallback to general template (user_role is NULL)
         template = db.query(NotificationTemplate).filter(
             NotificationTemplate.event_type == event_type,
             NotificationTemplate.channel == channel,
+            NotificationTemplate.user_role == None,
             NotificationTemplate.language == language,
             NotificationTemplate.is_active == True
         ).order_by(NotificationTemplate.version.desc()).first()
@@ -84,27 +101,28 @@ class NotificationTemplateService:
             db: Database session
         """
         default_templates = [
-            # Email templates
+            # Email templates for admins/authorities
             {
-                "event_type": EventType.issue_created,
+                "event_type": EventType.media_created,
                 "channel": NotificationChannel.email,
-                "subject": "New Issue Created: {{ class_name }}",
+                "subject": "New Issues Detected - Urban AI",
                 "body": """
 Hello,
 
-A new issue has been created in the Urban AI system.
+New media has been processed and {{ num_detections }} issue(s) detected.
 
-Issue ID: {{ issue_id }}
-Type: {{ class_name }}
-Severity: {{ severity }}
-Description: {{ description }}
+Media ID: {{ media_id }}
+Media Type: {{ media_type }}
+Number of Detections: {{ num_detections }}
+Uploaded by: {{ created_by }}
 
-Please review this issue in the dashboard.
+View the issues at: {{ web_app_url }}/issues?media_id={{ media_id }}
 
 Best regards,
 Urban AI Team
                 """.strip(),
-                "variables": ["issue_id", "class_name", "severity", "description"]
+                "variables": ["media_id", "num_detections", "created_by", "media_type"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_status_changed,
@@ -126,7 +144,8 @@ View the issue in the dashboard for more details.
 Best regards,
 Urban AI Team
                 """.strip(),
-                "variables": ["issue_id", "class_name", "old_status", "new_status", "severity", "changed_by"]
+                "variables": ["issue_id", "class_name", "old_status", "new_status", "severity", "changed_by"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_assigned,
@@ -146,7 +165,8 @@ Please review and address this issue at your earliest convenience.
 Best regards,
 Urban AI Team
                 """.strip(),
-                "variables": ["issue_id", "class_name", "severity", "assigned_to", "assigned_by"]
+                "variables": ["issue_id", "class_name", "severity", "assigned_to", "assigned_by"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_severity_changed,
@@ -167,7 +187,8 @@ View the issue in the dashboard for more details.
 Best regards,
 Urban AI Team
                 """.strip(),
-                "variables": ["issue_id", "class_name", "old_severity", "new_severity", "changed_by"]
+                "variables": ["issue_id", "class_name", "old_severity", "new_severity", "changed_by"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_verified,
@@ -187,52 +208,173 @@ This issue is now ready for assignment.
 Best regards,
 Urban AI Team
                 """.strip(),
-                "variables": ["issue_id", "class_name", "severity", "verified_by"]
+                "variables": ["issue_id", "class_name", "severity", "verified_by"],
+                "user_role": None
             },
 
-            # Push notification templates
+            # Push notification templates (general)
             {
-                "event_type": EventType.issue_created,
+                "event_type": EventType.media_created,
                 "channel": NotificationChannel.push,
                 "subject": None,
-                "body": "New {{ severity }} severity issue: {{ class_name }} (#{{ issue_id }})",
-                "variables": ["issue_id", "class_name", "severity"]
+                "body": "New media created with {{ num_detections }} detection(s)",
+                "variables": ["media_id", "num_detections", "created_by", "media_type"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_status_changed,
                 "channel": NotificationChannel.push,
                 "subject": None,
                 "body": "Issue #{{ issue_id }} status changed: {{ old_status }} → {{ new_status }}",
-                "variables": ["issue_id", "old_status", "new_status"]
+                "variables": ["issue_id", "old_status", "new_status"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_assigned,
                 "channel": NotificationChannel.push,
                 "subject": None,
                 "body": "You've been assigned issue #{{ issue_id }}: {{ class_name }} ({{ severity }})",
-                "variables": ["issue_id", "class_name", "severity"]
+                "variables": ["issue_id", "class_name", "severity"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_severity_changed,
                 "channel": NotificationChannel.push,
                 "subject": None,
                 "body": "Issue #{{ issue_id }} severity changed: {{ old_severity }} → {{ new_severity }}",
-                "variables": ["issue_id", "old_severity", "new_severity"]
+                "variables": ["issue_id", "old_severity", "new_severity"],
+                "user_role": None
             },
             {
                 "event_type": EventType.issue_verified,
                 "channel": NotificationChannel.push,
                 "subject": None,
                 "body": "Issue #{{ issue_id }} verified by {{ verified_by }}",
-                "variables": ["issue_id", "verified_by"]
+                "variables": ["issue_id", "verified_by"],
+                "user_role": None
+            },
+
+            # USER-FRIENDLY EMAIL TEMPLATES FOR REGULAR USERS
+            {
+                "event_type": EventType.issue_status_changed,
+                "channel": NotificationChannel.email,
+                "subject": "Update on Your Report: {{ class_name }}",
+                "body": """
+Hi there!
+
+Good news! We have an update on the {{ class_name }} issue you reported.
+
+Your report has been {{ new_status }}.
+
+You can view the details and track progress in your dashboard.
+
+Thank you for helping keep our city clean and safe!
+
+Best regards,
+Urban AI Team
+                """.strip(),
+                "variables": ["class_name", "new_status"],
+                "user_role": "user"
+            },
+            {
+                "event_type": EventType.issue_assigned,
+                "channel": NotificationChannel.email,
+                "subject": "Your Report is Being Addressed!",
+                "body": """
+Great news!
+
+Your report about {{ class_name }} has been assigned to our team and is being actively worked on.
+
+We'll keep you updated on the progress!
+
+Thank you for being an engaged citizen and helping improve our community.
+
+Best regards,
+Urban AI Team
+                """.strip(),
+                "variables": ["class_name"],
+                "user_role": "user"
+            },
+            {
+                "event_type": EventType.issue_severity_changed,
+                "channel": NotificationChannel.email,
+                "subject": "Update on Your {{ class_name }} Report",
+                "body": """
+Hello!
+
+We've reviewed your report about {{ class_name }} and updated its priority level.
+
+This helps us address issues more effectively and ensure the most urgent matters get the attention they need.
+
+Thank you for your report!
+
+Best regards,
+Urban AI Team
+                """.strip(),
+                "variables": ["class_name"],
+                "user_role": "user"
+            },
+            {
+                "event_type": EventType.issue_verified,
+                "channel": NotificationChannel.email,
+                "subject": "Thank You! Your Report Has Been Verified",
+                "body": """
+Congratulations!
+
+Your report about {{ class_name }} has been verified by our team. This is an important step in getting the issue addressed.
+
+Thank you for taking the time to report this issue. Your contribution makes a real difference in keeping our community safe and well-maintained!
+
+We'll notify you when work begins on resolving it.
+
+Best regards,
+Urban AI Team
+                """.strip(),
+                "variables": ["class_name"],
+                "user_role": "user"
+            },
+
+            # USER-FRIENDLY PUSH TEMPLATES FOR REGULAR USERS
+            {
+                "event_type": EventType.issue_status_changed,
+                "channel": NotificationChannel.push,
+                "subject": None,
+                "body": "Update: Your {{ class_name }} report is now {{ new_status }}!",
+                "variables": ["class_name", "new_status"],
+                "user_role": "user"
+            },
+            {
+                "event_type": EventType.issue_assigned,
+                "channel": NotificationChannel.push,
+                "subject": None,
+                "body": "Good news! Your {{ class_name }} report is being worked on",
+                "variables": ["class_name"],
+                "user_role": "user"
+            },
+            {
+                "event_type": EventType.issue_severity_changed,
+                "channel": NotificationChannel.push,
+                "subject": None,
+                "body": "Your {{ class_name }} report priority has been updated",
+                "variables": ["class_name"],
+                "user_role": "user"
+            },
+            {
+                "event_type": EventType.issue_verified,
+                "channel": NotificationChannel.push,
+                "subject": None,
+                "body": "Thank you! Your {{ class_name }} report has been verified ✓",
+                "variables": ["class_name"],
+                "user_role": "user"
             },
         ]
 
         for template_data in default_templates:
-            # Check if template already exists
+            # Check if template already exists (check user_role too)
             existing = db.query(NotificationTemplate).filter(
                 NotificationTemplate.event_type == template_data["event_type"],
                 NotificationTemplate.channel == template_data["channel"],
+                NotificationTemplate.user_role == template_data.get("user_role"),
                 NotificationTemplate.language == "en"
             ).first()
 
@@ -243,6 +385,7 @@ Urban AI Team
                     subject=template_data["subject"],
                     body=template_data["body"],
                     variables=template_data["variables"],
+                    user_role=template_data.get("user_role"),
                     language="en",
                     version=1,
                     is_active=True

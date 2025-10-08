@@ -27,6 +27,12 @@ def anyio_backend():
 @pytest.fixture(scope="session", autouse=True)
 def prepare_db():
     """Create and cleanup test database tables with migrations"""
+    # Create required PostgreSQL extensions BEFORE creating tables
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent"))
+        conn.commit()
+
     # Create all tables
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -34,9 +40,6 @@ def prepare_db():
     # Apply Alembic migration changes that aren't in model definitions
     # This creates the tsv column for RAG full-text search
     with engine.connect() as conn:
-        # Create required PostgreSQL extensions
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent"))
 
         # Create immutable unaccent function
         conn.execute(text("""

@@ -1,0 +1,342 @@
+/* Backdrop overlay with radial gradient */
+.notification-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background:
+    radial-gradient(1200px 800px at 20% 10%, rgba(14,124,100,.12), transparent 60%),
+    var(--overlay);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity .25s ease;
+  pointer-events: none;
+}
+
+.notification-prompt-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Prompt card with gradient border */
+.notification-prompt-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateY(6px) scale(.98);
+  z-index: 9999;
+  width: min(440px, calc(100vw - 32px));
+
+  /* Gradient border effect - matches auth-card */
+  background:
+    linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+    linear-gradient(135deg, var(--primary-300), var(--secondary-300)) border-box;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.25);
+
+  padding: var(--l);
+  opacity: 0;
+  transition: opacity .25s ease, transform .25s ease;
+  pointer-events: none;
+}
+
+.notification-prompt-card.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+/* Close button - matches theme-toggle style */
+.notification-prompt-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--secondary-100);
+  background: var(--surface-0);
+  color: var(--secondary-500);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform .08s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  padding: 0;
+  line-height: 0;
+}
+
+.notification-prompt-close:hover {
+  background: var(--primary-100);
+  border-color: var(--primary-300);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0,0,0,.10);
+}
+
+.notification-prompt-close:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Icon - primary teal circle */
+.notification-prompt-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--m);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-400), var(--primary-600));
+  color: #fff;
+  box-shadow:
+    0 12px 24px rgba(22,160,133,.25),
+    0 0 0 8px color-mix(in srgb, var(--primary-500) 12%, transparent);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      0 12px 24px rgba(22,160,133,.25),
+      0 0 0 8px color-mix(in srgb, var(--primary-500) 12%, transparent);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow:
+      0 14px 28px rgba(22,160,133,.3),
+      0 0 0 12px color-mix(in srgb, var(--primary-500) 18%, transparent);
+  }
+}
+
+/* Content */
+.notification-prompt-content {
+  text-align: center;
+  margin-bottom: var(--l);
+}
+
+.notification-prompt-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--secondary-500);
+  margin: 0 0 8px;
+  letter-spacing: .2px;
+}
+
+.notification-prompt-description {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--secondary-700);
+  opacity: .9;
+  margin: 0 0 var(--m);
+}
+
+/* Features list - matches auth feature-list */
+.notification-prompt-features {
+  display: grid;
+  gap: 8px;
+  margin: var(--m) 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.notification-prompt-features li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--on-surface);
+  padding: 8px 12px;
+  background: var(--surface-100);
+  border-radius: 10px;
+  border: 1px solid var(--surface-200);
+  transition: background .2s, border-color .2s;
+}
+
+.notification-prompt-features li:hover {
+  background: var(--primary-100);
+  border-color: var(--primary-300);
+}
+
+.notification-prompt-features li svg {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-500);
+  flex-shrink: 0;
+}
+
+/* Actions */
+.notification-prompt-actions {
+  display: grid;
+  gap: 10px;
+  margin-bottom: var(--m);
+}
+
+.notification-prompt-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .2s ease, background .2s ease;
+}
+
+.notification-prompt-actions .btn:active {
+  transform: translateY(1px);
+}
+
+.notification-prompt-actions .btn-primary {
+  background: var(--primary-500);
+  color: var(--primary-contrast);
+}
+
+.notification-prompt-actions .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(22,160,133,.22);
+}
+
+.notification-prompt-actions .btn-primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-md);
+}
+
+.notification-prompt-actions .btn-ghost {
+  background: transparent;
+  color: var(--secondary-700);
+  border-color: var(--secondary-300);
+}
+
+.notification-prompt-actions .btn-ghost:hover {
+  background: var(--surface-100);
+  border-color: var(--secondary-400);
+}
+
+.notification-prompt-actions .btn-block {
+  width: 100%;
+}
+
+/* Privacy note */
+.notification-prompt-privacy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.notification-prompt-privacy svg {
+  flex-shrink: 0;
+  opacity: .7;
+}
+
+/* Dark mode support */
+:root.dark .notification-prompt-card {
+  background:
+    linear-gradient(var(--surface-100), var(--surface-100)) padding-box,
+    linear-gradient(135deg, #0E7C64, #2C3E50) border-box;
+  box-shadow: 0 24px 60px rgba(0,0,0,.55);
+}
+
+:root.dark .notification-prompt-close {
+  background: #0b1220;
+  border-color: #1f2c38;
+  color: #dbeafe;
+}
+
+:root.dark .notification-prompt-close:hover {
+  background: #0e1628;
+  border-color: #2a3a4a;
+}
+
+:root.dark .notification-prompt-title {
+  color: var(--secondary-900);
+}
+
+:root.dark .notification-prompt-description {
+  color: var(--secondary-700);
+}
+
+:root.dark .notification-prompt-features li {
+  background: var(--surface-200);
+  border-color: var(--surface-300);
+}
+
+:root.dark .notification-prompt-features li:hover {
+  background: #0e1628;
+  border-color: #2a3a4a;
+}
+
+:root.dark .notification-prompt-actions .btn-ghost {
+  color: var(--secondary-700);
+  border-color: #2a3a4a;
+}
+
+:root.dark .notification-prompt-actions .btn-ghost:hover {
+  background: #0e1628;
+  border-color: #2a3a4a;
+}
+
+:root.dark .notification-prompt-actions .btn-primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 88%, #000 12%),
+    color-mix(in srgb, var(--primary-300) 92%, #000 8%)
+  );
+  border-color: color-mix(in srgb, var(--primary-300) 85%, #000 15%);
+  color: #E8F6F3;
+}
+
+:root.dark .notification-prompt-actions .btn-primary:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-400) 90%, #000 10%),
+    color-mix(in srgb, var(--primary-300) 96%, #000 4%)
+  );
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .notification-prompt-card,
+  .notification-prompt-overlay {
+    transition: opacity .15s ease;
+  }
+
+  .notification-prompt-card.visible {
+    transform: translate(-50%, -50%);
+  }
+
+  .notification-prompt-icon {
+    animation: none;
+  }
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .notification-prompt-card {
+    width: calc(100vw - 24px);
+    padding: var(--m);
+  }
+
+  .notification-prompt-title {
+    font-size: 20px;
+  }
+
+  .notification-prompt-icon {
+    width: 56px;
+    height: 56px;
+  }
+
+  .notification-prompt-icon svg {
+    width: 28px;
+    height: 28px;
+  }
+}

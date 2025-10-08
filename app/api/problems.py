@@ -6,7 +6,7 @@ from sqlalchemy import desc, func
 from typing import List, Optional, Literal
 
 from app.core.database import get_db
-from app.core.security import require_roles
+from app.core.security import require_roles, get_current_user
 from app.core.datetime_utils import format_datetime_iso_ro
 from app.models import media as dbm
 from app.models.schemas_portal import ProblemOut
@@ -228,6 +228,7 @@ class BulkUpdateRequest(BaseModel):
 def bulk_update_status(
     request: BulkUpdateRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     # Get all open detections for the media
     detections = (
@@ -240,23 +241,38 @@ def bulk_update_status(
         )
         .all()
     )
-    
+
     if not detections:
         return {"updated_count": 0, "message": "No open detections found for this media"}
-    
+
     # Update all detections
     updated_count = 0
     new_status = dbm.IssueStatus(request.status)
-    
+
     for detection in detections:
         detection.status = new_status
         if new_status == dbm.IssueStatus.resolved:
             from datetime import datetime, timezone
             detection.resolved_at = datetime.now(timezone.utc)
         updated_count += 1
-    
+
     db.commit()
-    
+
+    # Publish events for all status changes
+    from app.services.event_helpers import create_issue_status_changed_event
+    from app.services.event_publisher import publish_event
+    for detection in detections:
+        event = create_issue_status_changed_event(
+            issue_id=detection.id,
+            old_status="open",
+            new_status=request.status,
+            changed_by=current_user.username,
+            severity=detection.severity.value,
+            class_name=detection.class_name,
+            media_id=request.media_id
+        )
+        publish_event(event)
+
     return {
         "updated_count": updated_count,
         "media_id": request.media_id,
@@ -291,4 +307,127 @@ def issues_summary_by_media(
         out[media_id][sev_key][st_key] += int(c)
 
     return out
+
+class BulkAssignRequest(BaseModel):
+    media_id: int
+    assigned_to: str
+
+@router.patch("/issues/bulk_assign", dependencies=[require_roles("admin")])
+def bulk_assign_issues(
+    request: BulkAssignRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """Bulk assign all verified, unassigned detections for a media to an authority user (admin-only)"""
+    from app.models.user import User, RoleEnum
+    from fastapi import HTTPException
+
+    # Verify the assignee exists and is an authority
+    assignee = db.query(User).filter(User.username == request.assigned_to).first()
+    if not assignee:
+        raise HTTPException(404, f"User '{request.assigned_to}' not found")
+    if assignee.role != RoleEnum.authority:
+        raise HTTPException(409, "Can only assign to authority users")
+
+    # Get all verified, unassigned detections for the media
+    detections = (
+        db.query(dbm.Detection)
+        .join(dbm.Frame, dbm.Frame.id == dbm.Detection.frame_id)
+        .join(dbm.Media, dbm.Media.id == dbm.Frame.media_id)
+        .filter(
+            dbm.Media.id == request.media_id,
+            dbm.Detection.verified_at.isnot(None),
+            dbm.Detection.assigned_to.is_(None)
+        )
+        .all()
+    )
+
+    if not detections:
+        return {"assigned_count": 0, "message": "No verified, unassigned detections found for this media"}
+
+    # Assign all detections
+    assigned_count = 0
+    for detection in detections:
+        detection.assigned_to = request.assigned_to
+        assigned_count += 1
+
+    db.commit()
+
+    # Publish events for all assigned detections
+    from app.services.event_helpers import create_issue_assigned_event
+    from app.services.event_publisher import publish_event
+    for detection in detections:
+        event = create_issue_assigned_event(
+            issue_id=detection.id,
+            assigned_to=request.assigned_to,
+            assigned_by=current_user.username,
+            severity=detection.severity.value,
+            class_name=detection.class_name,
+            media_id=request.media_id
+        )
+        publish_event(event)
+
+    return {
+        "assigned_count": assigned_count,
+        "media_id": request.media_id,
+        "assigned_to": request.assigned_to,
+        "message": f"Assigned {assigned_count} detection(s) to {request.assigned_to}"
+    }
+
+class BulkVerifyRequest(BaseModel):
+    media_id: int
+
+@router.patch("/issues/bulk_verify", dependencies=[require_roles("admin")])
+def bulk_verify_issues(
+    request: BulkVerifyRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """Bulk verify all unverified detections for a media (admin-only)"""
+    from datetime import datetime, timezone
+
+    # Get all unverified detections for the media
+    detections = (
+        db.query(dbm.Detection)
+        .join(dbm.Frame, dbm.Frame.id == dbm.Detection.frame_id)
+        .join(dbm.Media, dbm.Media.id == dbm.Frame.media_id)
+        .filter(
+            dbm.Media.id == request.media_id,
+            dbm.Detection.verified_at.is_(None)
+        )
+        .all()
+    )
+
+    if not detections:
+        return {"verified_count": 0, "message": "No unverified detections found for this media"}
+
+    # Verify all detections
+    verified_count = 0
+    now = datetime.now(timezone.utc)
+    for detection in detections:
+        detection.verified_by = current_user.username
+        detection.verified_at = now
+        verified_count += 1
+
+    db.commit()
+
+    # Publish events for all verified detections
+    from app.services.event_helpers import create_issue_verified_event
+    from app.services.event_publisher import publish_event
+    for detection in detections:
+        event = create_issue_verified_event(
+            issue_id=detection.id,
+            verified_by=current_user.username,
+            severity=detection.severity.value,
+            class_name=detection.class_name,
+            media_id=request.media_id
+        )
+        publish_event(event)
+
+    return {
+        "verified_count": verified_count,
+        "media_id": request.media_id,
+        "verified_by": current_user.username,
+        "message": f"Verified {verified_count} detection(s)"
+    }
 

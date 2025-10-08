@@ -8,8 +8,9 @@ export default {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
-    userInterfaceStyle: "light",
+    userInterfaceStyle: "automatic",
     newArchEnabled: true,
+    scheme: "urbanai",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -32,6 +33,17 @@ export default {
           apiKey: process.env.GOOGLE_API_KEY,
         },
       },
+      intentFilters: [
+        {
+          action: "VIEW",
+          data: [
+            {
+              scheme: "urbanai",
+            },
+          ],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
     },
     web: {
       favicon: "./assets/favicon.png",

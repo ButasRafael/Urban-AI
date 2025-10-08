@@ -23,8 +23,6 @@ class UpdatePreferencesRequest(BaseModel):
     event_preferences: Optional[Dict[str, Dict[str, bool]]] = None
     min_severity: Optional[str] = None
     quiet_hours: Optional[Dict[str, Any]] = None
-    digest_enabled: Optional[bool] = None
-    digest_frequency: Optional[str] = None
 
 
 class UpdateFCMTokenRequest(BaseModel):
@@ -49,8 +47,6 @@ def get_preferences(
         "event_preferences": prefs.event_preferences,
         "min_severity": prefs.min_severity,
         "quiet_hours": prefs.quiet_hours,
-        "digest_enabled": prefs.digest_enabled,
-        "digest_frequency": prefs.digest_frequency,
         "has_fcm_token": bool(prefs.fcm_token),
     }
 
@@ -84,14 +80,6 @@ def update_preferences(
     if body.quiet_hours is not None:
         prefs.quiet_hours = body.quiet_hours
 
-    if body.digest_enabled is not None:
-        prefs.digest_enabled = body.digest_enabled
-
-    if body.digest_frequency is not None:
-        if body.digest_frequency not in ["immediate", "hourly", "daily"]:
-            raise HTTPException(400, "Invalid digest frequency. Must be 'immediate', 'hourly', or 'daily'")
-        prefs.digest_frequency = body.digest_frequency
-
     db.commit()
     db.refresh(prefs)
 
@@ -101,8 +89,6 @@ def update_preferences(
         "event_preferences": prefs.event_preferences,
         "min_severity": prefs.min_severity,
         "quiet_hours": prefs.quiet_hours,
-        "digest_enabled": prefs.digest_enabled,
-        "digest_frequency": prefs.digest_frequency,
         "has_fcm_token": bool(prefs.fcm_token),
     }
 

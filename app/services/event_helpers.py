@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import datetime, timezone
 from app.services.events import (
-    IssueCreatedEvent,
+    MediaCreatedEvent,
     IssueStatusChangedEvent,
     IssueAssignedEvent,
     IssueSeverityChangedEvent,
@@ -10,20 +10,20 @@ from app.services.events import (
 )
 
 
-def create_issue_created_event(
-    issue_id: int,
-    class_name: str,
-    severity: str,
-    description: Optional[str] = None,
-    created_by: Optional[str] = None
-) -> IssueCreatedEvent:
-    """Helper to create an IssueCreatedEvent"""
-    return IssueCreatedEvent(
-        issue_id=issue_id,
-        class_name=class_name,
-        severity=severity,
-        description=description,
+def create_media_created_event(
+    media_id: int,
+    num_detections: int,
+    created_by: str,
+    media_type: str,
+    max_severity: str = "medium"
+) -> MediaCreatedEvent:
+    """Helper to create a MediaCreatedEvent"""
+    return MediaCreatedEvent(
+        media_id=media_id,
+        num_detections=num_detections,
         created_by=created_by,
+        media_type=media_type,
+        max_severity=max_severity,
         timestamp=datetime.now(timezone.utc)
     )
 
@@ -34,7 +34,8 @@ def create_issue_status_changed_event(
     new_status: str,
     changed_by: str,
     severity: str,
-    class_name: str
+    class_name: str,
+    media_id: Optional[int] = None
 ) -> IssueStatusChangedEvent:
     """Helper to create an IssueStatusChangedEvent"""
     return IssueStatusChangedEvent(
@@ -44,6 +45,7 @@ def create_issue_status_changed_event(
         changed_by=changed_by,
         severity=severity,
         class_name=class_name,
+        media_id=media_id,
         timestamp=datetime.now(timezone.utc)
     )
 
@@ -53,7 +55,8 @@ def create_issue_assigned_event(
     assigned_to: str,
     assigned_by: str,
     severity: str,
-    class_name: str
+    class_name: str,
+    media_id: Optional[int] = None
 ) -> IssueAssignedEvent:
     """Helper to create an IssueAssignedEvent"""
     return IssueAssignedEvent(
@@ -62,6 +65,7 @@ def create_issue_assigned_event(
         assigned_by=assigned_by,
         severity=severity,
         class_name=class_name,
+        media_id=media_id,
         timestamp=datetime.now(timezone.utc)
     )
 
@@ -71,7 +75,8 @@ def create_issue_severity_changed_event(
     old_severity: str,
     new_severity: str,
     changed_by: str,
-    class_name: str
+    class_name: str,
+    media_id: Optional[int] = None
 ) -> IssueSeverityChangedEvent:
     """Helper to create an IssueSeverityChangedEvent"""
     return IssueSeverityChangedEvent(
@@ -80,6 +85,7 @@ def create_issue_severity_changed_event(
         new_severity=new_severity,
         changed_by=changed_by,
         class_name=class_name,
+        media_id=media_id,
         timestamp=datetime.now(timezone.utc)
     )
 
@@ -88,7 +94,8 @@ def create_issue_verified_event(
     issue_id: int,
     verified_by: str,
     severity: str,
-    class_name: str
+    class_name: str,
+    media_id: Optional[int] = None
 ) -> IssueVerifiedEvent:
     """Helper to create an IssueVerifiedEvent"""
     return IssueVerifiedEvent(
@@ -96,5 +103,6 @@ def create_issue_verified_event(
         verified_by=verified_by,
         severity=severity,
         class_name=class_name,
+        media_id=media_id,
         timestamp=datetime.now(timezone.utc)
     )

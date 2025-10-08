@@ -36,6 +36,11 @@ coverage/
 # Build files
 build/
 
+# Firebase
+.firebase/
+.firebaserc.local
+dev-dist/
+
 # Package lock files (keep one, ignore others)
 yarn.lock
 package-lock.json

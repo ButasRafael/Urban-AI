@@ -18,12 +18,14 @@ class UserOut(BaseModel):
 
 @router.get("", response_model=List[UserOut])
 def search_users(
-    q: str = Query(..., min_length=1, description="Search by username (substring)"),
+    q: str = Query("", description="Search by username (substring, empty for all)"),
     limit: int = Query(8, ge=1, le=50),
     role: Optional[Literal["user", "authority", "admin"]] = Query(None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(User).filter(User.username.ilike(f"%{q}%"))
+    query = db.query(User)
+    if q:  # Only filter by username if q is provided
+        query = query.filter(User.username.ilike(f"%{q}%"))
     if role:
         query = query.filter(User.role == role)
     rows = query.order_by(User.username.asc()).limit(limit).all()

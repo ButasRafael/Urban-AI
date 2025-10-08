@@ -14,6 +14,7 @@ from app.core.database import SessionLocal
 from app.models import media as dbm
 from app.models.user import User  # Import User model to register table
 from app.services import inference as svc
+from app.core.validation import load_image_with_fallback
 from app.services.embedding_worker import process_media_embeddings
 from app.core.redis_pool import (
     send_websocket_update_safe,
@@ -196,7 +197,8 @@ def process_image_task(self, media_id: int, file_path: str, use_sam: bool = True
 
     try:
         # Load and process image first (before DB operations)
-        img = cv2.imread(file_path)
+        from pathlib import Path
+        img = load_image_with_fallback(Path(file_path))
         if img is None:
             raise ValueError(f"Could not decode image from {file_path}")
 
@@ -284,6 +286,37 @@ def process_image_task(self, media_id: int, file_path: str, use_sam: bool = True
                     })
                 db.bulk_insert_mappings(dbm.Detection, detection_data)
             _report(90)
+
+            # Publish ONE media_created event after all detections are created
+            if dets:
+                try:
+                    from app.services.event_publisher import publish_event
+                    from app.services.event_helpers import create_media_created_event
+
+                    # Calculate max severity from all detections
+                    severity_order = {"high": 3, "medium": 2, "low": 1}
+                    max_severity = "low"
+                    for d in dets:
+                        severity = d.get("severity", "low")
+                        if severity_order.get(severity, 0) > severity_order.get(max_severity, 0):
+                            max_severity = severity
+
+                    event = create_media_created_event(
+                        media_id=media_id,
+                        num_detections=len(dets),
+                        created_by=media.user_username,
+                        media_type="image",
+                        max_severity=max_severity
+                    )
+                    publish_event(event)
+                    logger.info(f"Published media_created event for media_id={media_id} with {len(dets)} detections (max severity: {max_severity})")
+                except Exception as e:
+                    logger.error(f"Failed to publish media_created event for media_id={media_id}: {e}")
+                    # Don't fail the task if event publishing fails
+
+            # Calculate and save processing time
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            media.process_ms_total = processing_time_ms
 
             # Update media with output filename
             media.static_filename = out_name
@@ -507,6 +540,38 @@ def process_video_task(self, media_id: int, file_path: str, use_sam: bool = True
                         "frames_detected": agg["total_frames"],
                     })
                 db.bulk_insert_mappings(dbm.Detection, detection_data)
+
+                # Publish ONE media_created event after all detections are created
+                try:
+                    from app.services.event_publisher import publish_event
+                    from app.services.event_helpers import create_media_created_event
+
+                    # Calculate max severity from all detections
+                    severity_order = {"high": 3, "medium": 2, "low": 1}
+                    max_severity = "low"
+                    for agg in track_aggregates.values():
+                        severity = agg.get("severity")
+                        # Handle enum values
+                        if hasattr(severity, "value"):
+                            severity = severity.value
+                        else:
+                            severity = str(severity or "low").lower()
+
+                        if severity_order.get(severity, 0) > severity_order.get(max_severity, 0):
+                            max_severity = severity
+
+                    event = create_media_created_event(
+                        media_id=media_id,
+                        num_detections=len(track_aggregates),
+                        created_by=media.user_username,
+                        media_type="video",
+                        max_severity=max_severity
+                    )
+                    publish_event(event)
+                    logger.info(f"Published media_created event for media_id={media_id} with {len(track_aggregates)} detections (max severity: {max_severity})")
+                except Exception as e:
+                    logger.error(f"Failed to publish media_created event for media_id={media_id}: {e}")
+                    # Don't fail the task if event publishing fails
             # (commit happens on context exit)
 
         _report(85)
@@ -559,6 +624,11 @@ def process_video_task(self, media_id: int, file_path: str, use_sam: bool = True
             media = db.query(dbm.Media).filter(dbm.Media.id == media_id).first()
             if not media:
                 raise ValueError(f"Media record {media_id} not found")
+
+            # Calculate and save processing time
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            media.process_ms_total = processing_time_ms
+
             media.static_filename = out_name
             media.thumbnail_filename = thumbnail_name
             media.processing_status = dbm.ProcessingStatus.completed
@@ -732,35 +802,3 @@ def _to_h264(src: str, dst: str):
     except subprocess.SubprocessError as e:
         logger.error(f"Subprocess error during ffmpeg: {e}")
         raise RuntimeError(f"ffmpeg subprocess error: {e}")
-
-
-@celery_app.task(name="tasks.cleanup_temp_files", queue="cpu")
-def cleanup_temp_files():
-    """
-    Periodic task to clean up old temporary files.
-    Should be scheduled with Celery Beat.
-    """
-    from datetime import timedelta
-
-    logger.info("Starting temporary file cleanup")
-    temp_dir = Path("static/uploads")
-    cutoff = datetime.now() - timedelta(days=30)
-
-    cleaned = 0
-    errors = 0
-
-    if temp_dir.exists():
-        for file in temp_dir.glob("*"):
-            if file.is_file():
-                stat = file.stat()
-                if datetime.fromtimestamp(stat.st_mtime) < cutoff:
-                    try:
-                        file.unlink()
-                        cleaned += 1
-                        logger.debug(f"Deleted old temp file: {file}")
-                    except Exception as e:
-                        errors += 1
-                        logger.error(f"Failed to delete {file}: {e}")
-
-    logger.info(f"Cleanup complete: {cleaned} files deleted, {errors} errors")
-    return {"cleaned_files": cleaned, "errors": errors}

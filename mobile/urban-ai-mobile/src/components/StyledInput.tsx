@@ -83,7 +83,7 @@ const StyledInput = forwardRef<RNTextInput, Props>(function StyledInput(
         <Box
           borderWidth={1}
           borderColor={borderToken}
-          borderRadius="m"
+          borderRadius="lg"
           backgroundColor="card"
           marginBottom="m"
           style={[theme.shadows.sm, style, { position: 'relative' }]}

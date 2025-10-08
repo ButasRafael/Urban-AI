@@ -19,7 +19,7 @@ import { motion } from '../theme/motion';
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'tonal' | 'danger';
 type BoxColor = keyof Theme['colors'] | 'transparent';
 
-type TextVariantKey = 'display' | 'title' | 'body' | 'label';
+type TextVariantKey = 'display' | 'hero' | 'title' | 'subtitle' | 'body' | 'label' | 'caption' | 'button' | 'chip' | 'chipSmall';
 type Size = 'sm' | 'md' | 'lg';
 
 interface Props {
@@ -59,7 +59,7 @@ export default function StyledButton({
 
   size = 'md',
   fullWidth = false,
-  radius = 'm',
+  radius, // Will use size-specific radius if not provided
   haptic = true,
   gradient = false,
   leftIconName,
@@ -86,13 +86,14 @@ export default function StyledButton({
     onPress();
   };
 
+  // Updated to match web app design tokens (components.button from theme)
   const sizeMap: Record<
     Size,
-    { py: keyof Theme['spacing']; px: keyof Theme['spacing']; font: TextVariantKey; icon: number }
+    { py: keyof Theme['spacing']; px: keyof Theme['spacing']; font: TextVariantKey; icon: number; radius: keyof Theme['borderRadii'] }
   > = {
-    sm: { py: 'xs', px: 'm', font: 'label',  icon: 16 },
-    md: { py: 's',  px: 'm', font: 'label',  icon: 18 },
-    lg: { py: 'm',  px: 'l', font: 'title',  icon: 20 },
+    sm: { py: 's', px: 's',  font: 'label',  icon: 16, radius: 'sm' },   // 7px vertical, 10px horizontal, 10px radius
+    md: { py: 's', px: 'm',  font: 'button', icon: 18, radius: 'lg' },   // 10px vertical, 14px horizontal, 12px radius
+    lg: { py: 'm', px: 'l',  font: 'title',  icon: 20, radius: 'xl' },   // 12px vertical, 18px horizontal, 14px radius (using xl=16 as approximation)
   };
   const S = sizeMap[size];
 
@@ -126,7 +127,9 @@ export default function StyledButton({
       ? {} // No shadow for ghost/tonal variants
       : theme.shadows.sm; // Use consistent shadow system
 
-  const computedRadius = theme.borderRadii[radius];
+  // Use size-specific radius if not explicitly provided
+  const effectiveRadius = radius ?? S.radius;
+  const computedRadius = theme.borderRadii[effectiveRadius];
 
   const containerStyle: ViewStyle = {
     borderRadius: computedRadius,
@@ -138,7 +141,7 @@ export default function StyledButton({
       backgroundColor={variant === 'ghost' ? 'transparent' : bgColor}
       borderColor={variant === 'ghost' ? borderColor : 'transparent'}
       borderWidth={variant === 'ghost' ? 1 : 0}
-      borderRadius={radius}
+      borderRadius={effectiveRadius}
       paddingVertical={S.py}
       paddingHorizontal={S.px}
       alignItems="center"

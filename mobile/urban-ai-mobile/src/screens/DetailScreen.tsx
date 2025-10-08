@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  SafeAreaView,
   Image,
   Dimensions,
   Modal,
@@ -10,11 +9,11 @@ import {
   ScrollView,
 } from 'react-native';
 import ImageZoomLib from 'react-native-image-pan-zoom';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '@shopify/restyle';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Box, Text } from '../components/restylePrimitives';
 import type { Theme } from '../theme';
@@ -31,6 +30,20 @@ export default function DetailScreen({ route }: Props) {
   const theme = useTheme<Theme>();
   const insets = useSafeAreaInsets();
   const descriptions = media.descriptions ?? [];
+
+  // Use the appropriate URL based on media type
+  let videoUri = media.media_type === 'video'
+    ? media.annotated_video_url
+    : null;
+  if (videoUri && videoUri.startsWith('/')) {
+    videoUri = `${API_BASE}${videoUri}`;
+  }
+
+  // Create video player for videos
+  const player = useVideoPlayer(videoUri || '', (player) => {
+    player.loop = false;
+    player.muted = false;
+  });
 
   // Use the appropriate URL based on media type
   let uri = media.media_type === 'video'
@@ -64,7 +77,7 @@ export default function DetailScreen({ route }: Props) {
         >
           <Box
             bg="card"
-            borderRadius="m"
+            borderRadius="xl"
             borderWidth={1}
             borderColor="muted"
             overflow="hidden"
@@ -121,12 +134,12 @@ export default function DetailScreen({ route }: Props) {
             ) : (
               // VIDEO
               <View style={{ width, height: mediaHeight, backgroundColor: theme.colors.background }}>
-                <Video
-                  source={{ uri }}
+                <VideoView
+                  player={player}
                   style={{ width, height: mediaHeight }}
-                  useNativeControls
-                  resizeMode={ResizeMode.CONTAIN}
-                  shouldPlay={false}
+                  contentFit="contain"
+                  allowsFullscreen
+                  allowsPictureInPicture
                 />
               </View>
             )}
@@ -168,7 +181,7 @@ export default function DetailScreen({ route }: Props) {
             <Box
               width={56}
               height={56}
-              borderRadius="l"
+              borderRadius="lg"
               bg="card"
               alignItems="center"
               justifyContent="center"
@@ -197,8 +210,8 @@ export default function DetailScreen({ route }: Props) {
           <View style={styles.modalOverlay}>
             <Box
               bg="surface0"
-              borderTopLeftRadius="l"
-              borderTopRightRadius="l"
+              borderTopLeftRadius="xl"
+              borderTopRightRadius="xl"
               width="100%"
               style={{ maxHeight: height * 0.7, paddingBottom: insets.bottom || spacing.m }}
             >

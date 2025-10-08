@@ -1,6 +1,14 @@
 export type RootStackParamList = {
   Register: undefined
   Login: undefined
+  VerifyEmail: {
+    email?: string
+    token?: string
+  }
+  ForgotPassword: undefined
+  ResetPassword: {
+    token: string
+  }
   Home: undefined
   Gallery: undefined
   Processing: {
@@ -24,5 +32,6 @@ export type RootStackParamList = {
     }
     showInfo: boolean
   }
-  TestRefresh: undefined
+  NotificationSettings: undefined
+  Notifications: undefined
 }

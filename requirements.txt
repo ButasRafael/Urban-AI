@@ -36,6 +36,7 @@ sentry-sdk[sqlalchemy]
 sentry-sdk[logging]
 sentry-cli
 pillow
+pillow-heif
 groundingdino-py
 addict
 supervision
@@ -51,5 +52,6 @@ flower
 redis
 websockets
 slowapi
-resend
+email-validator
+jinja2
 firebase-admin

@@ -34,6 +34,14 @@ services:
       timeout: 5s
       retries: 5
 
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    restart: unless-stopped
+
   tempo:
     image: grafana/tempo:latest
     container_name: tempo
@@ -88,6 +96,8 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      mailhog:
+        condition: service_started
 
     restart: unless-stopped
     healthcheck:
@@ -108,6 +118,9 @@ services:
       - HF_HOME=/cache/hf
       - TRANSFORMERS_CACHE=/cache/hf
       - HF_HUB_CACHE=/cache/hf
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_FROM_EMAIL=noreply@urbanai.com
 
   celery-worker-gpu:
     build: .
@@ -218,6 +231,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     restart: unless-stopped
     environment:
       - ROLE=worker
@@ -229,6 +244,10 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_FROM_EMAIL=noreply@urbanai.com
+      - FIREBASE_CREDENTIALS_JSON=${FIREBASE_CREDENTIALS_JSON}
     healthcheck:
       test: ["CMD", "bash", "-c", "celery -A app.core.celery_app inspect ping -t 5 | grep -q 'pong'"]
       interval: 30s
@@ -249,6 +268,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     environment:
+      - ROLE=beat
+      - CUDA_VISIBLE_DEVICES=
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
       - REDIS_HOST=redis

@@ -25,6 +25,7 @@ export default function Register() {
   const nav = useNavigate()
 
   const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('authority')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -34,9 +35,9 @@ export default function Register() {
   const [capsLock, setCapsLock] = useState(false)
 
   const [busy, setBusy] = useState(false)
-  const [fieldErrs, setFieldErrs] = useState<{ username?: string; password?: string; confirm?: string }>({})
+  const [fieldErrs, setFieldErrs] = useState<{ username?: string; email?: string; password?: string; confirm?: string }>({})
 
-  const disabled = busy || !username.trim() || !password || !confirm
+  const disabled = busy || !username.trim() || !email.trim() || !password || !confirm
   const score = scorePassword(password)
   const strengthClass = ['strength--weak','strength--weak','strength--fair','strength--good','strength--strong'][score]
   const strengthLabel = STRENGTH_LABELS[score]
@@ -59,6 +60,7 @@ export default function Register() {
   function validate() {
     const fe: typeof fieldErrs = {}
     if (username.trim().length < 3) fe.username = 'At least 3 characters'
+    if (!email.includes('@') || email.length < 5) fe.email = 'Invalid email address'
     if (!PW_REGEX.test(password)) fe.password = 'Min 8 chars, include letters & digits'
     if (confirm !== password) fe.confirm = 'Passwords do not match'
     setFieldErrs(fe)
@@ -83,13 +85,13 @@ export default function Register() {
 
     setBusy(true)
     try {
-      const task = apiRegister(username.trim(), password, role).then(() => {
-        setTimeout(() => nav('/login', { replace: true }), 200)
+      const task = apiRegister(username.trim(), email.trim().toLowerCase(), password, role).then(() => {
+        setTimeout(() => nav(`/verify-email?email=${encodeURIComponent(email.trim().toLowerCase())}`, { replace: true }), 200)
       })
 
       notify.promise(task, {
         loading: 'Creating your account…',
-        success: 'Account created. You can sign in now.',
+        success: 'Account created! Check your email to verify your account.',
         error: (err: unknown) => isAxiosError(err)
             ? err.response?.data?.detail
             : err instanceof Error
@@ -183,6 +185,34 @@ export default function Register() {
                 />
               </div>
               {fieldErrs.username && <div className="field-error">{fieldErrs.username}</div>}
+            </div>
+
+            {/* Email */}
+            <div className="field">
+              <label htmlFor="email">Email</label>
+              <div className="with-icon">
+                <span className="icon-left" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2"/>
+                    <path d="m2 7 10 7 10-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </span>
+                <input
+                  id="email"
+                  type="email"
+                  className={`input ${fieldErrs.email ? 'error' : ''}`}
+                  placeholder="jane.doe@example.com"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setFieldErrs(f => ({ ...f, email: '' })) }}
+                  onBlur={() => setFieldErrs(f => ({ ...f, email: (!email.includes('@') || email.length < 5) ? 'Invalid email address' : '' }))}
+                  autoComplete="email"
+                  aria-invalid={!!fieldErrs.email}
+                />
+              </div>
+              {fieldErrs.email && <div className="field-error">{fieldErrs.email}</div>}
             </div>
 
             {/* Password */}

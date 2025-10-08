@@ -12,11 +12,11 @@ class NotificationChannel(str, enum.Enum):
 
 
 class EventType(str, enum.Enum):
-    issue_created = "issue_created"
     issue_status_changed = "issue_status_changed"
     issue_assigned = "issue_assigned"
     issue_severity_changed = "issue_severity_changed"
     issue_verified = "issue_verified"
+    media_created = "media_created"
 
 
 class NotificationStatus(str, enum.Enum):
@@ -36,7 +36,7 @@ class NotificationPreference(Base):
     push_enabled = Column(Boolean, default=True, nullable=False)
 
     # Event type preferences (stored as JSON for flexibility)
-    # Example: {"issue_created": {"email": true, "push": true}, "issue_assigned": {"email": true, "push": true}}
+    # Example: {"issue_assigned": {"email": true, "push": true}, "issue_status_changed": {"email": true, "push": true}}
     event_preferences = Column(MutableDict.as_mutable(JSON), default=dict, nullable=False)
 
     # Severity thresholds (minimum severity to trigger notification)
@@ -46,10 +46,6 @@ class NotificationPreference(Base):
     # Quiet hours (stored as JSON)
     # Example: {"enabled": true, "start": "22:00", "end": "08:00", "timezone": "UTC"}
     quiet_hours = Column(MutableDict.as_mutable(JSON), default=dict, nullable=False)
-
-    # Digest preferences
-    digest_enabled = Column(Boolean, default=False, nullable=False)
-    digest_frequency = Column(String, default="daily", nullable=False)  # "immediate", "hourly", "daily"
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
@@ -76,6 +72,10 @@ class NotificationTemplate(Base):
     # Template variables (stored as JSON list)
     # Example: ["issue_id", "old_status", "new_status", "assigned_to"]
     variables = Column(MutableList.as_mutable(JSON), default=list, nullable=False)
+
+    # Target user role (NULL means general template, otherwise specific to role)
+    # Possible values: "user", "admin", "authority", or NULL
+    user_role = Column(String, nullable=True)
 
     # Language support
     language = Column(String, default="en", nullable=False)
@@ -104,12 +104,19 @@ class NotificationLog(Base):
     # Notification status
     status = Column(SQLEnum(NotificationStatus, name="notification_status_enum"), default=NotificationStatus.pending, nullable=False)
 
+    # Delivered channels (array of channel names that successfully delivered)
+    # Example: ["email"], ["push"], ["email", "push"], or []
+    delivered_channels = Column(MutableList.as_mutable(JSON), nullable=True)
+
     # Event data (stored as JSON)
     event_data = Column(MutableDict.as_mutable(JSON), nullable=False)
 
     # Delivery details
     sent_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
+
+    # Read status (for notification store)
+    read_at = Column(DateTime(timezone=True), nullable=True)
 
     # Rate limiting tracking
     retry_count = Column(Integer, default=0, nullable=False)
@@ -120,4 +127,5 @@ class NotificationLog(Base):
     __table_args__ = (
         Index('ix_notification_log_username_created', 'username', 'created_at'),
         Index('ix_notification_log_status', 'status'),
+        Index('ix_notification_log_username_read', 'username', 'read_at'),
     )

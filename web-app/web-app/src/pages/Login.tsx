@@ -1,9 +1,12 @@
 import type React from 'react';
 import { useState, type FormEvent, useEffect } from 'react';
-import { login } from '../api/auth';
+import { login, resendVerificationEmail } from '../api/auth';
 import { useAuth } from '../auth/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { notify } from '../lib/notify';
+import { isAxiosError } from 'axios';
+import { initializeNotifications } from '../lib/notifications';
+import NotificationPrompt from '../components/NotificationPrompt';
 
 export default function Login() {
   const { setUser } = useAuth();
@@ -16,7 +19,11 @@ export default function Login() {
   const [peek, setPeek]           = useState(false);
   const [capsLock, setCapsLock]   = useState(false);
   const [busy, setBusy]           = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resendingEmail, setResendingEmail] = useState(false);
   const [fieldErrs, setFieldErrs] = useState<{ username?: string; password?: string }>({});
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   const disabled = busy || !username.trim() || !password;
 
@@ -36,12 +43,36 @@ export default function Login() {
     document.querySelector<HTMLInputElement>('#username')?.focus();
   }, []);
 
+  // Navigate after notification prompt is dismissed
+  useEffect(() => {
+    if (!showNotificationPrompt && pendingNavigation) {
+      setTimeout(() => {
+        nav(pendingNavigation, { replace: true });
+        setPendingNavigation(null);
+      }, 250);  // Small delay for animation
+    }
+  }, [showNotificationPrompt, pendingNavigation, nav]);
+
   function validate() {
     const fe: typeof fieldErrs = {};
     if (username.trim().length < 3) fe.username = 'At least 3 characters';
-    if (password.length < 6)        fe.password = 'At least 6 characters';
+    if (password.length < 8)        fe.password = 'At least 8 characters';
     setFieldErrs(fe);
     return Object.keys(fe).length === 0;
+  }
+
+  async function handleResendVerification() {
+    if (!unverifiedEmail) return;
+
+    setResendingEmail(true);
+    try {
+      await resendVerificationEmail(unverifiedEmail);
+      notify.success('Email sent!', 'Check your inbox for the verification link.');
+    } catch (err) {
+      notify.error('Failed to send email', isAxiosError(err) ? err.response?.data?.detail : 'Please try again.');
+    } finally {
+      setResendingEmail(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -54,21 +85,30 @@ export default function Login() {
     }
 
     setBusy(true);
+    setUnverifiedEmail(null);
     try {
-      const task = login(username.trim(), password).then(u => {
-        setUser(u);
-        if (!remember) localStorage.removeItem('refreshToken');
-        setTimeout(() => {
-          nav(u.role === 'admin' ? '/analytics' : '/map', { replace: true });
-        }, 50);
-        return u;
-      });
+      const u = await login(username.trim(), password);
+      setUser(u);
+      if (!remember) localStorage.removeItem('refreshToken');
+      notify.success(`Welcome back, ${u.username}!`);
 
-      notify.promise(task, {
-        loading: 'Signing in…',
-        success: (u) => `Welcome back, ${u.username}!`,
-        error: 'Invalid credentials. Please try again.',
-      });
+      const destination = u.role === 'admin' ? '/analytics' : '/map';
+
+      // Show custom notification prompt on every login (for testing)
+      setShowNotificationPrompt(true);
+      setPendingNavigation(destination);  // Delay navigation until prompt is handled
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 403) {
+        const detail = err.response.data?.detail || '';
+        if (detail.toLowerCase().includes('email')) {
+          setUnverifiedEmail(username.trim());
+          notify.error('Email not verified', detail);
+        } else {
+          notify.error('Access denied', detail);
+        }
+      } else {
+        notify.error('Login failed', isAxiosError(err) ? err.response?.data?.detail : 'Invalid credentials. Please try again.');
+      }
     } finally {
       setBusy(false);
     }
@@ -79,6 +119,20 @@ export default function Login() {
   }
   function handlePeekUp() {
     if (peek) { setShowPwd(false); setPeek(false); }
+  }
+
+  async function handleAllowNotifications() {
+    setShowNotificationPrompt(false);
+    await initializeNotifications();
+  }
+
+  function handleDenyNotifications() {
+    setShowNotificationPrompt(false);
+    localStorage.setItem('notification-prompt-dismissed', 'true');
+  }
+
+  function handleCloseNotificationPrompt() {
+    setShowNotificationPrompt(false);
   }
 
   return (
@@ -149,9 +203,26 @@ export default function Login() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="auth-form" aria-busy={busy} noValidate>
-            {/* Username */}
+            {/* Email not verified notice */}
+            {unverifiedEmail && (
+              <div style={{ marginBottom: 16, padding: 12, backgroundColor: 'var(--warning-bg, #fff3cd)', border: '1px solid var(--warning-border, #ffc107)', borderRadius: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Email not verified</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>Please verify your email to sign in.</div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={handleResendVerification}
+                  disabled={resendingEmail}
+                  style={{ fontSize: 13 }}
+                >
+                  {resendingEmail ? 'Sending…' : 'Resend verification email'}
+                </button>
+              </div>
+            )}
+
+            {/* Username or Email */}
             <div className="field">
-              <label htmlFor="username">Username</label>
+              <label htmlFor="username">Email or Username</label>
               <div className="with-icon">
                 <span className="icon-left" aria-hidden>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -162,7 +233,7 @@ export default function Login() {
                 <input
                   id="username"
                   className={`input ${fieldErrs.username ? 'error' : ''}`}
-                  placeholder="Enter your username"
+                  placeholder="Enter your email or username"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -196,7 +267,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setFieldErrs(f => ({ ...f, password: '' })); }}
                   onBlur={() =>
-                    setFieldErrs(f => ({ ...f, password: password.length < 6 ? 'At least 6 characters' : '' }))
+                    setFieldErrs(f => ({ ...f, password: password.length < 8 ? 'At least 8 characters' : '' }))
                   }
                   onKeyUp={(e: React.KeyboardEvent<HTMLInputElement>) =>
                       setCapsLock(e.getModifierState('CapsLock'))
@@ -244,7 +315,7 @@ export default function Login() {
                 <span className="muted">Remember me</span>
               </label>
               <div style={{ display:'flex', gap:12 }}>
-                <a className="muted" href="#" onClick={(e) => e.preventDefault()}>Forgot password?</a>
+                <Link className="muted" to="/forgot-password">Forgot password?</Link>
                 <Link className="muted" to="/register">Create account</Link>
               </div>
             </div>
@@ -259,6 +330,15 @@ export default function Login() {
           </footer>
         </div>
       </main>
+
+      {/* Notification Permission Prompt */}
+      {showNotificationPrompt && (
+        <NotificationPrompt
+          onAllow={handleAllowNotifications}
+          onDeny={handleDenyNotifications}
+          onClose={handleCloseNotificationPrompt}
+        />
+      )}
     </div>
   );
 }
